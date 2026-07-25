@@ -125,10 +125,10 @@ const Invoice = ({ id, clienteId, nome }: InvoiceProps) => {
   const clienteFinal = clienteId;
   const nomeCliente = nome;
 
-  const update = async (id: string) => {
+  const update = async (pedidoId: string) => {
     try {
       const payload: pedidoUpdate = {
-        clienteId: clienteId,
+        clienteId,
         itensPedido: itens.map((item) => ({
           produtoId: item.produto.produtoId,
           quantidade: item.quantidadeItem,
@@ -136,11 +136,11 @@ const Invoice = ({ id, clienteId, nome }: InvoiceProps) => {
         })),
       };
 
-      await NoteService.update(payload, id);
-
+      console.log("Payload update:", payload); // ← deixe temporariamente
+      await NoteService.update(payload, pedidoId);
       alert.success("Nota Alterada!", "Nota alterada com sucesso!");
     } catch (error) {
-      console.error(error);
+      console.error("Erro no update:", error);
       alert.error("Erro", "Não foi possível alterar a nota.");
     } finally {
       setSaving(false);
@@ -158,7 +158,7 @@ const Invoice = ({ id, clienteId, nome }: InvoiceProps) => {
         })),
       };
 
-      console.log(payload)
+      console.log(payload);
       await NoteService.create(payload);
 
       alert.success("Nota Criada!", "Nota salva com sucesso!");
@@ -175,12 +175,10 @@ const Invoice = ({ id, clienteId, nome }: InvoiceProps) => {
       alert.warning("Sem cliente", "Você não pode gerar uma nota sem cliente.");
       return;
     }
-
     if (itens.length === 0) {
       alert.warning("Nota vazia", "Adicione pelo menos um produto.");
       return;
     }
-
     if (itens.every((l) => l.quantidadeItem <= 0)) {
       alert.warning("Quantidade inválida", "Informe a quantidade dos produtos.");
       return;
@@ -188,8 +186,15 @@ const Invoice = ({ id, clienteId, nome }: InvoiceProps) => {
 
     setSaving(true);
 
-    if (id) update(id);
-    else create();
+    try {
+      if (id) {
+        await update(id);
+      } else {
+        await create();
+      }
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const handleExcluirNota = async () => {
