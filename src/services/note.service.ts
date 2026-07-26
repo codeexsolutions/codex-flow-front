@@ -7,7 +7,7 @@ const NoteService = {
   getAll: () => sysgrafix.get("/pedidos/"),
   getById: (pedidoId: string) => sysgrafix.get(`/pedidos/${pedidoId}`).then(({ data }) => data.data),
 
-  update: (data: pedidoUpdate, pedidoId: string) => sysgrafix.patch(`/pedidos/alterar/${pedidoId}`, data),
+  update: async (data: pedidoUpdate, pedidoId: string) => await sysgrafix.patch(`/pedidos/alterar/${pedidoId}`, data),
 
   delete: (pedidoId: string) => sysgrafix.delete(`/pedidos/${pedidoId}`),
 };

@@ -5,7 +5,7 @@ const ProductService = {
   getAll: async (params?: { name?: string; category?: string }) => await sysgrafix.get("/produtos", { params }),
   create: async (data: ProductType) => await sysgrafix.post("/produtos/cadastrar", data),
 
-  update: async (id: string, data: Partial<ProductType>) => await sysgrafix.patch(`/produtos/alterar/${id}`, data),
+  update: async (data: Partial<ProductType>) => await sysgrafix.patch(`/produtos/alterar/`, data),
 };
 
 export default ProductService;

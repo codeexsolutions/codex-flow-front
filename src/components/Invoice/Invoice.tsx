@@ -137,7 +137,7 @@ const Invoice = ({ id, clienteId, nome }: InvoiceProps) => {
       };
 
       console.log("Payload update:", payload); // ← deixe temporariamente
-      await NoteService.update(payload, pedidoId);
+      NoteService.update(payload, pedidoId);
       alert.success("Nota Alterada!", "Nota alterada com sucesso!");
     } catch (error) {
       console.error("Erro no update:", error);
