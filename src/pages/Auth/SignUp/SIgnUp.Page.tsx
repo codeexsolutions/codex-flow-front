@@ -173,11 +173,11 @@ const cadastrarEmpresa = async (payload: cadastroEmpresaDto): Promise<CadastroRe
   console.log(payload)
   const res = await sysgrafix.post("/empresas/cadastrar", payload);
 
-  if (!res.ok) {
+  if (!res.status === 201) {
     throw new Error(`Erro ${res.status} ao cadastrar empresa`);
   }
 
-  const data = await res.json().catch(() => ({}));
+  const data = res.data;
   return data as CadastroResponse;
 };
 
@@ -296,9 +296,9 @@ const CadastroEmpresaPage = () => {
       } else {
         navigate("/");
       }
-    } catch {
+    } catch(error:any) {
       toast.update(toastId, {
-        render: "Erro ao cadastrar empresa",
+        render: "Erro ao cadastrar empresa"+error.message,
         type: "error",
         isLoading: false,
         autoClose: 3000,
