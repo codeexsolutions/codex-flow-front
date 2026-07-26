@@ -47,13 +47,13 @@ function AppRoutesContent({ isLogged }: { isLogged: boolean }) {
     return <LoadingScreen />;
   }
 
-  if (isLogged && user && !user.ativo && path !== "/checkout") {
-    return <Navigate to="/checkout" replace />;
-  }
+  // if (isLogged && user && !user.ativo && path !== "/checkout") {
+  //   return <Navigate to="/checkout" replace />;
+  // }
 
-  if (isLogged && user?.ativo && (path === "/checkout" || path === "/login")) {
-    return <Navigate to="/" replace />;
-  }
+  // if (isLogged && user?.ativo && (path === "/checkout" || path === "/login")) {
+  //   return <Navigate to="/" replace />;
+  // }
 
   return (
     <Routes>
