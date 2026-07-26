@@ -3,8 +3,6 @@ import axios from "axios";
 const baseURL =
   import.meta.env.PRODUCTION === "true" ? import.meta.env.VITE_API_PRODUCTION : import.meta.env.VITE_API_LOCAL;
 
-console.log("API:", baseURL);
-
 const sysgrafix = axios.create({
   baseURL,
 });
