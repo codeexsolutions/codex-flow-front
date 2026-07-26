@@ -173,7 +173,7 @@ const cadastrarEmpresa = async (payload: cadastroEmpresaDto): Promise<CadastroRe
   console.log(payload)
   const res = await sysgrafix.post("/empresas/cadastrar", payload);
 
-  if (!res.status === 201) {
+  if (res.status === 201) {
     throw new Error(`Erro ${res.status} ao cadastrar empresa`);
   }
 

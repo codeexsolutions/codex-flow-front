@@ -94,13 +94,20 @@ const PontoDeVenda = () => {
 
   const hoje = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
 
-  const carregarVendas = () => {
-    NoteService.getAll()
-      .then(({ data }) => {
+  const carregarVendas =  async () => {
+
+      const response = await NoteService.getAll();
+      const data = response.data.data
+      const lista = (data as PedidoClienteType[]).filter((v): v is PedidoClienteType => !!v && !!v.pedido);
+      if(lista.length > 0)
+        setVendas(lista)
+
+      
+      /* .then(({ data }) => {
         const lista = (data.data as PedidoClienteType[]).filter((v): v is PedidoClienteType => !!v && !!v.pedido);
         setVendas(lista);
       })
-      .catch(() => setVendas([]));
+      .catch(() => setVendas([])); */
   };
 
   useEffect(() => {
@@ -111,7 +118,7 @@ const PontoDeVenda = () => {
   }, []);
 
   const vendasVisiveis = useMemo(() => {
-    console.log(vendas);
+
     const base = somenteHoje ? vendas.filter((v) => ehHoje(v.pedido.dataPedido)) : vendas;
     return [...base].sort((a, b) => +new Date(b.pedido.dataPedido) - +new Date(a.pedido.dataPedido));
   }, [vendas, somenteHoje]);
