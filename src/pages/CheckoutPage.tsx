@@ -137,8 +137,8 @@ const CheckoutPage = () => {
 
   // TODO: trocar por dados vindos do seu serviço de faturas
   const [faturas] = useState<Fatura[]>([
-    { id: "f4", competencia: "Ago/2026", vencimento: "10/08/2026", valor: 149, status: "PENDENTE" },
-    { id: "f3", competencia: "Jul/2026", vencimento: "10/07/2026", valor: 149, status: "VENCIDA" },
+    { id: "f4", competencia: "Ago/2026", vencimento: "10/08/2026", valor: 149, status: "PAGA" },
+    { id: "f3", competencia: "Jul/2026", vencimento: "10/07/2026", valor: 149, status: "PAGA" },
     { id: "f2", competencia: "Jun/2026", vencimento: "10/06/2026", valor: 149, status: "PAGA" },
     { id: "f1", competencia: "Mai/2026", vencimento: "10/05/2026", valor: 149, status: "PAGA" },
   ]);

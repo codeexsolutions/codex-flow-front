@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users, Search, AlertTriangle, ChevronLeft, ChevronRight, PieChart, RotateCw } from "lucide-react";
+import { Users, Search, AlertTriangle, ChevronLeft, ChevronRight, PieChart, RotateCw, UserPlus } from "lucide-react";
 import CustomerService from "../../services/client.service";
 import CustomerType, { eStatus, ContactType } from "../../types/ClientType";
 import ClienteForm from "./Components/Form/cliente.form";
@@ -192,7 +192,20 @@ const Clientes = () => {
     <div className="relative flex h-screen w-full flex-col overflow-hidden bg-[#0e0d1a] text-[#e8e4ff]">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(60%_100%_at_50%_0%,rgba(124,110,245,0.16),transparent_70%)]" />
 
-      <HeaderPage title="Clientes" subtitle="Cadastre, organize e acompanhe sua base de clientes" icon={<Users />} />
+      <HeaderPage
+        title="Clientes"
+        subtitle="Cadastre, organize e acompanhe sua base de clientes"
+        icon={<Users />}
+        actions={
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex cursor-pointer items-center gap-2 rounded-xl bg-gradient-to-br from-[#7c6ef5] to-[#8b7bf7] px-4 py-2.5 text-[13px] font-medium text-white shadow-[0_8px_24px_-8px_rgba(124,110,245,0.7)] transition-all hover:brightness-110 active:scale-[0.98]"
+          >
+            <UserPlus className="h-4 w-4" />
+            Novo cliente
+          </button>
+        }
+      />
 
       <main className="relative flex min-h-0 flex-1 flex-col gap-5 overflow-hidden px-5 py-5 lg:px-8 lg:py-6">
         {error && (
