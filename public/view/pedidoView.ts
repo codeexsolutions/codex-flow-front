@@ -15,18 +15,13 @@ export type pedidoCliente = {
   produtosPedido?: itemPedido[];
 };
 
-// Payload usado para CRIAR pedido — a API (novoPedidoDto) espera "itensPedido"
-export type NovoPedidoType = {
-  clienteId: string;
-  codigoEmpresa?: string;
-  itensPedido: ProductPedidoType[];
-};
 
-// Payload usado para ALTERAR pedido — a API (pedidoUpdate) espera "produtosPedido"
-type InvoiceType = {
-  clienteId: string;
-  codigoEmpresa?: string;
-  produtosPedido: ProductPedidoType[];
+export type itemPedido = {
+  itemPedidoId: string;
+  quantidadeItem: number;
+  valorVendaItem: number;
+  subtotalItens: number;
+  produto: produtoPedido;
 };
 
 export type produtosPedido = {
@@ -44,8 +39,9 @@ export type produtoPedido = {
 };
 
 export type pedidoUpdate = {
-  clienteId: string | undefined;
-  itensPedido: itemUpdate[];
+  clienteId: string;
+  codigoEmpresa?: string;
+  produtosPedido: itemUpdate[];
 };
 
 export type itemUpdate = {
@@ -54,13 +50,3 @@ export type itemUpdate = {
   valorVenda: number;
 };
 
-export type novoPedidoDto = {
-  clienteId: string | undefined;
-  itensPedido: itemNovoPedido[];
-};
-
-export type itemNovoPedido = {
-  produtoId: string;
-  quantidade: number;
-  valorVenda: number;
-};

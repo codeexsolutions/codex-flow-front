@@ -1,17 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ShoppingCart, TrendingUp, DollarSign, CheckCircle, AlertCircle, Star } from "lucide-react";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { Modal } from "../../../components/Modal";
 import Invoice from "../../../components/Invoice/Invoice";
 import NoteService from "../../../services/note.service";
@@ -39,12 +28,7 @@ const estaFechado = (v: PedidoClienteType) => v.pedido.pedidoStatus === "FECHADO
 const estaAberto = (v: PedidoClienteType) => v.pedido.pedidoStatus === "ABERTO";
 const estaCancelado = (v: PedidoClienteType) => v.pedido.pedidoStatus === "CANCELADO";
 
-const totalDoPedido = (v: PedidoClienteType) =>
-  Number(v.pedido.totalPedido) ||
-  (v.pedido.itensPedido ?? []).reduce(
-    (acc, item) => acc + Number(item.valorVendaItem || 0) * Number(item.quantidadeItem || 0),
-    0,
-  );
+const totalDoPedido = (v: PedidoClienteType) => Number(v.pedido.totalPedido) || (v.pedido.itensPedido ?? []).reduce((acc, item) => acc + Number(item.valorVendaItem || 0) * Number(item.quantidadeItem || 0), 0);
 
 const ehDoMes = (data: string | Date, ref: Date) => {
   const d = new Date(data);
@@ -75,19 +59,7 @@ const ChartTip = ({ active, payload, label }: any) => {
   );
 };
 
-function Kpi({
-  icon,
-  chip,
-  label,
-  value,
-  hint,
-}: {
-  icon: React.ReactNode;
-  chip: string;
-  label: string;
-  value: string;
-  hint?: string;
-}) {
+function Kpi({ icon, chip, label, value, hint }: { icon: React.ReactNode; chip: string; label: string; value: string; hint?: string }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-[#15132a] px-4 py-3">
       <div className={`rounded-lg p-2 ${chip}`}>{icon}</div>
@@ -196,9 +168,7 @@ const SalesOverviewPage = () => {
   }, [vendas]);
 
   const abrirPorCliente = (c: TopCliente) => {
-    const doCliente = vendas
-      .filter((v) => v.clienteId === c.clienteId)
-      .sort((a, b) => +new Date(b.pedido.dataPedido) - +new Date(a.pedido.dataPedido));
+    const doCliente = vendas.filter((v) => v.clienteId === c.clienteId).sort((a, b) => +new Date(b.pedido.dataPedido) - +new Date(a.pedido.dataPedido));
     const alvo = doCliente[0];
     if (!alvo) return;
     abrirNota({ id: alvo.pedido.pedidoId, clienteId: alvo.clienteId, nome: alvo.nomeCliente });
@@ -217,20 +187,7 @@ const SalesOverviewPage = () => {
 
 /* ======================= Tab Content ======================= */
 function TabOverview({ ...props }: any) {
-  const {
-    faturadoMes,
-    recebidoMes,
-    aReceberTotal,
-    totalVendas,
-    vendasNoMes,
-    percentualRecebido,
-    porMes,
-    pagas,
-    pendentes,
-    canceladas,
-    topClientes,
-    onAbrirCliente,
-  } = props;
+  const { faturadoMes, recebidoMes, aReceberTotal, totalVendas, vendasNoMes, percentualRecebido, porMes, pagas, pendentes, canceladas, topClientes, onAbrirCliente } = props;
 
   const maiorTotal = topClientes[0]?.total ?? 0;
   const statusData = [
@@ -243,45 +200,16 @@ function TabOverview({ ...props }: any) {
     <div className="grid h-full min-h-0 grid-rows-[auto_1fr] gap-3">
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <Kpi
-          icon={<DollarSign className="h-4 w-4 text-[#9b8ff5]" />}
-          chip="bg-[#7c6ef5]/[0.15]"
-          label="Faturado este mês"
-          value={formatCurrency(faturadoMes)}
-          hint={`${vendasNoMes} ${vendasNoMes === 1 ? "venda" : "vendas"}`}
-        />
-        <Kpi
-          icon={<CheckCircle className="h-4 w-4 text-[#5dcaa5]" />}
-          chip="bg-[#0f6e56]/30"
-          label="Recebido este mês"
-          value={formatCurrency(recebidoMes)}
-          hint={`${percentualRecebido.toFixed(0)}% do faturado`}
-        />
-        <Kpi
-          icon={<AlertCircle className="h-4 w-4 text-[#f09595]" />}
-          chip="bg-[#a22d2d]/20"
-          label="A receber (total)"
-          value={formatCurrency(aReceberTotal)}
-          hint={`${pendentes} ${pendentes === 1 ? "nota aberta" : "notas abertas"}`}
-        />
-        <Kpi
-          icon={<ShoppingCart className="h-4 w-4 text-[#fac775]" />}
-          chip="bg-[#ba7517]/25"
-          label="Total de vendas"
-          value={String(totalVendas)}
-          hint={`${vendasNoMes} neste mês`}
-        />
+        <Kpi icon={<DollarSign className="h-4 w-4 text-[#9b8ff5]" />} chip="bg-[#7c6ef5]/[0.15]" label="Faturado este mês" value={formatCurrency(faturadoMes)} hint={`${vendasNoMes} ${vendasNoMes === 1 ? "venda" : "vendas"}`} />
+        <Kpi icon={<CheckCircle className="h-4 w-4 text-[#5dcaa5]" />} chip="bg-[#0f6e56]/30" label="Recebido este mês" value={formatCurrency(recebidoMes)} hint={`${percentualRecebido.toFixed(0)}% do faturado`} />
+        <Kpi icon={<AlertCircle className="h-4 w-4 text-[#f09595]" />} chip="bg-[#a22d2d]/20" label="A receber (total)" value={formatCurrency(aReceberTotal)} hint={`${pendentes} ${pendentes === 1 ? "nota aberta" : "notas abertas"}`} />
+        <Kpi icon={<ShoppingCart className="h-4 w-4 text-[#fac775]" />} chip="bg-[#ba7517]/25" label="Total de vendas" value={String(totalVendas)} hint={`${vendasNoMes} neste mês`} />
       </div>
 
       <div className="grid min-h-0 grid-cols-1 gap-3 lg:grid-cols-[2fr_1fr]">
         {/* Gráfico Anual */}
         <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-[#15132a]">
-          <CardHeader
-            icon={<TrendingUp className="h-4 w-4 text-[#9b8ff5]" />}
-            chip="bg-[#7c6ef5]/[0.15]"
-            title="Faturamento anual"
-            sub="Faturado vs recebido por mês"
-          />
+          <CardHeader icon={<TrendingUp className="h-4 w-4 text-[#9b8ff5]" />} chip="bg-[#7c6ef5]/[0.15]" title="Faturamento anual" sub="Faturado vs recebido por mês" />
           <div className="min-h-[220px] flex-1 p-4">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={porMes}>
@@ -299,22 +227,8 @@ function TabOverview({ ...props }: any) {
                 <XAxis dataKey="name" {...axisProps} />
                 <YAxis {...axisProps} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v))} />
                 <Tooltip content={<ChartTip />} />
-                <Area
-                  type="monotone"
-                  dataKey="faturado"
-                  name="Faturado"
-                  stroke={C.accent}
-                  strokeWidth={2}
-                  fill="url(#gFat)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="recebido"
-                  name="Recebido"
-                  stroke={C.green}
-                  strokeWidth={2}
-                  fill="url(#gRec)"
-                />
+                <Area type="monotone" dataKey="faturado" name="Faturado" stroke={C.accent} strokeWidth={2} fill="url(#gFat)" />
+                <Area type="monotone" dataKey="recebido" name="Recebido" stroke={C.green} strokeWidth={2} fill="url(#gRec)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -335,26 +249,13 @@ function TabOverview({ ...props }: any) {
         <div className="grid min-h-0 grid-rows-2 gap-3">
           {/* Status */}
           <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-[#15132a]">
-            <CardHeader
-              icon={<CheckCircle className="h-4 w-4 text-[#5dcaa5]" />}
-              chip="bg-[#0f6e56]/30"
-              title="Status das vendas"
-              sub={`${pagas + pendentes + canceladas} no total`}
-            />
+            <CardHeader icon={<CheckCircle className="h-4 w-4 text-[#5dcaa5]" />} chip="bg-[#0f6e56]/30" title="Status das vendas" sub={`${pagas + pendentes + canceladas} no total`} />
             <div className="flex min-h-0 flex-1 items-center gap-2 p-4">
               <div className="h-full min-h-[110px] flex-1">
                 {statusData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie
-                        data={statusData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius="55%"
-                        outerRadius="85%"
-                        paddingAngle={3}
-                        dataKey="value"
-                      >
+                      <Pie data={statusData} cx="50%" cy="50%" innerRadius="55%" outerRadius="85%" paddingAngle={3} dataKey="value">
                         {statusData.map((s, i) => (
                           <Cell key={i} fill={s.color} />
                         ))}
@@ -386,26 +287,15 @@ function TabOverview({ ...props }: any) {
 
           {/* Top Clientes */}
           <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-[#15132a]">
-            <CardHeader
-              icon={<Star className="h-4 w-4 text-[#fac775]" />}
-              chip="bg-[#ba7517]/25"
-              title="Top clientes"
-              sub={topClientes.length > 0 ? `${topClientes.length} melhores` : undefined}
-            />
+            <CardHeader icon={<Star className="h-4 w-4 text-[#fac775]" />} chip="bg-[#ba7517]/25" title="Top clientes" sub={topClientes.length > 0 ? `${topClientes.length} melhores` : undefined} />
             <div className="flex-1 overflow-auto p-3">
               {topClientes.length > 0 ? (
                 <div className="flex flex-col gap-2">
                   {topClientes.map((c: TopCliente, i: number) => {
                     const pct = maiorTotal > 0 ? (c.total / maiorTotal) * 100 : 0;
                     return (
-                      <button
-                        key={c.clienteId}
-                        onClick={() => onAbrirCliente(c)}
-                        className="flex w-full items-center gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-2 text-left transition-colors hover:bg-white/[0.06]"
-                      >
-                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#7c6ef5]/[0.2] text-[10px] font-medium text-[#9b8ff5]">
-                          {i + 1}
-                        </div>
+                      <button key={c.clienteId} onClick={() => onAbrirCliente(c)} className="flex w-full items-center gap-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-2 text-left transition-colors hover:bg-white/[0.06]">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#7c6ef5]/[0.2] text-[10px] font-medium text-[#9b8ff5]">{i + 1}</div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
                             <p className="truncate text-[11px] text-[#e8e4ff]">{c.nome}</p>
@@ -413,10 +303,7 @@ function TabOverview({ ...props }: any) {
                           </div>
                           <div className="mt-1 flex items-center gap-2">
                             <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/[0.05]">
-                              <div
-                                className="h-full rounded-full bg-[#7c6ef5]"
-                                style={{ width: `${Math.max(pct, 3)}%` }}
-                              />
+                              <div className="h-full rounded-full bg-[#7c6ef5]" style={{ width: `${Math.max(pct, 3)}%` }} />
                             </div>
                             <span className="shrink-0 text-[10px] text-[#4e4a72]">
                               {c.pedidos} {c.pedidos === 1 ? "venda" : "vendas"}

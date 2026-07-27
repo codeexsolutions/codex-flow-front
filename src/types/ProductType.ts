@@ -3,9 +3,10 @@ type ProductType = {
   nome: string;
   valorCompra: number;
   valorVenda: number;
-  descricao?: string;
-  imagem?: string;
+  imagem: string;
+  descricao: string;
   quantidade: number;
+  codigoEmpresa: string;
 };
 
 export default ProductType;

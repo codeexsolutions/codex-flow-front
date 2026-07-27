@@ -10,30 +10,19 @@ const estaFechado = (v: PedidoClienteType) => v.pedido.pedidoStatus === "FECHADO
 const estaAberto = (v: PedidoClienteType) => v.pedido.pedidoStatus === "ABERTO";
 const estaCancelado = (v: PedidoClienteType) => v.pedido.pedidoStatus === "CANCELADO";
 
-const totalDoPedido = (v: PedidoClienteType) =>
-  Number(v.pedido.totalPedido) ||
-  (v.pedido.itensPedido ?? []).reduce(
-    (acc, item) => acc + Number(item.valorVendaItem || 0) * Number(item.quantidadeItem || 0),
-    0,
-  );
+const totalDoPedido = (v: PedidoClienteType) => Number(v.pedido.totalPedido) || (v.pedido.itensPedido ?? []).reduce((acc, item) => acc + Number(item.valorVendaItem || 0) * Number(item.quantidadeItem || 0), 0);
 
-const formatarData = (data?: string | Date) =>
-  data ? new Date(data).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "--";
+const formatarData = (data?: string | Date) => (data ? new Date(data).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "--");
 
 type StatusFiltro = "todos" | "pago" | "pendente" | "cancelado";
 type NotaAberta = { id?: string; clienteId: string; nome?: string };
 
 /* ======================= UI Helpers ======================= */
 const badgeStatus = (v: PedidoClienteType) => {
-  if (estaFechado(v))
-    return <span className="rounded-full bg-[#0f6e56]/30 px-2 py-0.5 text-[10px] text-[#5dcaa5]">Pago</span>;
-  if (estaAberto(v))
-    return <span className="rounded-full bg-[#a22d2d]/20 px-2 py-0.5 text-[10px] text-[#f09595]">Pendente</span>;
-  if (estaCancelado(v))
-    return <span className="rounded-full bg-white/[0.05] px-2 py-0.5 text-[10px] text-[#8a85b4]">Cancelado</span>;
-  return (
-    <span className="rounded-full bg-white/[0.05] px-2 py-0.5 text-[10px] text-[#8a85b4]">{v.pedido.pedidoStatus}</span>
-  );
+  if (estaFechado(v)) return <span className="rounded-full bg-[#0f6e56]/30 px-2 py-0.5 text-[10px] text-[#5dcaa5]">Pago</span>;
+  if (estaAberto(v)) return <span className="rounded-full bg-[#a22d2d]/20 px-2 py-0.5 text-[10px] text-[#f09595]">Pendente</span>;
+  if (estaCancelado(v)) return <span className="rounded-full bg-white/[0.05] px-2 py-0.5 text-[10px] text-[#8a85b4]">Cancelado</span>;
+  return <span className="rounded-full bg-white/[0.05] px-2 py-0.5 text-[10px] text-[#8a85b4]">{v.pedido.pedidoStatus}</span>;
 };
 
 /* ======================= Sales / Outlet Page ======================= */
@@ -101,13 +90,7 @@ const SalesList = () => {
         />
       </div>
 
-      <Modal
-        open={!!notaAberta}
-        onClose={fecharNota}
-        title={notaAberta?.id ? "Venda" : "Nova venda"}
-        subtitle={notaAberta?.nome}
-        size="full"
-      >
+      <Modal open={!!notaAberta} onClose={fecharNota} title={notaAberta?.id ? "Venda" : "Nova venda"} subtitle={notaAberta?.nome} size="full">
         {notaAberta && <Invoice id={notaAberta.id} clienteId={notaAberta.clienteId} nome={notaAberta.nome} />}
       </Modal>
     </div>
@@ -140,25 +123,12 @@ function TabSales({
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex max-w-xs flex-1 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.05] px-3 transition-colors focus-within:border-[#7c6ef5]">
           <Search className="h-3.5 w-3.5 text-[#4e4a72]" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar cliente…"
-            className="flex-1 bg-transparent py-2 text-xs text-[#e8e4ff] outline-none placeholder:text-[#6f6a93]"
-          />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente…" className="flex-1 bg-transparent py-2 text-xs text-[#e8e4ff] outline-none placeholder:text-[#6f6a93]" />
         </div>
 
         <div className="flex gap-1.5">
           {(["todos", "pago", "pendente", "cancelado"] as const).map((opt) => (
-            <button
-              key={opt}
-              onClick={() => setStatus(opt)}
-              className={`cursor-pointer rounded-lg px-3 py-2 text-[11px] capitalize transition-colors ${
-                status === opt
-                  ? "bg-[#7c6ef5] text-white"
-                  : "border border-white/[0.08] bg-white/[0.05] text-[#8a85b4] hover:bg-white/[0.09]"
-              }`}
-            >
+            <button key={opt} onClick={() => setStatus(opt)} className={`cursor-pointer rounded-lg px-3 py-2 text-[11px] capitalize transition-colors ${status === opt ? "bg-[#7c6ef5] text-white" : "border border-white/[0.08] bg-white/[0.05] text-[#8a85b4] hover:bg-white/[0.09]"}`}>
               {opt}
             </button>
           ))}
@@ -201,11 +171,7 @@ function TabSales({
                 const idCurto = v.pedido.pedidoId?.slice(-6).toUpperCase() ?? "—";
 
                 return (
-                  <button
-                    key={v.pedido.pedidoId}
-                    onClick={() => onAbrir(v)}
-                    className="grid w-full grid-cols-7 items-center gap-2 px-2 py-2.5 text-center text-[11px] text-[#e8e4ff] transition-colors hover:bg-white/[0.04]"
-                  >
+                  <button key={v.pedido.pedidoId} onClick={() => onAbrir(v)} className="grid w-full grid-cols-7 items-center gap-2 px-2 py-2.5 text-center text-[11px] text-[#e8e4ff] transition-colors hover:bg-white/[0.04]">
                     <p className="truncate font-mono text-[10px] text-[#8a85b4]">#{idCurto}</p>
                     <p className="truncate text-left text-[11px]">{v.nomeCliente}</p>
                     <p className="text-[#8a85b4]">{formatarData(v.pedido.dataPedido)}</p>

@@ -2,24 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  Building2,
-  User,
-  Mail,
-  Phone,
-  Smartphone,
-  MessageCircle,
-  MapPin,
-  Hash,
-  FileText,
-  Image as ImageIcon,
-  ArrowLeft,
-  ArrowRight,
-  Loader2,
-  Copy,
-  Check,
-  QrCode,
-} from "lucide-react";
+import { Building2, User, Mail, Phone, Smartphone, MessageCircle, MapPin, Hash, FileText, Image as ImageIcon, ArrowLeft, ArrowRight, Loader2, Copy, Check, QrCode } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { ToastContainer, toast } from "react-toastify";
@@ -27,6 +10,7 @@ import "react-toastify/dist/ReactToastify.css";
 
 // ⚠️ Ajuste o path para onde você mantém o onlyDigits
 import { onlyDigits } from "../../../utils/format";
+import sysgrafix from "../../../services/sysgrafix.service";
 
 const LANDING_ROUTE = "/";
 
@@ -137,35 +121,7 @@ const isValidCpfCnpj = (v?: string) => {
   return false;
 };
 
-const UFS = [
-  "AC",
-  "AL",
-  "AP",
-  "AM",
-  "BA",
-  "CE",
-  "DF",
-  "ES",
-  "GO",
-  "MA",
-  "MT",
-  "MS",
-  "MG",
-  "PA",
-  "PB",
-  "PR",
-  "PE",
-  "PI",
-  "RJ",
-  "RN",
-  "RS",
-  "RO",
-  "RR",
-  "SC",
-  "SP",
-  "SE",
-  "TO",
-];
+const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 
 /* ------------------------------------------------------------------ */
 /* Schema Zod                                                          */
@@ -213,24 +169,15 @@ const cadastroSchema = z.object({
 
 type CadastroFormInputs = z.infer<typeof cadastroSchema>;
 
-/* ------------------------------------------------------------------ */
-/* API                                                                 */
-/* ------------------------------------------------------------------ */
-
-const API_URL = "http://localhost:3000/v1/empresas/cadastrar";
-
 const cadastrarEmpresa = async (payload: cadastroEmpresaDto): Promise<CadastroResponse> => {
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  console.log(payload)
+  const res = await sysgrafix.post("/empresas/cadastrar", payload);
 
-  if (!res.ok) {
+  if (res.status === 201) {
     throw new Error(`Erro ${res.status} ao cadastrar empresa`);
   }
 
-  const data = await res.json().catch(() => ({}));
+  const data = res.data;
   return data as CadastroResponse;
 };
 
@@ -243,15 +190,7 @@ const STEPS = ["Empresa", "Contato", "Endereço"] as const;
 const STEP_FIELDS: Record<number, (keyof CadastroFormInputs | string)[]> = {
   0: ["nomeFantasia", "nomeRepresentante", "cpfCnpj", "inscMunicipal", "urlLogo", "urlImagem"],
   1: ["contato.email", "contato.celular", "contato.telefone", "contato.whatsapp"],
-  2: [
-    "endereco.cep",
-    "endereco.logradouro",
-    "endereco.numero",
-    "endereco.complemento",
-    "endereco.bairro",
-    "endereco.cidade",
-    "endereco.uf",
-  ],
+  2: ["endereco.cep", "endereco.logradouro", "endereco.numero", "endereco.complemento", "endereco.bairro", "endereco.cidade", "endereco.uf"],
 };
 
 /* ------------------------------------------------------------------ */
@@ -357,9 +296,9 @@ const CadastroEmpresaPage = () => {
       } else {
         navigate("/");
       }
-    } catch {
+    } catch(error:any) {
       toast.update(toastId, {
-        render: "Erro ao cadastrar empresa",
+        render: "Erro ao cadastrar empresa"+error.message,
         type: "error",
         isLoading: false,
         autoClose: 3000,
@@ -385,12 +324,9 @@ const CadastroEmpresaPage = () => {
 
   /* ------------------------- Estilos compactos ------------------------- */
 
-  const fieldBox =
-    "flex min-w-0 items-center gap-2 px-3 rounded-lg bg-white/[0.035] border border-white/[0.08] transition-all duration-200 " +
-    "hover:border-white/[0.14] focus-within:border-[#7c6ef5] focus-within:bg-white/[0.05] focus-within:ring-2 focus-within:ring-[#7c6ef5]/15";
+  const fieldBox = "flex min-w-0 items-center gap-2 px-3 rounded-lg bg-white/[0.035] border border-white/[0.08] transition-all duration-200 " + "hover:border-white/[0.14] focus-within:border-[#7c6ef5] focus-within:bg-white/[0.05] focus-within:ring-2 focus-within:ring-[#7c6ef5]/15";
   const labelCls = "block text-[10px] uppercase tracking-[0.7px] text-[#6b6790] mb-1";
-  const inputCls =
-    "cf-input w-full flex-1 min-w-0 bg-transparent outline-none py-2.5 text-[13px] sm:text-sm text-[#e8e4ff] placeholder:text-[#6f6a93]";
+  const inputCls = "cf-input w-full flex-1 min-w-0 bg-transparent outline-none py-2.5 text-[13px] sm:text-sm text-[#e8e4ff] placeholder:text-[#6f6a93]";
   const errCls = "mt-0.5 min-h-[13px] text-[10px] leading-[13px] text-[#f09595]";
 
   /* registros com máscara */
@@ -451,13 +387,7 @@ const CadastroEmpresaPage = () => {
             aria-label="Ir para a página inicial do Codex Flow"
           >
             <span className="cf-halo pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80px] h-[80px] rounded-full bg-[#7c5cff] opacity-50 blur-[36px]" />
-            <img
-              src="/logo.png"
-              alt="Codex Flow"
-              width={48}
-              height={48}
-              className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-xl shadow-[0_10px_30px_-8px_rgba(108,92,231,0.6)]"
-            />
+            <img src="/logo.png" alt="Codex Flow" width={48} height={48} className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-xl shadow-[0_10px_30px_-8px_rgba(108,92,231,0.6)]" />
           </button>
 
           <div className="flex flex-col leading-tight">
@@ -482,11 +412,7 @@ const CadastroEmpresaPage = () => {
           <div className="flex gap-1.5 mb-3 sm:mb-4">
             {STEPS.map((label, i) => (
               <div key={label} className="flex-1">
-                <div
-                  className={`h-[3px] rounded-full transition-all duration-300 ${
-                    i <= step ? "bg-gradient-to-r from-[#7c5cff] to-[#3b6ef5]" : "bg-white/[0.08]"
-                  }`}
-                />
+                <div className={`h-[3px] rounded-full transition-all duration-300 ${i <= step ? "bg-gradient-to-r from-[#7c5cff] to-[#3b6ef5]" : "bg-white/[0.08]"}`} />
               </div>
             ))}
           </div>
@@ -508,11 +434,7 @@ const CadastroEmpresaPage = () => {
                   <label className={labelCls}>Representante</label>
                   <div className={fieldBox}>
                     <User size={14} className="shrink-0 text-[#5e5a82]" />
-                    <input
-                      {...register("nomeRepresentante")}
-                      placeholder="Nome completo do responsável"
-                      className={inputCls}
-                    />
+                    <input {...register("nomeRepresentante")} placeholder="Nome completo do responsável" className={inputCls} />
                   </div>
                   <p className={errCls}>{errors.nomeRepresentante?.message}</p>
                 </div>
@@ -575,13 +497,7 @@ const CadastroEmpresaPage = () => {
                   <label className={labelCls}>Email</label>
                   <div className={fieldBox}>
                     <Mail size={14} className="shrink-0 text-[#5e5a82]" />
-                    <input
-                      {...register("contato.email")}
-                      type="email"
-                      placeholder="empresa@email.com"
-                      autoComplete="email"
-                      className={inputCls}
-                    />
+                    <input {...register("contato.email")} type="email" placeholder="empresa@email.com" autoComplete="email" className={inputCls} />
                   </div>
                   <p className={errCls}>{errors.contato?.email?.message}</p>
                 </div>
@@ -736,10 +652,7 @@ const CadastroEmpresaPage = () => {
                   <div>
                     <label className={labelCls}>UF</label>
                     <div className={fieldBox}>
-                      <select
-                        {...register("endereco.uf")}
-                        className={`${inputCls} appearance-none cursor-pointer [&>option]:bg-[#1a1828]`}
-                      >
+                      <select {...register("endereco.uf")} className={`${inputCls} appearance-none cursor-pointer [&>option]:bg-[#1a1828]`}>
                         <option value="">UF</option>
                         {UFS.map((uf) => (
                           <option key={uf} value={uf}>
@@ -757,11 +670,7 @@ const CadastroEmpresaPage = () => {
             {/* ---------------- Navegação entre etapas ---------------- */}
             <div className="mt-1 flex gap-2">
               {step > 0 && (
-                <button
-                  type="button"
-                  onClick={prevStep}
-                  className="flex items-center justify-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-xs sm:text-sm text-[#a8a3cf] transition hover:bg-white/[0.07] hover:border-white/[0.14]"
-                >
+                <button type="button" onClick={prevStep} className="flex items-center justify-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-xs sm:text-sm text-[#a8a3cf] transition hover:bg-white/[0.07] hover:border-white/[0.14]">
                   <ArrowLeft size={13} />
                   Voltar
                 </button>
@@ -794,11 +703,7 @@ const CadastroEmpresaPage = () => {
 
           <p className="mt-3 text-center text-[11px] text-[#6b6790]">
             Já tem conta?{" "}
-            <button
-              type="button"
-              onClick={() => navigate("/login")}
-              className="text-[#8b7bf0] transition-colors hover:text-[#a99ff0]"
-            >
+            <button type="button" onClick={() => navigate("/login")} className="text-[#8b7bf0] transition-colors hover:text-[#a99ff0]">
               Entrar
             </button>
           </p>
@@ -806,11 +711,7 @@ const CadastroEmpresaPage = () => {
 
         <p className="mt-2 sm:mt-3 text-center text-[10px] text-[#5e5a82]">
           © {new Date().getFullYear()} Codex Flow ·{" "}
-          <button
-            type="button"
-            onClick={() => navigate(LANDING_ROUTE)}
-            className="text-[#8b7bf0] transition-colors hover:text-[#a99ff0]"
-          >
+          <button type="button" onClick={() => navigate(LANDING_ROUTE)} className="text-[#8b7bf0] transition-colors hover:text-[#a99ff0]">
             Conheça o Codex Flow
           </button>
         </p>
@@ -827,9 +728,7 @@ const CadastroEmpresaPage = () => {
                 <QrCode size={16} className="text-[#32BCAD]" />
               </div>
               <h2 className="text-base text-[#f0effe]">Pagamento via Pix</h2>
-              <p className="text-[11px] leading-[1.4] text-[#7a769e]">
-                Primeiro acesso: finalize o pagamento para ativar sua conta.
-              </p>
+              <p className="text-[11px] leading-[1.4] text-[#7a769e]">Primeiro acesso: finalize o pagamento para ativar sua conta.</p>
             </div>
 
             <div className="mb-3 text-center">
@@ -843,26 +742,14 @@ const CadastroEmpresaPage = () => {
             </div>
 
             <div className="mx-auto mb-3 flex h-36 w-36 sm:h-40 sm:w-40 items-center justify-center rounded-lg bg-white p-2">
-              {pixInfo.qrCodeBase64 ? (
-                <img
-                  src={`data:image/png;base64,${pixInfo.qrCodeBase64}`}
-                  alt="QR Code Pix"
-                  className="h-full w-full"
-                />
-              ) : (
-                <QrCode size={100} className="text-[#0f0e18]" />
-              )}
+              {pixInfo.qrCodeBase64 ? <img src={`data:image/png;base64,${pixInfo.qrCodeBase64}`} alt="QR Code Pix" className="h-full w-full" /> : <QrCode size={100} className="text-[#0f0e18]" />}
             </div>
 
             <div className="mb-3">
               <span className={labelCls}>Pix copia e cola</span>
               <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2">
                 <p className="min-w-0 flex-1 truncate text-[11px] text-[#a8a3cf]">{pixInfo.copiaECola}</p>
-                <button
-                  type="button"
-                  onClick={copiarPix}
-                  className="flex shrink-0 items-center gap-1 rounded bg-[#6c5ce7]/15 px-2 py-1 text-[11px] text-[#9b8ff5] transition hover:bg-[#6c5ce7]/25"
-                >
+                <button type="button" onClick={copiarPix} className="flex shrink-0 items-center gap-1 rounded bg-[#6c5ce7]/15 px-2 py-1 text-[11px] text-[#9b8ff5] transition hover:bg-[#6c5ce7]/25">
                   {copied ? <Check size={11} /> : <Copy size={11} />}
                   {copied ? "OK" : "Copiar"}
                 </button>
@@ -880,11 +767,7 @@ const CadastroEmpresaPage = () => {
               <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
               <span className="relative">Já realizei o pagamento</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setPixInfo(null)}
-              className="mt-2 w-full text-center text-[11px] text-[#5e5a82] transition-colors hover:text-[#8b7bf0]"
-            >
+            <button type="button" onClick={() => setPixInfo(null)} className="mt-2 w-full text-center text-[11px] text-[#5e5a82] transition-colors hover:text-[#8b7bf0]">
               Pagar depois
             </button>
           </div>

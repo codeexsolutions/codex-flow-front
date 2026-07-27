@@ -44,3 +44,19 @@ export const maskCep = (v: string) =>
   onlyDigits(v)
     .slice(0, 8)
     .replace(/(\d{5})(\d)/, "$1-$2");
+
+export const maskPhone = (value: string): string => {
+  const digits = String(value ?? "")
+    .replace(/\D/g, "")
+    .slice(0, 11);
+
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) {
+    // Fixo: (00) 0000-0000
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  // Celular: (00) 00000-0000
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+};

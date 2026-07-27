@@ -24,12 +24,14 @@ export const clienteSchema = z.object({
     .transform((v) => v.replace(/\D/g, ""))
     .refine((v) => v.length === 11 || v.length === 14, "CPF ou CNPJ inválido"),
   status: z.nativeEnum(eStatus),
-  contato: z.object({
-    telefone: optionalDigits,
-    celular: optionalDigits,
-    whatsapp: optionalDigits,
-    email: optionalEmail,
-  }),
+  contato: z
+    .object({
+      telefone: optionalDigits,
+      celular: optionalDigits,
+      whatsapp: optionalDigits,
+      email: optionalEmail,
+    })
+    .optional(),
 });
 
 export type ClienteFormInput = z.input<typeof clienteSchema>;

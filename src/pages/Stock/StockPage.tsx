@@ -1,16 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Tags,
-  PackagePlus,
-  Search,
-  Package,
-  AlertTriangle,
-  ChevronLeft,
-  ChevronRight,
-  RotateCw,
-  Boxes,
-  Wallet,
-} from "lucide-react";
+import { Tags, PackagePlus, Search, Package, AlertTriangle, ChevronLeft, ChevronRight, RotateCw, Boxes, Wallet } from "lucide-react";
 import ProductType from "../../types/ProductType";
 import ProductService from "../../services/product.service";
 import { ProductForm } from "./components/Form/product.form";
@@ -24,7 +13,7 @@ const SEARCH_DEBOUNCE = 250;
 const LOW_STOCK = 5;
 
 const ROW_HEIGHT = 63.3; // altura de cada linha em px (deve ficar >= altura visual real)
-const MIN_PER_PAGE = 5; 
+const MIN_PER_PAGE = 5;
 const FALLBACK_PER_PAGE = 10;
 
 type ModalType = "registrar" | "editar" | "entrada" | "saida" | null;
@@ -74,11 +63,7 @@ function SkeletonRows({ count }: { count: number }) {
   return (
     <div className="animate-pulse">
       {Array.from({ length: count }).map((_, i) => (
-        <div
-          key={i}
-          className={`grid ${COLS} items-center border-b border-white/[0.04] px-5`}
-          style={{ height: ROW_HEIGHT }}
-        >
+        <div key={i} className={`grid ${COLS} items-center border-b border-white/[0.04] px-5`} style={{ height: ROW_HEIGHT }}>
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 shrink-0 rounded-xl bg-white/[0.05]" />
             <div className="flex flex-col gap-1.5">
@@ -167,11 +152,11 @@ const Estoque = () => {
     }
   };
 
-  const handleUpdateProduct = async () => {
+  const handleUpdateProduct = async (data) => {
     if (!selectedProduct?.id) return;
     setError(null);
     try {
-      // await ProductService.update(selectedProduct.id, data);
+      await ProductService.update({ id: selectedProduct.id, ...data });
       fechar();
       await load();
       alert.success("Produto atualizado!", "As alterações foram salvas.");
@@ -261,10 +246,7 @@ const Estoque = () => {
               <AlertTriangle className="h-4 w-4 shrink-0" />
               {error}
             </span>
-            <button
-              onClick={load}
-              className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[#f0a5a5]/30 px-2.5 py-1 text-[12px] font-medium text-[#f0a5a5] transition-colors hover:bg-[#f0a5a5]/10"
-            >
+            <button onClick={load} className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[#f0a5a5]/30 px-2.5 py-1 text-[12px] font-medium text-[#f0a5a5] transition-colors hover:bg-[#f0a5a5]/10">
               <RotateCw className="h-3.5 w-3.5" /> Tentar novamente
             </button>
           </div>
@@ -291,13 +273,7 @@ const Estoque = () => {
               <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
                 <div className="flex min-w-[200px] flex-1 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 transition-colors focus-within:border-[#7c6ef5]/60 focus-within:bg-white/[0.06] sm:max-w-xs">
                   <Search className="h-4 w-4 text-[#4e4a72]" />
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Buscar por nome, descrição ou ID…"
-                    aria-label="Buscar produtos"
-                    className="flex-1 bg-transparent py-2 text-[13px] text-[#e8e4ff] outline-none placeholder:text-[#6f6a93]"
-                  />
+                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nome, descrição ou ID…" aria-label="Buscar produtos" className="flex-1 bg-transparent py-2 text-[13px] text-[#e8e4ff] outline-none placeholder:text-[#6f6a93]" />
                 </div>
                 <div className="flex items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.03] p-1">
                   {FILTROS.map((opt) => (
@@ -305,11 +281,7 @@ const Estoque = () => {
                       key={opt.value}
                       onClick={() => setFiltro(opt.value)}
                       aria-pressed={filtro === opt.value}
-                      className={`cursor-pointer rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                        filtro === opt.value
-                          ? "bg-[#7c6ef5] text-white shadow-[0_4px_14px_-4px_rgba(124,110,245,0.8)]"
-                          : "text-[#8a85b4] hover:text-[#e8e4ff]"
-                      }`}
+                      className={`cursor-pointer rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors ${filtro === opt.value ? "bg-[#7c6ef5] text-white shadow-[0_4px_14px_-4px_rgba(124,110,245,0.8)]" : "text-[#8a85b4] hover:text-[#e8e4ff]"}`}
                     >
                       {opt.label}
                     </button>
@@ -319,9 +291,7 @@ const Estoque = () => {
             </div>
 
             {/* Cabeçalho de colunas */}
-            <div
-              className={`grid shrink-0 ${COLS} border-b border-white/[0.06] bg-white/[0.02] px-5 py-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#4e4a72]`}
-            >
+            <div className={`grid shrink-0 ${COLS} border-b border-white/[0.06] bg-white/[0.02] px-5 py-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#4e4a72]`}>
               <p>Produto</p>
               <p className="text-right">Compra</p>
               <p className="text-right">Venda</p>
@@ -341,15 +311,10 @@ const Estoque = () => {
                     </div>
                     <div>
                       <p className="text-[13px] text-[#b7b2d8]">Nenhum produto encontrado</p>
-                      <p className="mt-0.5 text-[11px]">
-                        {hasFilters ? "Ajuste a busca ou os filtros." : "Comece cadastrando seu primeiro produto."}
-                      </p>
+                      <p className="mt-0.5 text-[11px]">{hasFilters ? "Ajuste a busca ou os filtros." : "Comece cadastrando seu primeiro produto."}</p>
                     </div>
                     {!hasFilters && (
-                      <button
-                        onClick={() => setModal("registrar")}
-                        className="mt-1 cursor-pointer rounded-xl bg-[#7c6ef5] px-3.5 py-2 text-[12px] font-medium text-white transition-colors hover:bg-[#8b7bf7]"
-                      >
+                      <button onClick={() => setModal("registrar")} className="mt-1 cursor-pointer rounded-xl bg-[#7c6ef5] px-3.5 py-2 text-[12px] font-medium text-white transition-colors hover:bg-[#8b7bf7]">
                         Cadastrar primeiro produto
                       </button>
                     )}
@@ -370,28 +335,16 @@ const Estoque = () => {
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[#7c6ef5]/25 bg-gradient-to-br from-[#7c6ef5]/25 to-[#a78bfa]/10">
-                          {product.imagem ? (
-                            <img src={product.imagem} alt={product.nome} className="h-full w-full object-cover" />
-                          ) : (
-                            <Package className="h-4 w-4 text-[#b7aef9]" />
-                          )}
+                          {product.imagem ? <img src={product.imagem} alt={product.nome} className="h-full w-full object-cover" /> : <Package className="h-4 w-4 text-[#b7aef9]" />}
                         </div>
                         <div className="flex min-w-0 flex-col">
                           <span className="truncate text-[13px] font-medium text-[#e8e4ff]">{product.nome}</span>
-                          <span className="truncate text-[11px] text-[#6f6a93]">
-                            {product.descricao || `#${product.id}`}
-                          </span>
+                          <span className="truncate text-[11px] text-[#6f6a93]">{product.descricao || `#${product.id}`}</span>
                         </div>
                       </div>
-                      <span className="text-right text-[12px] tabular-nums text-[#8a85b4]">
-                        {brl(product.valorCompra)}
-                      </span>
-                      <span className="text-right text-[12px] font-medium tabular-nums text-[#e8e4ff]">
-                        {brl(product.valorVenda)}
-                      </span>
-                      <span className="text-right text-[12px] tabular-nums text-[#8a85b4]">
-                        {product.quantidade ?? 0}
-                      </span>
+                      <span className="text-right text-[12px] tabular-nums text-[#8a85b4]">{brl(product.valorCompra)}</span>
+                      <span className="text-right text-[12px] font-medium tabular-nums text-[#e8e4ff]">{brl(product.valorVenda)}</span>
+                      <span className="text-right text-[12px] tabular-nums text-[#8a85b4]">{product.quantidade ?? 0}</span>
                       <span className="flex justify-end">
                         <StockBadge quantidade={product.quantidade} />
                       </span>
@@ -400,12 +353,7 @@ const Estoque = () => {
 
                   {/* Linhas vazias pra preencher o espaço quando a página não enche */}
                   {Array.from({ length: emptySlots }).map((_, i) => (
-                    <div
-                      key={`empty-${i}`}
-                      aria-hidden
-                      className="border-b border-white/[0.04]"
-                      style={{ height: ROW_HEIGHT }}
-                    />
+                    <div key={`empty-${i}`} aria-hidden className="border-b border-white/[0.04]" style={{ height: ROW_HEIGHT }} />
                   ))}
                 </>
               )}
@@ -448,13 +396,10 @@ const Estoque = () => {
                 </div>
                 <h2 className="text-[13px] font-medium text-[#e8e4ff]">Valor do estoque</h2>
               </div>
-              <p className="text-2xl font-semibold tracking-tight text-[#f1eeff] tabular-nums">
-                {brl(stats.valorEstoque)}
-              </p>
+              <p className="text-2xl font-semibold tracking-tight text-[#f1eeff] tabular-nums">{brl(stats.valorEstoque)}</p>
               <div className="mt-1 flex items-center gap-1.5 text-[11px] text-[#6f6a93]">
                 <Boxes className="h-3.5 w-3.5" />
-                <span className="tabular-nums">{formatNumber(stats.unidades)}</span> unidades em{" "}
-                <span className="tabular-nums">{formatNumber(stats.total)}</span> itens
+                <span className="tabular-nums">{formatNumber(stats.unidades)}</span> unidades em <span className="tabular-nums">{formatNumber(stats.total)}</span> itens
               </div>
             </div>
 
@@ -468,10 +413,7 @@ const Estoque = () => {
               </div>
 
               <div className="flex h-2.5 overflow-hidden rounded-full bg-white/[0.05]">
-                <div
-                  className="bg-gradient-to-r from-[#0f6e56] to-[#5dcaa5] transition-all"
-                  style={{ width: `${pctDisponivel}%` }}
-                />
+                <div className="bg-gradient-to-r from-[#0f6e56] to-[#5dcaa5] transition-all" style={{ width: `${pctDisponivel}%` }} />
                 <div className="bg-[#e0b955] transition-all" style={{ width: `${pctBaixo}%` }} />
                 <div className="bg-[#a22d2d] transition-all" style={{ width: `${pctEsgotado}%` }} />
               </div>
@@ -483,8 +425,7 @@ const Estoque = () => {
                     <span className="text-[#8a85b4]">Em estoque</span>
                   </span>
                   <span className="tabular-nums">
-                    <span className="font-medium text-[#e8e4ff]">{formatNumber(stats.disponiveis)}</span>{" "}
-                    <span className="text-[#6f6a93]">({pctDisponivel}%)</span>
+                    <span className="font-medium text-[#e8e4ff]">{formatNumber(stats.disponiveis)}</span> <span className="text-[#6f6a93]">({pctDisponivel}%)</span>
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -493,8 +434,7 @@ const Estoque = () => {
                     <span className="text-[#8a85b4]">Baixo</span>
                   </span>
                   <span className="tabular-nums">
-                    <span className="font-medium text-[#e8e4ff]">{formatNumber(stats.baixos)}</span>{" "}
-                    <span className="text-[#6f6a93]">({pctBaixo}%)</span>
+                    <span className="font-medium text-[#e8e4ff]">{formatNumber(stats.baixos)}</span> <span className="text-[#6f6a93]">({pctBaixo}%)</span>
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -503,8 +443,7 @@ const Estoque = () => {
                     <span className="text-[#8a85b4]">Esgotado</span>
                   </span>
                   <span className="tabular-nums">
-                    <span className="font-medium text-[#e8e4ff]">{formatNumber(stats.esgotados)}</span>{" "}
-                    <span className="text-[#6f6a93]">({pctEsgotado}%)</span>
+                    <span className="font-medium text-[#e8e4ff]">{formatNumber(stats.esgotados)}</span> <span className="text-[#6f6a93]">({pctEsgotado}%)</span>
                   </span>
                 </div>
               </div>
@@ -514,12 +453,7 @@ const Estoque = () => {
       </main>
 
       {/* Modais */}
-      <Modal
-        open={modal === "registrar"}
-        onClose={fechar}
-        title="Novo produto"
-        subtitle="Preencha os dados do produto a cadastrar"
-      >
+      <Modal open={modal === "registrar"} onClose={fechar} title="Novo produto" subtitle="Preencha os dados do produto a cadastrar">
         <ProductForm submitText="Criar produto" onCancel={fechar} onSubmit={handleCreateProduct} />
       </Modal>
 
