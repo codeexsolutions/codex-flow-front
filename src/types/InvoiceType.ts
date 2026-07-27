@@ -6,6 +6,14 @@ export type ProductPedidoType = {
   valorVenda: number;
 };
 
+// Payload usado para CRIAR pedido — a API (novoPedidoDto) espera "itensPedido"
+export type NovoPedidoType = {
+  clienteId: string;
+  codigoEmpresa?: string;
+  itensPedido: ProductPedidoType[];
+};
+
+// Payload usado para ALTERAR pedido — a API (pedidoUpdate) espera "produtosPedido"
 type InvoiceType = {
   clienteId: string;
   codigoEmpresa?: string;

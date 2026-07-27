@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Package, Users, DollarSign, Settings, LogOut, ShoppingCart, BarChart3, Bot, IdCard, Menu, X } from "lucide-react";
+import { Package, Users, DollarSign, Settings, LogOut, ShoppingCart, BarChart3, Bot, IdCard, Menu, X, Wallet } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import useAuth from "../store/auth.store";
@@ -126,6 +126,7 @@ const Sidebar = () => {
           {item("funcionarios", <IdCard size={17} />, "Funcionários", true)}
 
           {cat("Financeiro")}
+          {item("financeiro", <Wallet size={17} />, "Financeiro")}
           {item("vendas", <DollarSign size={17} />, "Vendas")}
           {item("relatorios", <BarChart3 size={17} />, "Relatórios", true)}
 

@@ -6,7 +6,7 @@ import { formatCurrency } from "../../utils/formatCurrency";
 
 import ProductType from "../../types/ProductType";
 import PaymentType from "../../types/PaymentType";
-import InvoiceType, { PedidoClienteType } from "../../types/InvoiceType";
+import InvoiceType, { NovoPedidoType, PedidoClienteType } from "../../types/InvoiceType";
 
 import NoteService from "../../services/note.service";
 import ProductService from "../../services/product.service";
@@ -152,19 +152,29 @@ const Invoice = ({ id, clienteId, nome }: InvoiceProps) => {
       return;
     }
 
-    const invoicePayload: InvoiceType = {
-      clienteId: clienteFinal,
-      produtosPedido: linhas.map((l) => ({
-        produtoId: l.produtoId,
-        quantidade: Number(l.quantidade) || 0,
-        valorVenda: Number(l.valorVenda) || 0,
-      })),
-    };
+    const itensMapeados = linhas.map((l) => ({
+      produtoId: l.produtoId,
+      quantidade: Number(l.quantidade) || 0,
+      valorVenda: Number(l.valorVenda) || 0,
+    }));
 
     setSaving(true);
     try {
-      if (!id) await NoteService.create(invoicePayload);
-      else await NoteService.update({ ...invoicePayload }, id);
+      if (!id) {
+        // API de criação (novoPedidoDto) espera o campo "itensPedido"
+        const novoPedidoPayload: NovoPedidoType = {
+          clienteId: clienteFinal,
+          itensPedido: itensMapeados,
+        };
+        await NoteService.create(novoPedidoPayload);
+      } else {
+        // API de alteração (pedidoUpdate) espera o campo "produtosPedido"
+        const atualizarPayload: InvoiceType = {
+          clienteId: clienteFinal,
+          produtosPedido: itensMapeados,
+        };
+        await NoteService.update({ ...atualizarPayload }, id);
+      }
       alert.success("Nota salva!", "A nota foi salva com sucesso.");
     } catch {
       alert.error("Erro ao salvar", "Não foi possível salvar a nota.");
