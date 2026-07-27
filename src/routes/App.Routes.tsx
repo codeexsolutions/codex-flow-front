@@ -27,6 +27,8 @@ import SalesPage from "../pages/Sales/Sales.Page";
 import SalesOverviewPage from "../pages/Sales/pages/SalesOverview.Page";
 import SalesList from "../pages/Sales/pages/SalesList.Page";
 
+import FinanceiroPage from "../pages/Financeiro/Financeiro.Page";
+
 import NotFoundPage from "../pages/NotFoundPage";
 import AparenciaTab from "../pages/Config/pages/Aparencia.Page";
 import useTheme from "../hooks/useTheme";
@@ -83,6 +85,8 @@ function AppRoutesContent({ isLogged }: { isLogged: boolean }) {
             <Route path="lista" element={<SalesList />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
+
+          <Route path="financeiro" element={<FinanceiroPage />} />
 
           <Route path="*" element={<NotFoundPage />} />
         </Route>
