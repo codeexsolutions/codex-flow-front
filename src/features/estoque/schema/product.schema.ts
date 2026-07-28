@@ -14,4 +14,9 @@ export const productSchema = z.object({
   imagem: z.string().optional(),
 });
 
-export type ProductFormData = z.infer<typeof productSchema>;
+/**
+ * `z.coerce.number()` aceita string na entrada (o que o input HTML devolve) e
+ * garante number na saída — por isso entrada e saída são tipos distintos.
+ */
+export type ProductFormInput = z.input<typeof productSchema>;
+export type ProductFormData = z.output<typeof productSchema>;

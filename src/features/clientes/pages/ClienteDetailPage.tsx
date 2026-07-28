@@ -3,66 +3,38 @@ import type { ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Pencil, FileText, MessageCircle, Mail, CalendarDays, Loader2, AlertTriangle, PhoneCall, Receipt, Wallet, ShoppingBag, TrendingUp, Users } from "lucide-react";
 
-import HeaderPage from "../../components/Headers/HeaderPage";
-import { Modal } from "../../components/Modal";
-import Invoice from "../../components/Invoice/Invoice";
+import HeaderPage from "@/shared/ui/HeaderPage";
+import { PageBody, PageToolbar } from "@/shared/ui/PageShell";
+import { Modal } from "@/shared/ui/Modal";
+import Invoice from "@/features/vendas/components/Invoice";
 
-import CustomerService from "../../services/client.service";
-import NoteService from "../../services/note.service";
-import CustomerType, { eStatus } from "../../types/ClientType";
-import { PedidoClienteType } from "../../types/InvoiceType";
-import { useAlert } from "../../components/Alert/Alert";
-import { formatDate, getInitials, onlyDigits, formatDocument, formatNumber } from "../../utils/format";
-import { formatCurrency } from "../../utils/formatCurrency";
+import CustomerService from "@/features/clientes/services/client.service";
+import NoteService from "@/features/vendas/services/note.service";
+import CustomerType from "@/shared/domain/cliente";
+import type { PedidoClienteType } from "@/shared/domain/pedido";
+import { useAlert } from "@/shared/ui/Alert";
+import { getInitials, onlyDigits, formatDocument, formatNumber } from "@/shared/utils/format";
+import { formatDate } from "@/shared/utils/date";
+import { maskPhone } from "@/shared/validation/masks";
+import { formatTime as horaPedido } from "@/shared/utils/date";
+import { ClienteStatusBadge as StatusBadge, PedidoStatusBadge } from "@/shared/ui/StatusBadge";
+import { formatCurrency } from "@/shared/utils/currency";
 
-import ClienteEditForm from "./Components/Form/cliente-edit.form";
-import { ClienteFormData } from "./Components/Schema/cliente.schema";
-import ClienteSalesChart from "./Components/Chart/ClientesSalesChart";
+import ClienteEditForm from "@/features/clientes/components/ClienteEditForm";
+import { ClienteFormData } from "@/features/clientes/schema/cliente.schema";
+import ClienteSalesChart from "@/features/clientes/components/ClientesSalesChart";
 
 const ITEMS_PER_PAGE = 6;
 
-const horaPedido = (data?: string | Date) => (data ? new Date(data).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "--:--");
-
 /* -------------------------------------------------------------------------- */
-/*  Sub-componentes                                                            */
+/* Sub-componentes */
 /* -------------------------------------------------------------------------- */
-
-const StatusBadge = ({ status }: { status: eStatus }) =>
-  status === eStatus.ATIVO ? (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-success/40 bg-success/15 px-2.5 py-0.5 text-[11px] font-medium text-success">
-      <span className="h-1.5 w-1.5 rounded-full bg-success" /> Ativo
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-fg/[0.08] bg-fg/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-mist">
-      <span className="h-1.5 w-1.5 rounded-full bg-faint" /> Inativo
-    </span>
-  );
-
-const PedidoStatusBadge = ({ status }: { status?: string }) => {
-  if (status === "ABERTO")
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/50 bg-warning/20 px-2.5 py-1 text-[11px] font-medium text-warning">
-        <span className="h-1.5 w-1.5 rounded-full bg-warning" /> Aberto
-      </span>
-    );
-  if (status === "CANCELADO")
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-danger/40 bg-danger/20 px-2.5 py-1 text-[11px] font-medium text-danger">
-        <span className="h-1.5 w-1.5 rounded-full bg-danger" /> Cancelado
-      </span>
-    );
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-success/40 bg-success/20 px-2.5 py-1 text-[11px] font-medium text-success">
-      <span className="h-1.5 w-1.5 rounded-full bg-success" /> Fechado
-    </span>
-  );
-};
 
 const StatCard = ({ icon, label, value }: { icon: ReactNode; label: string; value: string }) => (
-  <div className="rounded-2xl border border-fg/[0.07] bg-surface p-4 transition-colors hover:border-fg/[0.12]">
+  <div className="card glass-sheen rounded-2xl p-4 transition-colors hover:border-fg/[0.12]">
     <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/20">{icon}</div>
     <p className="text-[11px] uppercase tracking-[0.1em] text-faint">{label}</p>
-    <p className="mt-1 truncate text-xl font-semibold tabular-nums tracking-tight text-ink">{value}</p>
+    <p className="mt-1 truncate text-xl tabular-nums tracking-tight text-ink">{value}</p>
   </div>
 );
 
@@ -70,14 +42,14 @@ const SectionHead = ({ icon, title, meta }: { icon: ReactNode; title: string; me
   <div className="flex items-center gap-3 border-b border-fg/[0.07] px-5 py-3.5">
     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/20">{icon}</div>
     <div className="min-w-0">
-      <h2 className="text-[13px] font-semibold text-ink">{title}</h2>
+      <h2 className="text-[13px] text-ink">{title}</h2>
       {meta && <p className="text-[11px] text-faint">{meta}</p>}
     </div>
   </div>
 );
 
 const ContactRow = ({ icon, value, tone = "accent" }: { icon: ReactNode; value: string; tone?: "accent" | "success" | "info" }) => {
-  const toneCls = tone === "success" ? "bg-success/15 text-success" : tone === "info" ? "bg-[#4aa8ff]/15 text-[#a9d6ff]" : "bg-accent/[0.14] text-accent-soft";
+  const toneCls = tone === "success" ? "bg-success/15 text-success" : tone === "info" ? "bg-accent/15 text-accent-soft" : "bg-accent/[0.14] text-accent-soft";
 
   return (
     <div className="flex items-center gap-3 rounded-xl border border-fg/[0.05] bg-fg/[0.02] px-3 py-2.5 text-[13px] text-mist">
@@ -88,7 +60,7 @@ const ContactRow = ({ icon, value, tone = "accent" }: { icon: ReactNode; value: 
 };
 
 const QuickAction = ({ icon, label, href, tone = "accent" }: { icon: ReactNode; label: string; href?: string; tone?: "accent" | "success" | "info" }) => {
-  const toneCls = tone === "success" ? "bg-success/15 text-success" : tone === "info" ? "bg-[#4aa8ff]/15 text-[#a9d6ff]" : "bg-accent/[0.15] text-accent-soft";
+  const toneCls = tone === "success" ? "bg-success/15 text-success" : tone === "info" ? "bg-accent/15 text-accent-soft" : "bg-accent/[0.15] text-accent-soft";
 
   const handleClick = () => {
     if (!href) return;
@@ -99,14 +71,14 @@ const QuickAction = ({ icon, label, href, tone = "accent" }: { icon: ReactNode; 
   return (
     <button type="button" onClick={handleClick} disabled={!href} className="group flex items-center gap-3 rounded-xl border border-fg/[0.06] bg-fg/[0.01] px-4 py-3 text-left transition-colors hover:border-fg/[0.12] hover:bg-fg/[0.04] disabled:cursor-not-allowed disabled:opacity-50">
       <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${toneCls}`}>{icon}</span>
-      <span className="flex-1 text-sm font-medium text-ink">{label}</span>
+      <span className="flex-1 text-sm text-ink">{label}</span>
       <ChevronRight size={16} className="text-muted transition-colors group-hover:text-accent-soft" />
     </button>
   );
 };
 
 /* -------------------------------------------------------------------------- */
-/*  Página                                                                     */
+/* Página */
 /* -------------------------------------------------------------------------- */
 
 type PedidoAberto = { id?: string; clienteId: string; nome?: string };
@@ -267,24 +239,23 @@ const ClienteDetalhe = () => {
       </button>
 
       {client && (
-        <button onClick={() => setShowEdit(true)} className="flex h-9 items-center gap-1.5 rounded-xl border border-accent/40 bg-accent/[0.14] px-3 text-[13px] font-medium text-accent-soft transition-all hover:bg-accent/25 active:scale-95">
+        <button onClick={() => setShowEdit(true)} className="flex h-9 items-center gap-1.5 rounded-xl border border-accent/40 bg-accent/[0.14] px-3 text-[13px] text-accent-soft transition-all hover:bg-accent/25 active:scale-95">
           <Pencil className="h-4 w-4" /> Editar
         </button>
       )}
     </div>
   );
 
-  const headerIcon = client ? <div className="flex h-full w-full items-center justify-center rounded-xl bg-gradient-to-br from-accent/30 to-accent-soft/10 text-[13px] font-semibold text-accent-soft ring-1 ring-accent/25">{getInitials(client.nome)}</div> : <Users size={22} />;
+  const headerIcon = client ? <div className="flex h-full w-full items-center justify-center rounded-xl bg-gradient-to-br from-accent/30 to-accent-soft/10 text-[13px] text-accent-soft ring-1 ring-accent/25">{getInitials(client.nome)}</div> : <Users size={22} />;
 
   /* ------------------------------- Render ------------------------------- */
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden bg-canvas text-ink">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(60%_100%_at_50%_0%,rgb(var(--accent)/0.14),transparent_70%)]" />
+    <div className="aurora relative flex h-full w-full flex-col overflow-hidden text-ink">
+      <HeaderPage title={client?.nome ?? "Cliente"} subtitle={client?.cpfCnpj ? formatDocument(client.cpfCnpj) : "—"} icon={headerIcon} />
 
-      <HeaderPage title={client?.nome ?? "Cliente"} subtitle={client?.cpfCnpj ? formatDocument(client.cpfCnpj) : "—"} icon={headerIcon} actions={headerActions} />
-
-      <main className="relative z-10 flex-1 overflow-y-auto px-5 py-6 lg:px-8">
+      <PageBody scroll>
+        <PageToolbar>{headerActions}</PageToolbar>
         {loading ? (
           <div className="flex h-full items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-faint" />
@@ -310,7 +281,7 @@ const ClienteDetalhe = () => {
               </div>
 
               {/* Gráfico */}
-              <div className="overflow-hidden rounded-2xl border border-fg/[0.07] bg-surface">
+              <div className="overflow-hidden card glass-sheen rounded-2xl">
                 <SectionHead icon={<TrendingUp className="h-4 w-4" />} title="Vendas" meta="Últimos 6 meses" />
                 <div className="h-[280px] p-4">
                   <ClienteSalesChart monthlyData={monthly} />
@@ -318,7 +289,7 @@ const ClienteDetalhe = () => {
               </div>
 
               {/* Pedidos — estilo PDV */}
-              <div className="flex flex-col overflow-hidden rounded-2xl border border-fg/[0.07] bg-surface">
+              <div className="flex flex-col overflow-hidden card glass-sheen rounded-2xl">
                 <SectionHead icon={<Receipt className="h-4 w-4" />} title="Pedidos" meta={`${pedidos.length} ${pedidos.length === 1 ? "pedido" : "pedidos"} no total`} />
 
                 <div>
@@ -346,7 +317,7 @@ const ClienteDetalhe = () => {
                             </span>
 
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-[13px] font-medium text-ink">
+                              <p className="truncate text-[13px] text-ink">
                                 <span className="text-faint">#</span>
                                 {p.pedido?.pedidoId?.slice(0, 8)}
                               </p>
@@ -360,7 +331,7 @@ const ClienteDetalhe = () => {
                             </span>
 
                             <div className="text-right">
-                              <p className="text-[13px] font-medium tabular-nums text-ink">{formatCurrency(total)}</p>
+                              <p className="text-[13px] tabular-nums text-ink">{formatCurrency(total)}</p>
                               <p className={`text-[11px] tabular-nums ${status === "ABERTO" ? "text-warning" : status === "CANCELADO" ? "text-danger" : "text-success"}`}>{status === "ABERTO" ? "aberto" : status === "CANCELADO" ? "cancelado" : "fechado"}</p>
                             </div>
                             <ChevronRight size={16} className="text-muted" />
@@ -381,7 +352,7 @@ const ClienteDetalhe = () => {
                   <div className="flex shrink-0 items-center justify-between gap-3 border-t border-fg/[0.06] bg-fg/[0.02] px-5 py-3">
                     <p className="flex items-center gap-2 text-[12px] text-faint">
                       <TrendingUp size={14} className="text-accent-soft" />
-                      Ticket médio: <span className="font-medium tabular-nums text-ink">{formatCurrency(stats.ticket)}</span>
+                      Ticket médio: <span className="tabular-nums text-ink">{formatCurrency(stats.ticket)}</span>
                     </p>
 
                     <div className="flex items-center gap-2">
@@ -393,7 +364,7 @@ const ClienteDetalhe = () => {
                         <ChevronLeft size={14} />
                       </button>
                       <span className="text-[12px] text-faint">
-                        Página <span className="font-medium text-mist">{currentPage}</span>/<span className="font-medium text-mist">{totalPages}</span>
+                        Página <span className="text-mist">{currentPage}</span>/<span className="text-mist">{totalPages}</span>
                       </span>
                       <button
                         onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
@@ -415,9 +386,9 @@ const ClienteDetalhe = () => {
                 <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-accent/10 blur-[70px]" />
 
                 <div className="relative flex flex-col items-center text-center">
-                  <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-gradient-to-br from-accent/40 to-accent-soft/10 text-3xl font-semibold text-accent-soft ring-1 ring-accent/30">{client ? getInitials(client.nome) : "?"}</div>
+                  <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-gradient-to-br from-accent/40 to-accent-soft/10 text-3xl text-accent-soft ring-1 ring-accent/30">{client ? getInitials(client.nome) : "?"}</div>
 
-                  <h2 className="mt-4 max-w-full truncate text-xl font-semibold tracking-tight text-ink">{client?.nome}</h2>
+                  <h2 className="mt-4 max-w-full truncate text-xl tracking-tight text-ink">{client?.nome}</h2>
 
                   <p className="mt-1 flex items-center gap-1.5 text-sm text-mist">
                     <FileText size={14} className="text-accent" />
@@ -430,16 +401,16 @@ const ClienteDetalhe = () => {
                 {(email || client?.contato?.celular || client?.contato?.telefone || client?.contato?.whatsapp) && (
                   <div className="relative mt-5 space-y-2 border-t border-fg/[0.06] pt-4">
                     {email && <ContactRow icon={<Mail size={15} />} value={email} />}
-                    {(client?.contato?.celular || client?.contato?.telefone) && <ContactRow icon={<PhoneCall size={15} />} value={formatNumber(client!.contato!.celular || client!.contato!.telefone || "")} />}
-                    {client?.contato?.whatsapp && <ContactRow icon={<MessageCircle size={15} />} value={formatNumber(client.contato.whatsapp)} tone="success" />}
+                    {(client?.contato?.celular || client?.contato?.telefone) && <ContactRow icon={<PhoneCall size={15} />} value={maskPhone(client!.contato!.celular || client!.contato!.telefone || "")} />}
+                    {client?.contato?.whatsapp && <ContactRow icon={<MessageCircle size={15} />} value={maskPhone(client.contato.whatsapp)} tone="success" />}
                   </div>
                 )}
               </div>
 
               {/* Status dos pedidos */}
               {pedidos.length > 0 && (
-                <div className="rounded-2xl border border-fg/[0.07] bg-surface p-5">
-                  <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-mist">Status dos pedidos</p>
+                <div className="card glass-sheen rounded-2xl p-5">
+                  <p className="mb-4 text-[11px] uppercase tracking-[0.12em] text-mist">Status dos pedidos</p>
                   <div className="space-y-3.5">
                     {statusBreak.map((s) => (
                       <div key={s.key}>
@@ -448,7 +419,7 @@ const ClienteDetalhe = () => {
                             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
                             {s.label}
                           </span>
-                          <span className="font-semibold tabular-nums text-ink">{s.count}</span>
+                          <span className="tabular-nums text-ink">{s.count}</span>
                         </div>
                         <div className="h-1.5 overflow-hidden rounded-full bg-fg/[0.06]">
                           <div className="h-full rounded-full transition-all" style={{ width: `${s.pct}%`, backgroundColor: s.color }} />
@@ -460,8 +431,8 @@ const ClienteDetalhe = () => {
               )}
 
               {/* Ações rápidas */}
-              <div className="rounded-2xl border border-fg/[0.07] bg-surface p-5">
-                <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-mist">Ações rápidas</p>
+              <div className="card glass-sheen rounded-2xl p-5">
+                <p className="mb-4 text-[11px] uppercase tracking-[0.12em] text-mist">Ações rápidas</p>
                 <div className="flex flex-col gap-2.5">
                   <QuickAction icon={<MessageCircle size={18} />} label="WhatsApp" href={waDigits ? `https://wa.me/55${waDigits}` : undefined} tone="success" />
                   <QuickAction icon={<PhoneCall size={18} />} label="Ligar" href={telDigits ? `tel:${telDigits}` : undefined} />
@@ -471,7 +442,7 @@ const ClienteDetalhe = () => {
             </aside>
           </div>
         )}
-      </main>
+      </PageBody>
 
       {/* Modal de edição */}
       {client && <ClienteEditForm open={showEdit} client={client} saving={saving} onClose={() => setShowEdit(false)} onSubmit={handleUpdate} />}

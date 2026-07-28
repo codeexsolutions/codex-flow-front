@@ -10,15 +10,7 @@ interface AutoCompleteInputProps<T> {
   onFocus?: () => void;
 }
 
-function AutoCompleteInput<T extends { id: number | string }>({
-  items,
-  value,
-  onChange,
-  onSelect,
-  placeholder,
-  displayKey,
-  onFocus,
-}: AutoCompleteInputProps<T>) {
+function AutoCompleteInput<T extends { id: number | string }>({ items, value, onChange, onSelect, placeholder, displayKey, onFocus }: AutoCompleteInputProps<T>) {
   const [selectedIndex, setSelectedIndex] = useState(-1);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -44,8 +36,8 @@ function AutoCompleteInput<T extends { id: number | string }>({
 
   return (
     <div className="relative w-full max-w-xl">
-      <div className="flex items-center gap-2 bg-white border border-gray-200 rounded px-4 py-2 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 transition-all">
-        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+      <div className="glass-subtle flex items-center gap-2 rounded-xl px-4 py-2 transition-all focus-within:border-accent/50">
+        <svg className="h-5 w-5 text-faint" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path d="M21 21l-4.3-4.3M10 18a8 8 0 100-16 8 8 0 000 16z" />
         </svg>
 
@@ -59,12 +51,12 @@ function AutoCompleteInput<T extends { id: number | string }>({
           onFocus={onFocus}
           onKeyDown={handleKeyDown}
           placeholder={placeholder || "Buscar produtos..."}
-          className="w-full bg-transparent outline-none text-sm text-gray-700 placeholder-gray-400"
+          className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-faint"
         />
       </div>
 
       {value && items.length > 0 && (
-        <ul className="absolute mt-2 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-72 overflow-y-auto z-50 animate-in fade-in slide-in-from-top-2">
+        <ul className="glass-strong elev-3 absolute z-50 mt-2 max-h-72 w-full overflow-y-auto rounded-xl animate-scale-in">
           {items.map((item, index) => (
             <li
               key={String(item.id)}
@@ -72,13 +64,11 @@ function AutoCompleteInput<T extends { id: number | string }>({
                 onSelect(item);
                 setSelectedIndex(-1);
               }}
-              className={`px-4 py-3 cursor-pointer flex items-center justify-between transition-colors ${
-                index === selectedIndex ? "bg-blue-50 text-blue-600" : "hover:bg-gray-50 text-gray-700"
-              }`}
+              className={`px-4 py-3 cursor-pointer flex items-center justify-between transition-colors ${index === selectedIndex ? "bg-accent/15 text-accent-soft" : "text-mist hover:bg-fg/[0.05] hover:text-ink"}`}
             >
-              <span className="text-sm font-medium">{String(item[displayKey])}</span>
+              <span className="text-sm">{String(item[displayKey])}</span>
 
-              {index === selectedIndex && <span className="text-xs text-blue-500">Enter ↵</span>}
+              {index === selectedIndex && <span className="text-xs text-accent">Enter ↵</span>}
             </li>
           ))}
         </ul>

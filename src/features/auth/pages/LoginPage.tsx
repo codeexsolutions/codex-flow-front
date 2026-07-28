@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import useAuth from "../../../store/auth.store";
+import useAuth from "@/features/auth/store/auth.store";
 
-import AuthForm from "../components/Form/Auth.form";
-import AuthFormInputs from "../components/Schema/auth.schema";
-import { onlyDigits } from "../../../utils/format";
+import AuthForm from "@/features/auth/components/AuthForm";
+import AuthFormInputs from "@/features/auth/schema/auth.schema";
+import { onlyDigits } from "@/shared/utils/format";
 
 const LANDING_ROUTE = "/page";
 
@@ -27,7 +27,7 @@ const AuthPage = () => {
         senha: data.senha,
         cpfCnpjEmpresa: onlyDigits(data.cpfCnpjEmpresa),
       });
-    } catch (err) {
+    } catch {
       setLoginError(true);
     } finally {
       setIsLoading(false);
@@ -35,66 +35,47 @@ const AuthPage = () => {
   };
 
   return (
-    <div className="cf-page relative h-[100dvh] w-full flex items-center justify-center px-3 py-3 sm:px-4 sm:py-5 bg-[#0b0913] overflow-hidden">
-      {/* Glows de fundo */}
-      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-        <div className="absolute -top-24 -left-24 w-[420px] h-[420px] rounded-full bg-[#8b5cf6] opacity-[0.15] blur-[130px]" />
-        <div className="absolute -bottom-24 -right-24 w-[420px] h-[420px] rounded-full bg-[#3b6ef5] opacity-[0.15] blur-[130px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full bg-[#6c5ce7] opacity-[0.09] blur-[110px]" />
+    <div className="relative flex h-[100dvh] w-full items-center justify-center overflow-hidden bg-canvas px-3 py-3 sm:px-4 sm:py-5">
+      {/* Glows de fundo — seguem o accent e somem no modo leve */}
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" style={{ opacity: "var(--fx-aurora, 1)" }}>
+        <div className="absolute -left-24 -top-24 h-[420px] w-[420px] rounded-full bg-accent opacity-[0.18] blur-[130px]" />
+        <div className="absolute -bottom-24 -right-24 h-[420px] w-[420px] rounded-full opacity-[0.16] blur-[130px]" style={{ background: "rgb(var(--aurora-2))" }} />
+        <div className="absolute left-1/2 top-1/2 h-[300px] w-[300px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-soft opacity-[0.1] blur-[110px]" />
       </div>
 
       <div className="relative z-10 w-full max-w-sm sm:max-w-md flex flex-col max-h-full">
         {/* Marca */}
         <div className="cf-rise flex items-center justify-center gap-3 mb-3 sm:mb-4">
-          <button
-            type="button"
-            onClick={() => navigate(LANDING_ROUTE)}
-            className="group relative inline-flex items-center justify-center transition-transform duration-300 hover:scale-[1.04]"
-            aria-label="Ir para a página inicial do Codex Flow"
-          >
-            <span className="cf-halo pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80px] h-[80px] rounded-full bg-[#7c5cff] opacity-50 blur-[36px]" />
-            <img
-              src="/logo.png"
-              alt="Codex Flow"
-              width={48}
-              height={48}
-              className="relative w-10 h-10 sm:w-12 sm:h-12 rounded-xl shadow-[0_10px_30px_-8px_rgba(108,92,231,0.6)]"
-            />
+          <button type="button" onClick={() => navigate(LANDING_ROUTE)} className="group relative inline-flex items-center justify-center transition-transform duration-300 hover:scale-[1.04]" aria-label="Ir para a página inicial do Codex Flow">
+            <span className="pointer-events-none absolute left-1/2 top-1/2 h-[80px] w-[80px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent blur-[36px]" style={{ opacity: "calc(0.5 * var(--fx-glow, 1))" }} />
+            <img src="/logo.png" alt="Codex Flow" width={48} height={48} className="relative h-10 w-10 rounded-xl shadow-glow sm:h-12 sm:w-12" />
           </button>
           <div className="flex flex-col leading-tight">
-            <span className="text-base sm:text-lg font-medium tracking-tight text-[#f0effe]">Codex Flow</span>
-            <span className="text-[10px] uppercase tracking-[2px] text-[#6b6790]">Painel da empresa</span>
+            <span className="text-base tracking-tight text-ink sm:text-lg">Codex Flow</span>
+            <span className="text-[10px] uppercase tracking-[2px] text-faint">Painel da empresa</span>
           </div>
         </div>
 
         {/* Card */}
-        <div className="cf-rise-2 relative rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4 sm:p-6 backdrop-blur-xl shadow-[0_25px_70px_-25px_rgba(0,0,0,0.8)]">
-          <span className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[#9b6bff] to-transparent opacity-70" />
+        <div className="glass-strong glass-sheen elev-3 relative rounded-2xl p-4 sm:p-6">
+          <span className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-accent-soft to-transparent opacity-70" />
 
-          <h1 className="text-base sm:text-lg font-medium text-[#f0effe] mb-0.5">Entrar</h1>
-          <p className="text-[11px] text-[#7a769e] mb-3 sm:mb-4">Acesse sua conta para continuar</p>
+          <h1 className="mb-0.5 text-base text-ink sm:text-lg">Entrar</h1>
+          <p className="mb-3 text-[11px] text-mist sm:mb-4">Acesse sua conta para continuar</p>
 
           <AuthForm onSubmit={onSubmit} isLoading={isLoading} loginError={loginError} />
 
-          <p className="mt-3 text-center text-[11px] text-[#6b6790]">
+          <p className="mt-3 text-center text-[11px] text-faint">
             Ainda não tem conta?{" "}
-            <button
-              type="button"
-              onClick={() => navigate("/cadastro")}
-              className="text-[#8b7bf0] transition-colors hover:text-[#a99ff0]"
-            >
+            <button type="button" onClick={() => navigate("/cadastro")} className="text-accent transition-colors hover:text-accent-soft">
               Cadastre sua empresa
             </button>
           </p>
         </div>
 
-        <p className="mt-2 sm:mt-3 text-center text-[10px] text-[#5e5a82]">
+        <p className="mt-2 text-center text-[10px] text-muted sm:mt-3">
           © {new Date().getFullYear()} Codex Flow ·{" "}
-          <button
-            type="button"
-            onClick={() => navigate(LANDING_ROUTE)}
-            className="text-[#8b7bf0] transition-colors hover:text-[#a99ff0]"
-          >
+          <button type="button" onClick={() => navigate(LANDING_ROUTE)} className="text-accent transition-colors hover:text-accent-soft">
             Conheça o Codex Flow
           </button>
         </p>

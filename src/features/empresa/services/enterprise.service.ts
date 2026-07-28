@@ -1,5 +1,5 @@
-import sysgrafix from "./sysgrafix.service";
-import EnterpriseType from "../types/EnterpriseType";
+import sysgrafix from "@/shared/api/sysgrafix";
+import EnterpriseType from "@/shared/domain/empresa";
 
 const EnterpriseService = {
   getById: (id: string) => sysgrafix.get(`/empresas/cpf-cnpj/${id}`),

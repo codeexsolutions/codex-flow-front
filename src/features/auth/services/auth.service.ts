@@ -1,4 +1,4 @@
-import sysgrafix from "./sysgrafix.service";
+import sysgrafix from "@/shared/api/sysgrafix";
 
 const AuthService = {
   login: (data: object | undefined, token?: string) =>

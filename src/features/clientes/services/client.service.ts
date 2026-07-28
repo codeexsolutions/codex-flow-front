@@ -1,5 +1,5 @@
-import ClientType from "../types/ClientType";
-import sysgrafix from "./sysgrafix.service";
+import ClientType from "@/shared/domain/cliente";
+import sysgrafix from "@/shared/api/sysgrafix";
 
 const ClientService = {
   create: (params: ClientType) => sysgrafix.post("/clientes/cadastrar", params),

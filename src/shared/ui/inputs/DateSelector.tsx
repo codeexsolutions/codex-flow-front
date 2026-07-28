@@ -7,7 +7,7 @@ interface DateSelectorProps {
   onSelect: (date: string) => void;
 }
 
-const formatDate = (date: string) => new Date(date).toLocaleDateString("pt-BR");
+import { formatDate } from "@/shared/utils/date";
 
 const DateSelector = ({ dates, value, onSelect }: DateSelectorProps) => {
   const [open, setOpen] = useState(false);
@@ -56,18 +56,15 @@ const DateSelector = ({ dates, value, onSelect }: DateSelectorProps) => {
   return (
     <div ref={ref} tabIndex={0} onKeyDown={handleKeyDown} className="relative">
       {/* INPUT STYLE */}
-      <div
-        onClick={() => setOpen((prev) => !prev)}
-        className="flex items-center gap-2 bg-white border border-slate-200 rounded px-3 py-2 cursor-pointer transition hover:border-slate-300 focus-within:ring-2 focus-within:ring-indigo-500"
-      >
-        <Calendar className="w-4 h-4 text-slate-400" />
+      <div onClick={() => setOpen((prev) => !prev)} className="glass-subtle flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 transition-all hover:border-fg/[0.16] focus-within:border-accent/50">
+        <Calendar className="h-4 w-4 text-faint" />
 
-        <span className="text-sm text-slate-700">{value ? formatDate(value) : "Selecionar data"}</span>
+        <span className="text-sm text-ink">{value ? formatDate(value) : "Selecionar data"}</span>
       </div>
 
       {/* DROPDOWN */}
       {open && (
-        <ul className="absolute mt-2 w-full bg-white border border-slate-200 rounded shadow-lg max-h-72 overflow-y-auto z-50 animate-in fade-in slide-in-from-top-2">
+        <ul className="glass-strong elev-3 absolute z-50 mt-2 max-h-72 w-full overflow-y-auto rounded-xl animate-scale-in">
           {dates.map((d, index) => (
             <li
               key={d}
@@ -76,13 +73,11 @@ const DateSelector = ({ dates, value, onSelect }: DateSelectorProps) => {
                 setOpen(false);
                 setSelectedIndex(-1);
               }}
-              className={`px-4 py-3 cursor-pointer flex items-center justify-between transition ${
-                index === selectedIndex ? "bg-indigo-50 text-indigo-600" : "hover:bg-slate-50 text-slate-700"
-              }`}
+              className={`flex cursor-pointer items-center justify-between px-4 py-3 transition-colors ${index === selectedIndex ? "bg-accent/15 text-accent-soft" : "text-mist hover:bg-fg/[0.05] hover:text-ink"}`}
             >
-              <span className="text-sm ">{formatDate(d)}</span>
+              <span className="text-sm">{formatDate(d)}</span>
 
-              {index === selectedIndex && <span className="text-xs text-indigo-500">Enter ↵</span>}
+              {index === selectedIndex && <span className="text-xs text-accent">Enter ↵</span>}
             </li>
           ))}
         </ul>

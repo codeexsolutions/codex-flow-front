@@ -1,10 +1,12 @@
 import type { MouseEvent } from "react";
-import { Palette, Moon, Sun, Monitor, Check, Type, Sparkles, Accessibility } from "lucide-react";
+import { Palette, Moon, Sun, Monitor, Check, Type, Sparkles, Accessibility, Gauge, Layers, Zap } from "lucide-react";
 
-import { SettingsCard } from "../ui";
-import { useAlert } from "../../../components/Alert/Alert";
-import useThemeStore, { type AccentId, type FontScale, type MotionPref, type ThemeMode } from "../../../store/theme.store";
-import { switchThemeWithTransition } from "../../../utils/themeTransition";
+import { SettingsCard } from "@/features/config/components/ConfigUI";
+import { useAlert } from "@/shared/ui/Alert";
+import useThemeStore, { type AccentId, type FontScale, type MotionPref, type ThemeMode, type FxPref } from "@/shared/theme/theme.store";
+import { switchThemeWithTransition } from "@/shared/theme/transition";
+import useTheme from "@/shared/theme/useTheme";
+import { FX_LABEL, FX_DESCRIPTION } from "@/shared/theme/detectPerformance";
 
 const THEMES: { id: ThemeMode; label: string; icon: React.ReactNode }[] = [
   { id: "escuro", label: "Escuro", icon: <Moon size={14} /> },
@@ -31,16 +33,26 @@ const MOTIONS: { id: MotionPref; label: string; desc: string; icon: React.ReactN
   { id: "reduce", label: "Reduzidas", desc: "Menos animações e transições", icon: <Accessibility size={15} /> },
 ];
 
+const FX_OPTIONS: { id: FxPref; icon: React.ReactNode }[] = [
+  { id: "auto", icon: <Gauge size={15} /> },
+  { id: "full", icon: <Layers size={15} /> },
+  { id: "balanced", icon: <Sparkles size={15} /> },
+  { id: "lite", icon: <Zap size={15} /> },
+];
+
+/* Cores do preview: fixas de propósito — precisam mostrar o tema oposto ao ativo. */
+const PREVIEW = {
+  claro: { bg: "#f4f3fb", panel: "#ffffff", line: "#dcdae8", soft: "#e7e5f2" },
+  escuro: { bg: "#12111d", panel: "#1c1a2b", line: "#2a2740", soft: "#26233a" },
+};
+
 const ThemePreview = ({ id, accent }: { id: ThemeMode; accent: string }) => {
-  const light = id === "claro";
-  const bg = light ? "#f4f3fb" : "#12111d";
-  const panel = light ? "#ffffff" : "#1c1a2b";
-  const line = light ? "#dcdae8" : "#2a2740";
-  const soft = light ? "#e7e5f2" : "#26233a";
+  const p = id === "claro" ? PREVIEW.claro : PREVIEW.escuro;
+  const { bg, panel, line, soft } = p;
 
   return (
     <div className="relative mb-3 h-20 w-full overflow-hidden rounded-lg border border-fg/[0.08]" style={{ background: bg }}>
-      {id === "sistema" && <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, #12111d 50%, #f4f3fb 50%)" }} />}
+      {id === "sistema" && <div className="absolute inset-0" style={{ background: `linear-gradient(90deg, ${PREVIEW.escuro.bg} 50%, ${PREVIEW.claro.bg} 50%)` }} />}
       <div className="relative flex h-full gap-1.5 p-1.5">
         <div className="flex w-1/4 flex-col gap-1 rounded-md p-1" style={{ background: panel }}>
           <div className="h-1.5 w-full rounded-full" style={{ background: accent }} />
@@ -64,10 +76,14 @@ const AparenciaTab = () => {
   const accentId = useThemeStore((s) => s.accent);
   const fontScale = useThemeStore((s) => s.fontScale);
   const motion = useThemeStore((s) => s.motion);
+  const fx = useThemeStore((s) => s.fx);
   const setMode = useThemeStore((s) => s.setMode);
   const setAccent = useThemeStore((s) => s.setAccent);
   const setFontScale = useThemeStore((s) => s.setFontScale);
   const setMotion = useThemeStore((s) => s.setMotion);
+  const setFx = useThemeStore((s) => s.setFx);
+
+  const { detectedFx, activeFx } = useTheme();
 
   const accent = ACCENTS.find((a) => a.id === accentId) ?? ACCENTS[0];
 
@@ -97,6 +113,15 @@ const AparenciaTab = () => {
     notify(`Animações: ${MOTIONS.find((m) => m.id === id)?.label.toLowerCase()}`);
   };
 
+  const trocarFx = (id: FxPref) => {
+    if (id === fx) return;
+    setFx(id);
+    notify(`Efeitos: ${id === "auto" ? "automático" : FX_LABEL[id].toLowerCase()}`);
+  };
+
+  const fxLabel = (id: FxPref) => (id === "auto" ? "Automático" : FX_LABEL[id]);
+  const fxDesc = (id: FxPref) => (id === "auto" ? `Detectado: ${FX_LABEL[detectedFx]}` : FX_DESCRIPTION[id]);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 overflow-y-auto lg:grid-cols-2">
@@ -114,7 +139,7 @@ const AparenciaTab = () => {
                 >
                   <ThemePreview id={t.id} accent={accent.color} />
                   <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
+                    <span className="flex items-center gap-1.5 text-[13px] text-ink">
                       {t.icon}
                       {t.label}
                     </span>
@@ -142,7 +167,7 @@ const AparenciaTab = () => {
                   onClick={() => trocarAccent(a)}
                   title={a.label}
                   aria-label={a.label}
-                  className={`relative h-10 w-10 cursor-pointer rounded-full transition-transform hover:scale-105 ${active ? "ring-2 ring-white/70 ring-offset-2 ring-offset-canvas" : ""}`}
+                  className={`relative h-10 w-10 cursor-pointer rounded-full transition-transform hover:scale-105 ${active ? "ring-2 ring-fg/70 ring-offset-2 ring-offset-canvas" : ""}`}
                   style={{ background: a.color }}
                 >
                   {active && <Check size={16} strokeWidth={3} className="absolute inset-0 m-auto text-white drop-shadow" />}
@@ -153,10 +178,10 @@ const AparenciaTab = () => {
 
           <div className="mt-5 flex items-center gap-3 rounded-xl border border-fg/[0.06] bg-fg/[0.02] p-3">
             <span className="text-[12px] text-mist">Prévia:</span>
-            <button type="button" className="rounded-lg bg-accent px-3.5 py-1.5 text-[12px] font-medium text-white">
+            <button type="button" className="rounded-lg bg-accent px-3.5 py-1.5 text-[12px] text-white">
               Botão
             </button>
-            <span className="text-[12px] font-medium text-accent">Link de exemplo</span>
+            <span className="text-[12px] text-accent">Link de exemplo</span>
           </div>
         </SettingsCard>
 
@@ -173,9 +198,9 @@ const AparenciaTab = () => {
                   onClick={() => trocarFontScale(f.id)}
                   className={`group flex cursor-pointer flex-col items-center gap-2 rounded-xl border p-3 text-center transition-all ${active ? "border-accent/60 bg-accent/[0.1] ring-1 ring-accent/40" : "border-fg/[0.08] hover:border-fg/[0.16] hover:bg-fg/[0.02]"}`}
                 >
-                  <span className={`flex h-11 w-11 items-center justify-center rounded-lg font-semibold ${size} ${active ? "bg-accent/20 text-accent-soft" : "bg-fg/[0.05] text-mist"}`}>{f.sample}</span>
+                  <span className={`flex h-11 w-11 items-center justify-center rounded-lg ${size} ${active ? "bg-accent/20 text-accent-soft" : "bg-fg/[0.05] text-mist"}`}>{f.sample}</span>
                   <div>
-                    <p className="text-[12.5px] font-medium text-ink">{f.label}</p>
+                    <p className="text-[12.5px] text-ink">{f.label}</p>
                     <p className="mt-0.5 text-[10.5px] leading-tight text-faint">{f.desc}</p>
                   </div>
                   {active && (
@@ -203,7 +228,7 @@ const AparenciaTab = () => {
                 >
                   <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${active ? "bg-accent/20 text-accent-soft" : "bg-fg/[0.05] text-mist"}`}>{m.icon}</span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-medium text-ink">{m.label}</p>
+                    <p className="text-[13px] text-ink">{m.label}</p>
                     <p className="truncate text-[11px] text-faint">{m.desc}</p>
                   </div>
                   {active && (
@@ -214,6 +239,43 @@ const AparenciaTab = () => {
                 </button>
               );
             })}
+          </div>
+        </SettingsCard>
+
+        {/* Efeitos visuais */}
+        <SettingsCard icon={<Layers className="h-4 w-4" />} title="Efeitos visuais" desc="O desfoque de vidro é o efeito mais pesado da interface. Se a rolagem estiver travando, escolha um nível mais leve.">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {FX_OPTIONS.map((o) => {
+              const active = o.id === fx;
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => trocarFx(o.id)}
+                  className={`relative flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-left transition-all ${active ? "border-accent/60 bg-accent/[0.1] ring-1 ring-accent/40" : "border-fg/[0.08] hover:border-fg/[0.16] hover:bg-fg/[0.02]"}`}
+                >
+                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${active ? "bg-accent/20 text-accent-soft" : "bg-fg/[0.05] text-mist"}`}>{o.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] text-ink">{fxLabel(o.id)}</p>
+                    <p className="truncate text-[11px] text-faint">{fxDesc(o.id)}</p>
+                  </div>
+                  {active && (
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent text-white">
+                      <Check size={11} strokeWidth={3} />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Amostra ao vivo do nível ativo */}
+          <div className="relative mt-5 overflow-hidden rounded-xl border border-fg/[0.06] p-4">
+            <div aria-hidden className="absolute inset-0" style={{ background: "linear-gradient(120deg, rgb(var(--accent) / 0.5), rgb(var(--aurora-2) / 0.45))" }} />
+            <div className="glass-strong relative flex items-center justify-between gap-3 rounded-lg px-3.5 py-3">
+              <span className="text-[12.5px] text-ink">Prévia do vidro</span>
+              <span className="rounded-full bg-accent/20 px-2.5 py-1 text-[11px] text-accent-soft">{FX_LABEL[activeFx]}</span>
+            </div>
           </div>
         </SettingsCard>
       </div>

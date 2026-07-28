@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { onlyDigits } from "../../../../utils/format";
+import { onlyDigits } from "@/shared/utils/format";
 
 export const authSchema = z.object({
   cpfCnpjEmpresa: z

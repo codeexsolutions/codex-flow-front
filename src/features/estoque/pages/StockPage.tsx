@@ -1,20 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Tags, PackagePlus, Search, Package, AlertTriangle, ChevronLeft, ChevronRight, RotateCw, Boxes, Wallet } from "lucide-react";
-import ProductType from "../../types/ProductType";
-import ProductService from "../../services/product.service";
-import { ProductForm } from "./components/Form/product.form";
-import { ProductFormData } from "./components/Schema/product.schema";
-import { Modal } from "../../components/Modal";
-import HeaderPage from "../../components/Headers/HeaderPage";
-import { useAlert } from "../../components/Alert/Alert";
-import { formatNumber, toPercent } from "../../utils/format";
+import ProductType from "@/shared/domain/produto";
+import ProductService from "@/features/estoque/services/product.service";
+import { ProdutoForm } from "@/features/estoque/components/ProdutoForm";
+import { ProductFormData } from "@/features/estoque/schema/product.schema";
+import { Modal } from "@/shared/ui/Modal";
+import HeaderPage from "@/shared/ui/HeaderPage";
+import { PageBody } from "@/shared/ui/PageShell";
+import { useAlert } from "@/shared/ui/Alert";
+import { formatNumber, toPercent } from "@/shared/utils/format";
+import useVendaStore from "@/features/vendas/store/venda.store";
+import { estaCancelado } from "@/shared/domain/pedido";
+import { TrendingUp } from "lucide-react";
+import { formatCurrency as brl } from "@/shared/utils/currency";
+import { SkeletonTableRows, SkeletonIdentityCell } from "@/shared/ui/skeleton";
+import { useAutoPageSize, ROW_HEIGHT } from "@/shared/hooks/useAutoPageSize";
+import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 
-const SEARCH_DEBOUNCE = 250;
 const LOW_STOCK = 5;
-
-const ROW_HEIGHT = 63.3; // altura de cada linha em px (deve ficar >= altura visual real)
-const MIN_PER_PAGE = 5;
-const FALLBACK_PER_PAGE = 10;
 
 type ModalType = "registrar" | "editar" | "entrada" | "saida" | null;
 
@@ -28,8 +31,6 @@ const FILTROS: { value: Filtro; label: string }[] = [
 
 const COLS = "grid-cols-[1fr_120px_120px_90px_130px]";
 
-const brl = (v?: number) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
 type StockLevel = "disponivel" | "baixo" | "esgotado";
 function stockLevel(qtd?: number): StockLevel {
   const q = qtd ?? 0;
@@ -42,44 +43,32 @@ function StockBadge({ quantidade }: { quantidade?: number }) {
   const level = stockLevel(quantidade);
   if (level === "esgotado")
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#a22d2d]/40 bg-[#a22d2d]/20 px-2.5 py-1 text-[11px] font-medium text-[#f0a5a5]">
-        <span className="h-1.5 w-1.5 rounded-full bg-[#f0a5a5]" /> Esgotado
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-danger/40 bg-danger/20 px-2.5 py-1 text-[11px] text-danger">
+        <span className="h-1.5 w-1.5 rounded-full bg-danger" /> Esgotado
       </span>
     );
   if (level === "baixo")
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#8a6d1f]/50 bg-[#8a6d1f]/20 px-2.5 py-1 text-[11px] font-medium text-[#e0b955]">
-        <span className="h-1.5 w-1.5 rounded-full bg-[#e0b955]" /> Baixo
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/50 bg-warning/20 px-2.5 py-1 text-[11px] text-warning">
+        <span className="h-1.5 w-1.5 rounded-full bg-warning" /> Baixo
       </span>
     );
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#0f6e56]/40 bg-[#0f6e56]/20 px-2.5 py-1 text-[11px] font-medium text-[#5dcaa5]">
-      <span className="h-1.5 w-1.5 rounded-full bg-[#5dcaa5]" /> Em estoque
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-success/40 bg-success/20 px-2.5 py-1 text-[11px] text-success">
+      <span className="h-1.5 w-1.5 rounded-full bg-success" /> Em estoque
     </span>
   );
 }
 
-function SkeletonRows({ count }: { count: number }) {
-  return (
-    <div className="animate-pulse">
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className={`grid ${COLS} items-center border-b border-white/[0.04] px-5`} style={{ height: ROW_HEIGHT }}>
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 shrink-0 rounded-xl bg-white/[0.05]" />
-            <div className="flex flex-col gap-1.5">
-              <div className="h-3 w-32 rounded bg-white/[0.06]" />
-              <div className="h-2 w-40 rounded bg-white/[0.04]" />
-            </div>
-          </div>
-          <div className="ml-auto h-3 w-16 rounded bg-white/[0.05]" />
-          <div className="ml-auto h-3 w-16 rounded bg-white/[0.05]" />
-          <div className="ml-auto h-3 w-10 rounded bg-white/[0.05]" />
-          <div className="h-5 w-20 rounded-full bg-white/[0.05]" />
-        </div>
-      ))}
-    </div>
-  );
-}
+const SkeletonRows = ({ count }: { count: number }) => (
+  <SkeletonTableRows count={count} cols={COLS} rowHeight={ROW_HEIGHT}>
+    <SkeletonIdentityCell />
+    <div className="ml-auto h-3 w-16 rounded bg-fg/[0.05]" />
+    <div className="ml-auto h-3 w-16 rounded bg-fg/[0.05]" />
+    <div className="ml-auto h-3 w-10 rounded bg-fg/[0.05]" />
+    <div className="h-5 w-20 rounded-full bg-fg/[0.05]" />
+  </SkeletonTableRows>
+);
 
 const Estoque = () => {
   const alert = useAlert();
@@ -90,15 +79,17 @@ const Estoque = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [filtro, setFiltro] = useState<Filtro>("todos");
   const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(FALLBACK_PER_PAGE);
 
   const [modal, setModal] = useState<ModalType>(null);
   const fechar = () => setModal(null);
 
-  const bodyRef = useRef<HTMLDivElement>(null);
+  const { bodyRef, perPage } = useAutoPageSize<HTMLDivElement>();
+
+  const vendas = useVendaStore((s) => s.vendas);
+  const fetchVendas = useVendaStore((s) => s.fetchVendas);
 
   const load = async () => {
     setLoading(true);
@@ -116,29 +107,8 @@ const Estoque = () => {
 
   useEffect(() => {
     load();
-  }, []);
-
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE);
-    return () => clearTimeout(t);
-  }, [search]);
-
-  useEffect(() => {
-    const el = bodyRef.current;
-    if (!el) return;
-
-    const calc = () => {
-      const h = el.clientHeight;
-      if (h <= 0) return;
-      const rows = Math.max(MIN_PER_PAGE, Math.floor(h / ROW_HEIGHT));
-      setPerPage((prev) => (prev === rows ? prev : rows));
-    };
-
-    calc();
-    const ro = new ResizeObserver(calc);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+    fetchVendas();
+  }, [fetchVendas]);
 
   const handleCreateProduct = async (data: ProductFormData) => {
     setError(null);
@@ -152,7 +122,7 @@ const Estoque = () => {
     }
   };
 
-  const handleUpdateProduct = async (data) => {
+  const handleUpdateProduct = async (data: ProductFormData) => {
     if (!selectedProduct?.id) return;
     setError(null);
     try {
@@ -169,7 +139,7 @@ const Estoque = () => {
     if (!selectedProduct?.id) return;
     setError(null);
     try {
-      // await ProductService.delete(selectedProduct.id);
+      await ProductService.remove(selectedProduct.id);
       fechar();
       await load();
       alert.success("Produto excluído!", "O produto foi removido do estoque.");
@@ -216,82 +186,87 @@ const Estoque = () => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
+  // Ranking por unidades efetivamente vendidas (ignora pedidos cancelados).
+  const maisVendidos = useMemo(() => {
+    const mapa = new Map<string, number>();
+    vendas.forEach((v) => {
+      if (estaCancelado(v)) return;
+      (v.pedido.itensPedido ?? []).forEach((item) => {
+        const nome = item.produto?.nomeProduto;
+        if (!nome) return;
+        mapa.set(nome, (mapa.get(nome) ?? 0) + Number(item.quantidadeItem || 0));
+      });
+    });
+    return Array.from(mapa, ([nome, qtd]) => ({ nome, qtd }))
+      .sort((a, b) => b.qtd - a.qtd)
+      .slice(0, 5);
+  }, [vendas]);
+
+  const maiorVenda = maisVendidos[0]?.qtd ?? 0;
+
   const hasFilters = Boolean(search) || filtro !== "todos";
 
   return (
-    <div className="relative flex h-screen w-full flex-col overflow-hidden bg-[#0e0d1a] text-[#e8e4ff]">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(60%_100%_at_50%_0%,rgba(124,110,245,0.16),transparent_70%)]" />
-
-      {/* Cabeçalho — componente compartilhado */}
-      <HeaderPage
-        icon={<Tags className="h-5 w-5" />}
-        title="Estoque"
-        subtitle={`${formatNumber(stats.total)} ${stats.total === 1 ? "produto cadastrado" : "produtos cadastrados"}`}
-        actions={
-          <button
-            onClick={() => setModal("registrar")}
-            className="flex cursor-pointer items-center gap-2 rounded-xl bg-gradient-to-br from-[#7c6ef5] to-[#8b7bf7] px-4 py-2.5 text-[13px] font-medium text-white shadow-[0_8px_24px_-8px_rgba(124,110,245,0.7)] transition-all hover:brightness-110 active:scale-[0.98]"
-          >
-            <PackagePlus className="h-4 w-4" />
-            Novo produto
-          </button>
-        }
-      />
+    <div className="aurora relative flex h-full w-full flex-col overflow-hidden text-ink">
+      <HeaderPage icon={<Tags className="h-5 w-5" />} title="Estoque" subtitle={`${formatNumber(stats.total)} ${stats.total === 1 ? "produto cadastrado" : "produtos cadastrados"}`} />
 
       {/* Conteúdo — ocupa o resto exato da viewport */}
-      <main className="relative flex min-h-0 flex-1 flex-col gap-5 overflow-hidden px-5 py-5 lg:px-8 lg:py-6">
+      <PageBody>
         {error && (
-          <div className="flex shrink-0 items-center justify-between gap-2.5 rounded-xl border border-[#a22d2d]/40 bg-[#a22d2d]/15 px-4 py-3 text-[13px] text-[#f0a5a5]">
+          <div className="flex shrink-0 items-center justify-between gap-2.5 rounded-xl border border-danger/40 bg-danger/15 px-4 py-3 text-[13px] text-danger">
             <span className="flex items-center gap-2.5">
               <AlertTriangle className="h-4 w-4 shrink-0" />
               {error}
             </span>
-            <button onClick={load} className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[#f0a5a5]/30 px-2.5 py-1 text-[12px] font-medium text-[#f0a5a5] transition-colors hover:bg-[#f0a5a5]/10">
+            <button onClick={load} className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-danger/30 px-2.5 py-1 text-[12px] text-danger transition-colors hover:bg-danger/10">
               <RotateCw className="h-3.5 w-3.5" /> Tentar novamente
             </button>
           </div>
         )}
 
         {/* Grid principal: tabela + lateral, ambos esticados até o fim */}
-        <section className="flex min-h-0 flex-1 flex-col gap-4 xl:flex-row xl:items-stretch">
+        <section className="flex min-h-0 flex-1 flex-col gap-3">
           {/* Card da tabela — altura fixa da viewport */}
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-[#15132a]">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden card glass-sheen rounded-lg">
             {/* Toolbar do card */}
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3.5">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-fg/[0.06] px-4 py-3.5">
               <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#7c6ef5]/[0.15]">
-                  <Package className="h-4 w-4 text-[#9b8ff5]" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/[0.15]">
+                  <Package className="h-4 w-4 text-accent-soft" />
                 </div>
                 <div>
-                  <h2 className="text-[13px] font-medium text-[#e8e4ff]">Todos os produtos</h2>
-                  <p className="text-[11px] text-[#6f6a93]">
+                  <h2 className="text-[13px] text-ink">Todos os produtos</h2>
+                  <p className="text-[11px] text-faint">
                     {formatNumber(filtered.length)} {filtered.length === 1 ? "resultado" : "resultados"}
                   </p>
                 </div>
               </div>
 
               <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
-                <div className="flex min-w-[200px] flex-1 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 transition-colors focus-within:border-[#7c6ef5]/60 focus-within:bg-white/[0.06] sm:max-w-xs">
-                  <Search className="h-4 w-4 text-[#4e4a72]" />
-                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nome, descrição ou ID…" aria-label="Buscar produtos" className="flex-1 bg-transparent py-2 text-[13px] text-[#e8e4ff] outline-none placeholder:text-[#6f6a93]" />
+                <div className="flex min-w-[200px] flex-1 items-center gap-2 rounded-lg border border-fg/[0.08] bg-fg/[0.04] px-3 transition-colors focus-within:border-accent/60 focus-within:bg-fg/[0.06] sm:max-w-xs">
+                  <Search className="h-4 w-4 text-muted" />
+                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nome, descrição ou ID…" aria-label="Buscar produtos" className="flex-1 bg-transparent py-2 text-[13px] text-ink outline-none placeholder:text-faint" />
                 </div>
-                <div className="flex items-center gap-1 rounded-xl border border-white/[0.07] bg-white/[0.03] p-1">
+                <div className="flex items-center gap-1 rounded-lg border border-fg/[0.07] bg-fg/[0.03] p-1">
                   {FILTROS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setFiltro(opt.value)}
-                      aria-pressed={filtro === opt.value}
-                      className={`cursor-pointer rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors ${filtro === opt.value ? "bg-[#7c6ef5] text-white shadow-[0_4px_14px_-4px_rgba(124,110,245,0.8)]" : "text-[#8a85b4] hover:text-[#e8e4ff]"}`}
-                    >
+                    <button key={opt.value} onClick={() => setFiltro(opt.value)} aria-pressed={filtro === opt.value} className={`cursor-pointer rounded-lg px-3 py-1.5 text-[12px] transition-colors ${filtro === opt.value ? "bg-accent text-white shadow-glow" : "text-mist hover:text-ink"}`}>
                       {opt.label}
                     </button>
                   ))}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setModal("registrar")}
+                  className="focus-ring inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-gradient-to-br from-accent-soft to-accent px-3 py-2 text-[12.5px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98]"
+                >
+                  <PackagePlus className="h-3.5 w-3.5" />
+                  Novo produto
+                </button>
               </div>
             </div>
 
             {/* Cabeçalho de colunas */}
-            <div className={`grid shrink-0 ${COLS} border-b border-white/[0.06] bg-white/[0.02] px-5 py-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#4e4a72]`}>
+            <div className={`grid shrink-0 ${COLS} border-b border-fg/[0.06] bg-fg/[0.02] px-5 py-2.5 text-[10px] uppercase tracking-[0.12em] text-muted`}>
               <p>Produto</p>
               <p className="text-right">Compra</p>
               <p className="text-right">Venda</p>
@@ -305,16 +280,16 @@ const Estoque = () => {
                 <SkeletonRows count={perPage} />
               ) : filtered.length === 0 ? (
                 <div className="flex h-full items-center justify-center py-10">
-                  <div className="flex max-w-xs flex-col items-center gap-3 text-center text-[#6f6a93]">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.03]">
+                  <div className="flex max-w-xs flex-col items-center gap-3 text-center text-faint">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-fg/[0.06] bg-fg/[0.03]">
                       <Package className="h-6 w-6" />
                     </div>
                     <div>
-                      <p className="text-[13px] text-[#b7b2d8]">Nenhum produto encontrado</p>
+                      <p className="text-[13px] text-mist">Nenhum produto encontrado</p>
                       <p className="mt-0.5 text-[11px]">{hasFilters ? "Ajuste a busca ou os filtros." : "Comece cadastrando seu primeiro produto."}</p>
                     </div>
                     {!hasFilters && (
-                      <button onClick={() => setModal("registrar")} className="mt-1 cursor-pointer rounded-xl bg-[#7c6ef5] px-3.5 py-2 text-[12px] font-medium text-white transition-colors hover:bg-[#8b7bf7]">
+                      <button onClick={() => setModal("registrar")} className="mt-1 cursor-pointer rounded-xl bg-accent px-3.5 py-2 text-[12px] text-white transition-colors hover:bg-accent">
                         Cadastrar primeiro produto
                       </button>
                     )}
@@ -330,21 +305,21 @@ const Estoque = () => {
                         setModal("editar");
                       }}
                       aria-label={`Editar produto ${product.nome}`}
-                      className={`group relative grid w-full ${COLS} items-center border-b border-white/[0.04] px-5 text-left transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-r before:bg-[#7c6ef5] before:opacity-0 before:transition-opacity hover:bg-white/[0.03] hover:before:opacity-100`}
+                      className={`group relative grid w-full ${COLS} items-center border-b border-fg/[0.04] px-5 text-left transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-r before:bg-accent before:opacity-0 before:transition-opacity hover:bg-fg/[0.03] hover:before:opacity-100`}
                       style={{ height: ROW_HEIGHT }}
                     >
                       <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-[#7c6ef5]/25 bg-gradient-to-br from-[#7c6ef5]/25 to-[#a78bfa]/10">
-                          {product.imagem ? <img src={product.imagem} alt={product.nome} className="h-full w-full object-cover" /> : <Package className="h-4 w-4 text-[#b7aef9]" />}
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-accent/25 bg-gradient-to-br from-accent/25 to-accent-soft/10">
+                          {product.imagem ? <img src={product.imagem} alt={product.nome} className="h-full w-full object-cover" /> : <Package className="h-4 w-4 text-accent-soft" />}
                         </div>
                         <div className="flex min-w-0 flex-col">
-                          <span className="truncate text-[13px] font-medium text-[#e8e4ff]">{product.nome}</span>
-                          <span className="truncate text-[11px] text-[#6f6a93]">{product.descricao || `#${product.id}`}</span>
+                          <span className="truncate text-[13px] text-ink">{product.nome}</span>
+                          <span className="truncate text-[11px] text-faint">{product.descricao || `#${product.id}`}</span>
                         </div>
                       </div>
-                      <span className="text-right text-[12px] tabular-nums text-[#8a85b4]">{brl(product.valorCompra)}</span>
-                      <span className="text-right text-[12px] font-medium tabular-nums text-[#e8e4ff]">{brl(product.valorVenda)}</span>
-                      <span className="text-right text-[12px] tabular-nums text-[#8a85b4]">{product.quantidade ?? 0}</span>
+                      <span className="text-right text-[12px] tabular-nums text-mist">{brl(product.valorCompra)}</span>
+                      <span className="text-right text-[12px] tabular-nums text-ink">{brl(product.valorVenda)}</span>
+                      <span className="text-right text-[12px] tabular-nums text-mist">{product.quantidade ?? 0}</span>
                       <span className="flex justify-end">
                         <StockBadge quantidade={product.quantidade} />
                       </span>
@@ -353,14 +328,14 @@ const Estoque = () => {
 
                   {/* Linhas vazias pra preencher o espaço quando a página não enche */}
                   {Array.from({ length: emptySlots }).map((_, i) => (
-                    <div key={`empty-${i}`} aria-hidden className="border-b border-white/[0.04]" style={{ height: ROW_HEIGHT }} />
+                    <div key={`empty-${i}`} aria-hidden className="border-b border-fg/[0.04]" style={{ height: ROW_HEIGHT }} />
                   ))}
                 </>
               )}
             </div>
 
             {/* Rodapé / paginação */}
-            <div className="flex shrink-0 items-center justify-between border-t border-white/[0.06] bg-white/[0.02] px-5 py-3 text-[11px] text-[#6f6a93]">
+            <div className="flex shrink-0 items-center justify-between border-t border-fg/[0.06] bg-fg/[0.02] px-5 py-3 text-[11px] text-faint">
               <p>
                 {formatNumber(filtered.length)} {filtered.length === 1 ? "produto" : "produtos"}
               </p>
@@ -368,7 +343,7 @@ const Estoque = () => {
                 <button
                   disabled={page <= 1}
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="flex cursor-pointer items-center gap-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-2.5 py-1.5 text-[#b7b2d8] transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex cursor-pointer items-center gap-1 rounded-lg border border-fg/[0.08] bg-fg/[0.04] px-2.5 py-1.5 text-mist transition-colors hover:bg-fg/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" /> Anterior
                 </button>
@@ -378,7 +353,7 @@ const Estoque = () => {
                 <button
                   disabled={page >= totalPages}
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="flex cursor-pointer items-center gap-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-2.5 py-1.5 text-[#b7b2d8] transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex cursor-pointer items-center gap-1 rounded-lg border border-fg/[0.08] bg-fg/[0.04] px-2.5 py-1.5 text-mist transition-colors hover:bg-fg/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Próxima <ChevronRight className="h-3.5 w-3.5" />
                 </button>
@@ -387,78 +362,106 @@ const Estoque = () => {
           </div>
 
           {/* Lateral: valor + composição */}
-          <aside className="flex flex-col gap-4 xl:w-[340px]">
+          <aside className="grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-3">
             {/* Valor do estoque */}
-            <div className="rounded-2xl border border-white/[0.07] bg-[#15132a] p-4">
+            <div className="card glass-sheen rounded-lg p-4">
               <div className="mb-3.5 flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#7c6ef5]/[0.15]">
-                  <Wallet className="h-4 w-4 text-[#9b8ff5]" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/[0.15]">
+                  <Wallet className="h-4 w-4 text-accent-soft" />
                 </div>
-                <h2 className="text-[13px] font-medium text-[#e8e4ff]">Valor do estoque</h2>
+                <h2 className="text-[13px] text-ink">Valor do estoque</h2>
               </div>
-              <p className="text-2xl font-semibold tracking-tight text-[#f1eeff] tabular-nums">{brl(stats.valorEstoque)}</p>
-              <div className="mt-1 flex items-center gap-1.5 text-[11px] text-[#6f6a93]">
+              <p className="text-2xl tracking-tight text-ink tabular-nums">{brl(stats.valorEstoque)}</p>
+              <div className="mt-1 flex items-center gap-1.5 text-[11px] text-faint">
                 <Boxes className="h-3.5 w-3.5" />
                 <span className="tabular-nums">{formatNumber(stats.unidades)}</span> unidades em <span className="tabular-nums">{formatNumber(stats.total)}</span> itens
               </div>
             </div>
 
             {/* Composição do estoque */}
-            <div className="rounded-2xl border border-white/[0.07] bg-[#15132a] p-4">
+            <div className="card glass-sheen rounded-lg p-4">
               <div className="mb-3.5 flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#7c6ef5]/[0.15]">
-                  <Package className="h-4 w-4 text-[#9b8ff5]" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/[0.15]">
+                  <Package className="h-4 w-4 text-accent-soft" />
                 </div>
-                <h2 className="text-[13px] font-medium text-[#e8e4ff]">Composição do estoque</h2>
+                <h2 className="text-[13px] text-ink">Composição do estoque</h2>
               </div>
 
-              <div className="flex h-2.5 overflow-hidden rounded-full bg-white/[0.05]">
-                <div className="bg-gradient-to-r from-[#0f6e56] to-[#5dcaa5] transition-all" style={{ width: `${pctDisponivel}%` }} />
-                <div className="bg-[#e0b955] transition-all" style={{ width: `${pctBaixo}%` }} />
-                <div className="bg-[#a22d2d] transition-all" style={{ width: `${pctEsgotado}%` }} />
+              <div className="flex h-2.5 overflow-hidden rounded-full bg-fg/[0.05]">
+                <div className="bg-gradient-to-r from-success to-success transition-all" style={{ width: `${pctDisponivel}%` }} />
+                <div className="bg-warning transition-all" style={{ width: `${pctBaixo}%` }} />
+                <div className="bg-danger transition-all" style={{ width: `${pctEsgotado}%` }} />
               </div>
 
               <div className="mt-3.5 flex flex-col gap-2 text-[12px]">
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-[#5dcaa5]" />
-                    <span className="text-[#8a85b4]">Em estoque</span>
+                    <span className="h-2 w-2 rounded-full bg-success" />
+                    <span className="text-mist">Em estoque</span>
                   </span>
                   <span className="tabular-nums">
-                    <span className="font-medium text-[#e8e4ff]">{formatNumber(stats.disponiveis)}</span> <span className="text-[#6f6a93]">({pctDisponivel}%)</span>
+                    <span className="text-ink">{formatNumber(stats.disponiveis)}</span> <span className="text-faint">({pctDisponivel}%)</span>
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-[#e0b955]" />
-                    <span className="text-[#8a85b4]">Baixo</span>
+                    <span className="h-2 w-2 rounded-full bg-warning" />
+                    <span className="text-mist">Baixo</span>
                   </span>
                   <span className="tabular-nums">
-                    <span className="font-medium text-[#e8e4ff]">{formatNumber(stats.baixos)}</span> <span className="text-[#6f6a93]">({pctBaixo}%)</span>
+                    <span className="text-ink">{formatNumber(stats.baixos)}</span> <span className="text-faint">({pctBaixo}%)</span>
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-[#a22d2d]" />
-                    <span className="text-[#8a85b4]">Esgotado</span>
+                    <span className="h-2 w-2 rounded-full bg-danger" />
+                    <span className="text-mist">Esgotado</span>
                   </span>
                   <span className="tabular-nums">
-                    <span className="font-medium text-[#e8e4ff]">{formatNumber(stats.esgotados)}</span> <span className="text-[#6f6a93]">({pctEsgotado}%)</span>
+                    <span className="text-ink">{formatNumber(stats.esgotados)}</span> <span className="text-faint">({pctEsgotado}%)</span>
                   </span>
                 </div>
               </div>
             </div>
+
+            {/* Produtos mais vendidos */}
+            <div className="card glass-sheen flex flex-col rounded-lg p-4">
+              <div className="mb-3.5 flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/[0.15] ring-1 ring-inset ring-accent/20">
+                  <TrendingUp className="h-4 w-4 text-accent-soft" />
+                </div>
+                <h2 className="text-[13px] text-ink">Mais vendidos</h2>
+              </div>
+
+              {maisVendidos.length === 0 ? (
+                <p className="py-4 text-center text-[12px] text-faint">Ainda sem vendas registradas.</p>
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  {maisVendidos.map((p) => (
+                    <div key={p.nome} className="flex flex-col gap-1">
+                      <div className="flex items-baseline justify-between gap-2 text-[12px]">
+                        <span className="min-w-0 truncate text-mist">{p.nome}</span>
+                        <span className="nums shrink-0 text-ink">{formatNumber(p.qtd)} un.</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-fg/[0.05]">
+                        <div className="h-full rounded-full bg-gradient-to-r from-accent-soft to-accent transition-all" style={{ width: `${maiorVenda ? (p.qtd / maiorVenda) * 100 : 0}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </aside>
         </section>
-      </main>
+      </PageBody>
 
       {/* Modais */}
       <Modal open={modal === "registrar"} onClose={fechar} title="Novo produto" subtitle="Preencha os dados do produto a cadastrar">
-        <ProductForm submitText="Criar produto" onCancel={fechar} onSubmit={handleCreateProduct} />
+        <ProdutoForm submitText="Criar produto" onCancel={fechar} onSubmit={handleCreateProduct} />
       </Modal>
 
       <Modal open={modal === "editar"} onClose={fechar} title="Editar produto" subtitle="Atualize os dados do produto">
-        <ProductForm
+        <ProdutoForm
           submitText="Salvar alterações"
           onCancel={fechar}
           onDelete={handleDeleteProduct}

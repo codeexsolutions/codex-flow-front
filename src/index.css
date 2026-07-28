@@ -1,51 +1,250 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ══════════════════════════════════════════════════════════════════════
+   TOKENS — fonte única de verdade do design system.
+   Tudo em canal RGB puro para o Tailwind aplicar <alpha-value>.
+   ══════════════════════════════════════════════════════════════════════ */
+
 :root {
-  /* TEMA CLARO (base) */
-  --canvas: 246 245 251;
+  /* ---------- TEMA CLARO ---------- */
+  /* Neutros levemente tingidos de violeta: evita o cinza "escritório". */
+  --canvas: 245 244 250;
   --surface: 255 255 255;
-  --surface-raised: 244 243 251;
-  --ink: 27 25 48;
-  --mist: 78 75 107;
-  --faint: 123 119 153;
-  --muted: 160 157 187;
-  --accent: 124 110 245;
-  --accent-soft: 133 119 240;
-  --accent-strong: 88 71 212;
-  --fg: 20 18 45; /* usado em bordas e overlays translúcidos */
+  --surface-raised: 250 249 253;
+
+  --ink: 26 24 46;
+  --mist: 88 84 122;
+  --faint: 132 127 165;
+  --muted: 168 164 192;
+  --fg: 26 24 46;
+
+  --accent: 109 92 232;
+  --accent-soft: 128 112 240;
+  --accent-strong: 86 68 208;
+
+  --success: 22 155 110;
+  --warning: 190 122 12;
+  --danger: 208 62 62;
+
+  /* Vidro — no claro o vidro é branco e luminoso */
+  --glass-bg: 255 255 255;
+  --glass-alpha: 0.72;
+  --glass-border: 26 24 46;
+  --glass-border-alpha: 0.08;
+  --glass-highlight: 255 255 255;
+
+  /* Sombras — no claro precisam ser suaves e coloridas, não pretas */
+  --shadow-color: 60 50 120;
+  --shadow-1: 0 1px 2px rgb(var(--shadow-color) / 0.06), 0 2px 8px -2px rgb(var(--shadow-color) / 0.08);
+  --shadow-2: 0 2px 4px rgb(var(--shadow-color) / 0.06), 0 8px 24px -6px rgb(var(--shadow-color) / 0.12);
+  --shadow-3: 0 4px 8px rgb(var(--shadow-color) / 0.07), 0 20px 48px -12px rgb(var(--shadow-color) / 0.18);
+
+  /* Brilho ambiente do fundo */
+  --aurora-1: 109 92 232;
+  --aurora-2: 120 160 255;
+  --aurora-alpha: 0.1;
+
+  /* Nível de efeito (sobrescrito por [data-fx]) */
+  --blur-sm: 8px;
+  --blur-md: 16px;
+  --blur-lg: 28px;
+
+  --ring-focus: 0 0 0 3px rgb(var(--accent) / 0.28);
 }
 
 .dark {
-  /* TEMA ESCURO (seu design atual) */
-  --canvas: 14 13 26;
-  --surface: 21 19 42;
-  --surface-raised: 28 26 48;
-  --ink: 236 234 252;
-  --mist: 165 161 201;
-  --faint: 111 106 147;
-  --muted: 78 74 110;
+  /* ---------- TEMA ESCURO ---------- */
+  --canvas: 12 11 24;
+  --surface: 22 20 42;
+  --surface-raised: 30 27 55;
+
+  --ink: 240 237 255;
+  --mist: 166 161 202;
+  --faint: 122 116 160;
+  --muted: 88 83 122;
+  --fg: 255 255 255;
+
   --accent: 124 110 245;
   --accent-soft: 169 156 248;
   --accent-strong: 196 186 255;
-  --fg: 255 255 255;
+
+  --success: 93 202 165;
+  --warning: 250 199 117;
+  --danger: 240 149 149;
+
+  --glass-bg: 36 33 64;
+  --glass-alpha: 0.55;
+  --glass-border: 255 255 255;
+  --glass-border-alpha: 0.09;
+  --glass-highlight: 255 255 255;
+
+  --shadow-color: 0 0 0;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px -2px rgb(0 0 0 / 0.35);
+  --shadow-2: 0 2px 6px rgb(0 0 0 / 0.35), 0 10px 28px -8px rgb(0 0 0 / 0.5);
+  --shadow-3: 0 6px 14px rgb(0 0 0 / 0.4), 0 24px 60px -12px rgb(0 0 0 / 0.65);
+
+  --aurora-1: 124 110 245;
+  --aurora-2: 80 140 255;
+  --aurora-alpha: 0.16;
 }
 
+/* ---------- Accents ---------- */
+:root[data-accent="roxo"] {
+  --accent: 109 92 232;
+  --accent-soft: 128 112 240;
+  --accent-strong: 86 68 208;
+  --aurora-1: 109 92 232;
+}
+.dark[data-accent="roxo"] {
+  --accent: 124 110 245;
+  --accent-soft: 169 156 248;
+  --accent-strong: 196 186 255;
+  --aurora-1: 124 110 245;
+}
+
+:root[data-accent="azul"] {
+  --accent: 30 130 220;
+  --accent-soft: 56 150 235;
+  --accent-strong: 20 105 190;
+  --aurora-1: 40 130 220;
+}
+.dark[data-accent="azul"] {
+  --accent: 74 168 255;
+  --accent-soft: 130 195 255;
+  --accent-strong: 175 215 255;
+  --aurora-1: 74 168 255;
+}
+
+:root[data-accent="verde"] {
+  --accent: 22 155 110;
+  --accent-soft: 30 175 126;
+  --accent-strong: 15 130 92;
+  --aurora-1: 30 170 120;
+}
+.dark[data-accent="verde"] {
+  --accent: 62 207 142;
+  --accent-soft: 120 225 175;
+  --accent-strong: 170 240 210;
+  --aurora-1: 62 207 142;
+}
+
+:root[data-accent="rosa"] {
+  --accent: 214 54 128;
+  --accent-soft: 232 78 148;
+  --accent-strong: 182 38 108;
+  --aurora-1: 224 70 140;
+}
+.dark[data-accent="rosa"] {
+  --accent: 240 98 160;
+  --accent-soft: 250 140 190;
+  --accent-strong: 255 190 220;
+  --aurora-1: 240 98 160;
+}
+
+:root[data-accent="laranja"] {
+  --accent: 200 118 10;
+  --accent-soft: 222 136 18;
+  --accent-strong: 168 96 6;
+  --aurora-1: 215 130 20;
+}
+.dark[data-accent="laranja"] {
+  --accent: 245 166 35;
+  --accent-soft: 250 195 100;
+  --accent-strong: 255 220 160;
+  --aurora-1: 245 166 35;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   NÍVEIS DE EFEITO — data-fx no <html>
+   Controla custo de GPU sem re-renderizar nada em React.
+   ══════════════════════════════════════════════════════════════════════ */
+
+[data-fx="full"] {
+  --blur-sm: 10px;
+  --blur-md: 20px;
+  --blur-lg: 32px;
+  --fx-glow: 1;
+  --fx-aurora: 1;
+}
+
+[data-fx="balanced"] {
+  --blur-sm: 6px;
+  --blur-md: 12px;
+  --blur-lg: 16px;
+  --fx-glow: 1;
+  --fx-aurora: 1;
+}
+
+/* Leve: zero blur (o filtro é o que mais pesa), zero aurora, sombra mínima */
+[data-fx="lite"] {
+  --blur-sm: 0px;
+  --blur-md: 0px;
+  --blur-lg: 0px;
+  --fx-glow: 0;
+  --fx-aurora: 0;
+  --glass-alpha: 1;
+  --shadow-1: 0 1px 2px rgb(var(--shadow-color) / 0.1);
+  --shadow-2: 0 2px 6px rgb(var(--shadow-color) / 0.12);
+  --shadow-3: 0 4px 12px rgb(var(--shadow-color) / 0.16);
+}
+
+[data-fx="lite"] .glass,
+[data-fx="lite"] .glass-strong,
+[data-fx="lite"] .glass-panel {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* ---------- Escala tipográfica ---------- */
 html {
+  font-size: 16px;
   touch-action: manipulation;
   -webkit-text-size-adjust: 100%;
 }
+html[data-font-scale="sm"] {
+  font-size: 15px;
+}
+html[data-font-scale="lg"] {
+  font-size: 17.5px;
+}
+
+/* ---------- Movimento ---------- */
+[data-motion="reduce"] *,
+[data-motion="reduce"] *::before,
+[data-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   BASE
+   ══════════════════════════════════════════════════════════════════════ */
 
 body {
   @apply bg-canvas font-sans text-ink antialiased;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   letter-spacing: -0.011em;
   overflow-x: hidden;
-
   -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 240ms ease,
+    color 240ms ease;
 }
 
 button,
@@ -69,9 +268,264 @@ input[type="number"] {
   appearance: textfield;
   -moz-appearance: textfield;
 }
-
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
+}
+
+::selection {
+  background: rgb(var(--accent) / 0.28);
+  color: rgb(var(--ink));
+}
+
+/* Scrollbar discreta e temática */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--fg) / 0.16) transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--fg) / 0.14);
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(var(--accent) / 0.45);
+  background-clip: content-box;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   UTILITÁRIOS DE SUPERFÍCIE
+   ══════════════════════════════════════════════════════════════════════ */
+
+@layer components {
+  /* Vidro padrão — cards, painéis, barras */
+  .glass {
+    background-color: rgb(var(--glass-bg) / var(--glass-alpha));
+    backdrop-filter: blur(var(--blur-md)) saturate(160%);
+    -webkit-backdrop-filter: blur(var(--blur-md)) saturate(160%);
+    border: 1px solid rgb(var(--glass-border) / var(--glass-border-alpha));
+  }
+
+  /* Vidro mais opaco — modais, sidebar, overlays de leitura longa */
+  .glass-strong {
+    background-color: rgb(var(--glass-bg) / calc(var(--glass-alpha) + 0.18));
+    backdrop-filter: blur(var(--blur-lg)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(180%);
+    border: 1px solid rgb(var(--glass-border) / calc(var(--glass-border-alpha) + 0.04));
+  }
+
+  /* Vidro sutil — hovers, chips, linhas de tabela */
+  .glass-subtle {
+    background-color: rgb(var(--glass-bg) / calc(var(--glass-alpha) - 0.3));
+    backdrop-filter: blur(var(--blur-sm));
+    -webkit-backdrop-filter: blur(var(--blur-sm));
+    border: 1px solid rgb(var(--glass-border) / var(--glass-border-alpha));
+  }
+
+  /* Reflexo superior — dá a leitura de "vidro real" */
+  .glass-sheen {
+    position: relative;
+  }
+  .glass-sheen::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgb(var(--glass-highlight) / 0.5), transparent);
+    opacity: calc(0.7 * var(--fx-glow, 1));
+    pointer-events: none;
+  }
+
+  .elev-1 {
+    box-shadow: var(--shadow-1);
+  }
+  .elev-2 {
+    box-shadow: var(--shadow-2);
+  }
+  .elev-3 {
+    box-shadow: var(--shadow-3);
+  }
+
+  /* Card padrão do sistema */
+  .card {
+    @apply glass elev-1 rounded-2xl;
+  }
+
+  .card-interactive {
+    @apply card transition-all duration-200;
+  }
+  .card-interactive:hover {
+    box-shadow: var(--shadow-2);
+    border-color: rgb(var(--accent) / 0.28);
+    transform: translateY(-1px);
+  }
+
+  /* Fundo com aurora — usado no canvas das páginas */
+  .aurora {
+    position: relative;
+    isolation: isolate;
+  }
+  .aurora::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: var(--fx-aurora, 1);
+    background:
+      radial-gradient(60% 55% at 15% 0%, rgb(var(--aurora-1) / var(--aurora-alpha)), transparent 70%),
+      radial-gradient(50% 50% at 90% 10%, rgb(var(--aurora-2) / calc(var(--aurora-alpha) * 0.75)), transparent 70%);
+  }
+
+  .focus-ring:focus-visible {
+    outline: none;
+    box-shadow: var(--ring-focus);
+  }
+
+  /* Texto com gradiente de destaque */
+  .text-gradient {
+    background: linear-gradient(135deg, rgb(var(--accent-soft)), rgb(var(--accent)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   TRANSIÇÕES DE ROTA
+   ══════════════════════════════════════════════════════════════════════ */
+
+@keyframes route-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.route-enter {
+  animation: route-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Entrada escalonada de listas e grades */
+.stagger > * {
+  animation: route-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.stagger > *:nth-child(1) {
+  animation-delay: 0.02s;
+}
+.stagger > *:nth-child(2) {
+  animation-delay: 0.06s;
+}
+.stagger > *:nth-child(3) {
+  animation-delay: 0.1s;
+}
+.stagger > *:nth-child(4) {
+  animation-delay: 0.14s;
+}
+.stagger > *:nth-child(n + 5) {
+  animation-delay: 0.18s;
+}
+
+[data-motion="reduce"] .route-enter,
+[data-motion="reduce"] .stagger > * {
+  animation: none !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   IMPRESSÃO — folha A4
+   ══════════════════════════════════════════════════════════════════════ */
+
+.folha-a4 {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 14mm 15mm;
+  box-sizing: border-box;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+@media print {
+  /* Papel é sempre claro, independente do tema em uso na tela. */
+  html,
+  body {
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  /* Esconde tudo que não faz parte da folha */
+  body * {
+    visibility: hidden;
+  }
+  .area-impressao,
+  .area-impressao * {
+    visibility: visible;
+  }
+  .area-impressao {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .no-print,
+  aside,
+  header.no-print {
+    display: none !important;
+  }
+
+  .folha-a4 {
+    width: 100%;
+    min-height: auto;
+    box-shadow: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  /* Vidro e sombra não existem no papel */
+  .glass,
+  .glass-strong,
+  .glass-subtle,
+  .card {
+    background: #fff !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+  }
+
+  tr,
+  section {
+    break-inside: avoid;
+  }
+  thead {
+    display: table-header-group;
+  }
+}
+
+/* ---------- View Transitions (troca de tema) ---------- */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) {
+  z-index: 1;
+}
+::view-transition-new(root) {
+  z-index: 2;
 }

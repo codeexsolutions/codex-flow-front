@@ -1,15 +1,17 @@
 import { useEffect } from "react";
-import { Users, FileText, Phone, Smartphone, MessageCircle, Mail, BadgeCheck, Loader2, Save, X } from "lucide-react";
+import { Users, FileText, Phone, Smartphone, MessageCircle, Mail, BadgeCheck } from "lucide-react";
 import { useForm } from "react-hook-form";
 import type { Path } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import CustomerType, { eStatus } from "../../../../types/ClientType";
-import Field from "../../../../components/Input/Field";
-import { Modal } from "../../../../components/Modal";
-import { useAlert } from "../../../../components/Alert/Alert";
-import { formatDocument, maskPhone } from "../../../../utils/format";
-import { clienteSchema, ClienteFormInput, ClienteFormData } from "../Schema/cliente.schema";
+import CustomerType, { eStatus } from "@/shared/domain/cliente";
+import Field from "@/shared/ui/inputs/Field";
+import { FormActions } from "@/shared/ui/form/FormKit";
+import { Modal } from "@/shared/ui/Modal";
+import { useAlert } from "@/shared/ui/Alert";
+import { formatDocument } from "@/shared/utils/format";
+import { maskPhone } from "@/shared/validation/masks";
+import { clienteSchema, ClienteFormInput, ClienteFormData } from "@/features/clientes/schema/cliente.schema";
 
 const toDefaults = (c: CustomerType): ClienteFormInput => ({
   nome: c.nome ?? "",
@@ -66,8 +68,8 @@ const ClienteEditForm = ({ open, client, saving = false, onClose, onSubmit }: Pr
       <form onSubmit={handleSubmit((data) => onSubmit(data), onInvalid)} className="flex flex-col gap-5">
         {/* Identificação */}
         <div className="flex items-center gap-3">
-          <span className="text-[11px] uppercase tracking-[0.12em] text-sky-300/50 font-normal">Identificação</span>
-          <span className="h-px flex-1 bg-sky-400/10" />
+          <span className="text-[11px] uppercase tracking-[0.12em] text-faint">Identificação</span>
+          <span className="h-px flex-1 bg-fg/[0.08]" />
         </div>
 
         <Field label="Nome" icon={<Users className="h-3.5 w-3.5" />} placeholder="Nome completo" error={errors.nome?.message} {...register("nome")} />
@@ -76,10 +78,10 @@ const ClienteEditForm = ({ open, client, saving = false, onClose, onSubmit }: Pr
           <Field label="CPF / CNPJ" icon={<FileText className="h-3.5 w-3.5" />} placeholder="Somente números" inputMode="numeric" error={errors.cpfCnpj?.message} {...masked("cpfCnpj", formatDocument)} />
 
           <div className="flex flex-col">
-            <label className="mb-1.5 block text-[10px] uppercase tracking-[0.12em] text-sky-200/50 font-normal">Status</label>
-            <div className="flex items-center gap-2 rounded-xl border border-sky-400/10 bg-[#0b1428] px-3 transition-colors focus-within:border-sky-400/40 hover:border-sky-400/20">
-              <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-sky-300/60" />
-              <select {...register("status")} className="w-full flex-1 cursor-pointer bg-transparent py-2.5 text-[13px] text-sky-50 outline-none font-normal [&>option]:bg-[#0b1428]">
+            <label className="mb-1.5 block text-[10px] uppercase tracking-[0.12em] text-faint">Status</label>
+            <div className="flex items-center gap-2 rounded-xl border border-fg/[0.1] bg-surface-raised px-3 transition-colors focus-within:border-accent/50 hover:border-fg/[0.16]">
+              <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-accent-soft" />
+              <select {...register("status")} className="w-full flex-1 cursor-pointer bg-transparent py-2.5 text-[13px] text-ink outline-none [&>option]:bg-surface-raised">
                 <option value={eStatus.ATIVO}>Ativo</option>
                 <option value={eStatus.INATIVO}>Inativo</option>
               </select>
@@ -90,8 +92,8 @@ const ClienteEditForm = ({ open, client, saving = false, onClose, onSubmit }: Pr
 
         {/* Contato */}
         <div className="flex items-center gap-3">
-          <span className="text-[11px] uppercase tracking-[0.12em] text-sky-300/50 font-normal">Contato</span>
-          <span className="h-px flex-1 bg-sky-400/10" />
+          <span className="text-[11px] uppercase tracking-[0.12em] text-faint">Contato</span>
+          <span className="h-px flex-1 bg-fg/[0.08]" />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -101,20 +103,7 @@ const ClienteEditForm = ({ open, client, saving = false, onClose, onSubmit }: Pr
           <Field label="E-mail" icon={<Mail className="h-3.5 w-3.5" />} placeholder="email@exemplo.com" inputMode="email" error={errors.contato?.email?.message} {...register("contato.email")} />
         </div>
 
-        <div className="flex justify-end gap-2 pt-3 border-t border-sky-400/5">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-sky-400/10 bg-transparent px-4 py-2.5 text-[12px] text-sky-200/70 font-normal transition-all hover:bg-sky-400/5 hover:text-sky-100 hover:border-sky-400/20 disabled:opacity-50"
-          >
-            <X className="h-3.5 w-3.5" /> Cancelar
-          </button>
-          <button type="submit" disabled={saving} className="flex cursor-pointer items-center gap-2 rounded-xl bg-sky-500 px-5 py-2.5 text-[12px] text-white font-normal shadow-lg shadow-sky-500/20 transition-all hover:bg-sky-400 hover:shadow-sky-400/30 active:scale-[0.98] disabled:opacity-60">
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            {saving ? "Salvando…" : "Salvar alterações"}
-          </button>
-        </div>
+        <FormActions onCancel={onClose} saving={saving} submitText="Salvar alterações" />
       </form>
     </Modal>
   );

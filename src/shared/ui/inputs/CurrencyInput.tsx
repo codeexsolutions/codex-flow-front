@@ -33,17 +33,7 @@ const CurrencyInput = ({
     }
   };
 
-  return (
-    <input
-      type="text"
-      ref={inputRef}
-      value={formatCurrencyFromCents(value)}
-      onChange={handleChange}
-      onFocus={handleFocus}
-      className="py-1 px-2 w-24 h-10 bg-transparent border-b"
-      inputMode="numeric"
-    />
-  );
+  return <input type="text" ref={inputRef} value={formatCurrencyFromCents(value)} onChange={handleChange} onFocus={handleFocus} className="py-1 px-2 w-24 h-10 bg-transparent border-b" inputMode="numeric" />;
 };
 
 export default CurrencyInput;

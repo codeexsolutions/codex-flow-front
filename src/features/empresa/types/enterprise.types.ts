@@ -1,4 +1,4 @@
-import EnterpriseType from "../../types/EnterpriseType";
+import EnterpriseType from "@/shared/domain/empresa";
 
 interface UseEnterpriseProps {
   enterprise: EnterpriseType | null;

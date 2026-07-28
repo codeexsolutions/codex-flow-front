@@ -1,35 +1,39 @@
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { useEffect } from "react";
 
-import useAuth from "../store/auth.store";
-import useEnterprise from "../store/enterprise.store";
+import useAuth from "@/features/auth/store/auth.store";
+import useEnterprise from "@/features/empresa/store/enterprise.store";
 
-import Main from "../pages/Main/Main";
-import LoadingScreen from "../pages/Main/LoadingScreen";
-import LandingPage from "../pages/LadingPage";
+import Main from "@/app/layouts/MainLayout";
+import LoadingScreen from "@/shared/ui/LoadingScreen";
+import NotFoundPage from "@/shared/ui/NotFoundPage";
+import useTheme from "@/shared/theme/useTheme";
 
-import AuthPage from "../pages/Auth/Login/Login.Page";
-import CadastroEmpresaPage from "../pages/Auth/SignUp/SIgnUp.Page";
+import LandingPage from "@/features/landing/pages/LandingPage";
 
-import Workflow from "../pages/PDVPage";
-import CheckoutPage from "../pages/CheckoutPage";
+import DashboardPage from "@/features/dashboard/pages/DashboardPage";
+import FinanceiroPage from "@/features/financeiro/pages/FinanceiroPage";
+import RelatoriosPage from "@/features/relatorios/pages/RelatoriosPage";
 
-import ClientesPage from "../pages/Clientes/Client.page";
-import CustomerDetailPage from "../pages/Clientes/Detail.page";
+import AuthPage from "@/features/auth/pages/LoginPage";
+import CadastroEmpresaPage from "@/features/auth/pages/SignUpPage";
 
-import TableStock from "../pages/Stock/StockPage";
+import Workflow from "@/features/vendas/pages/PDVPage";
+import SalesPage from "@/features/vendas/pages/SalesPage";
+import SalesOverviewPage from "@/features/vendas/pages/SalesOverviewPage";
+import SalesList from "@/features/vendas/pages/SalesListPage";
 
-import ConfiguracoesPage from "../pages/Config/Config.Page";
-import EmpresaPage from "../pages/Config/pages/Empresa.Page";
-import ProfilePage from "../pages/Config/pages/Profile.Page";
+import CheckoutPage from "@/features/checkout/pages/CheckoutPage";
 
-import SalesPage from "../pages/Sales/Sales.Page";
-import SalesOverviewPage from "../pages/Sales/pages/SalesOverview.Page";
-import SalesList from "../pages/Sales/pages/SalesList.Page";
+import ClientesPage from "@/features/clientes/pages/ClientesPage";
+import CustomerDetailPage from "@/features/clientes/pages/ClienteDetailPage";
 
-import NotFoundPage from "../pages/NotFoundPage";
-import AparenciaTab from "../pages/Config/pages/Aparencia.Page";
-import useTheme from "../hooks/useTheme";
+import TableStock from "@/features/estoque/pages/StockPage";
+
+import ConfiguracoesPage from "@/features/config/pages/ConfigPage";
+import EmpresaPage from "@/features/config/pages/EmpresaPage";
+import ProfilePage from "@/features/config/pages/ProfilePage";
+import AparenciaTab from "@/features/config/pages/AparenciaPage";
 
 const PUBLIC_PATHS = ["/login", "/cadastro", "/page"];
 
@@ -63,7 +67,9 @@ function AppRoutesContent({ isLogged }: { isLogged: boolean }) {
 
       {isLogged && (
         <Route path="/" element={<Main />}>
-          <Route index element={<Workflow />} />
+          {/* Dashboard é a home; o PDV passou a ter rota própria. */}
+          <Route index element={<DashboardPage />} />
+          <Route path="pdv" element={<Workflow />} />
 
           <Route path="checkout" element={<CheckoutPage />} />
 
@@ -71,6 +77,9 @@ function AppRoutesContent({ isLogged }: { isLogged: boolean }) {
           <Route path="clientes/:clienteId" element={<CustomerDetailPage />} />
 
           <Route path="estoque" element={<TableStock />} />
+
+          <Route path="financeiro" element={<FinanceiroPage />} />
+          <Route path="relatorios" element={<RelatoriosPage />} />
 
           <Route path="configuracoes" element={<ConfiguracoesPage />}>
             <Route index element={<Navigate to="perfil" replace />} />

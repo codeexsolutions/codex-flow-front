@@ -1,20 +1,6 @@
 import { z } from "zod";
-import { eStatus } from "../../../../types/ClientType";
-
-const optionalDigits = z
-  .string()
-  .trim()
-  .optional()
-  .transform((v) => {
-    const d = (v ?? "").replace(/\D/g, "");
-    return d.length ? d : undefined;
-  })
-  .refine((v) => v === undefined || v.length >= 8, "Número inválido");
-
-const optionalEmail = z
-  .union([z.string().trim().email("E-mail inválido"), z.literal("")])
-  .optional()
-  .transform((v) => (v ? v : undefined));
+import { eStatus } from "@/shared/domain/cliente";
+import { optionalDigits, optionalEmail } from "@/shared/validation/fields";
 
 export const clienteSchema = z.object({
   nome: z.string().trim().min(1, "Informe o nome do cliente"),

@@ -1,7 +1,6 @@
 import axios from "axios";
 
-const baseURL =
-  import.meta.env.PROD ? import.meta.env.VITE_API_PRODUCTION : import.meta.env.VITE_API_LOCAL;
+const baseURL = import.meta.env.PROD ? import.meta.env.VITE_API_PRODUCTION : import.meta.env.VITE_API_LOCAL;
 
 const sysgrafix = axios.create({
   baseURL,

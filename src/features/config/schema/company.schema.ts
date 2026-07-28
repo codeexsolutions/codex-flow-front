@@ -1,0 +1,37 @@
+import { z } from "zod";
+import { optionalCep, optionalPhone, optionalUrl, requiredEmail } from "@/shared/validation/fields";
+
+/* Schema único da empresa --------------------------------------------- */
+
+export const empresaSchema = z.object({
+  // Identificação
+  nomeFantasia: z.string().min(1, "Nome fantasia obrigatório"),
+  nomeRepresentante: z.string().optional().default(""),
+  cpfCnpj: z.string().optional().default(""), // somente leitura
+  inscMunicipal: z.string().optional().default(""),
+  urlLogo: optionalUrl,
+  urlImagem: optionalUrl,
+
+  // Contato
+  email: requiredEmail,
+  celular: optionalPhone,
+  telefone: optionalPhone,
+  whatsapp: optionalPhone,
+
+  // Endereço
+  cep: optionalCep,
+  logradouro: z.string().optional().default(""),
+  numero: z.string().optional().default(""),
+  complemento: z.string().optional().default(""),
+  bairro: z.string().optional().default(""),
+  cidade: z.string().optional().default(""),
+  uf: z.string().optional().default(""),
+});
+
+/**
+ * `.default("")` faz entrada e saída divergirem: na entrada o campo é
+ * opcional; na saída o zod garante a string. O formulário precisa dos dois —
+ * `EmpresaInput` é o que o usuário digita, `EmpresaData` é o já validado.
+ */
+export type EmpresaInput = z.input<typeof empresaSchema>;
+export type EmpresaData = z.output<typeof empresaSchema>;

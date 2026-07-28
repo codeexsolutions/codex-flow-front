@@ -1,11 +1,12 @@
 import { create } from "zustand";
 
-import AuthService from "../services/auth.service";
-import AuthFormInputs from "../pages/Auth/components/Schema/auth.schema";
-import useAuthProps from "./types/auth.types";
-import { decodeToken, isTokenExpired } from "../utils/decodeToken";
-import { alert } from "../components/Alert/Alert"; // ajuste o caminho se necessário
-import useEnterprise from "./enterprise.store";
+import AuthService from "@/features/auth/services/auth.service";
+import AuthFormInputs from "@/features/auth/schema/auth.schema";
+import useAuthProps from "@/features/auth/types/auth.types";
+import { decodeToken, isTokenExpired } from "@/shared/utils/decodeToken";
+import { alert } from "@/shared/ui/Alert"; // ajuste o caminho se necessário
+import useEnterprise from "@/features/empresa/store/enterprise.store";
+import { toCodigoEmpresaBase } from "@/shared/domain/empresa";
 
 const TOKEN_KEY = "token";
 const REFRESH_TOKEN_KEY = "refreshToken";
@@ -96,15 +97,14 @@ const useAuth = create<AuthStore>((set, get) => ({
       const user = get().user;
 
       if (user?.codigoEmpresa) {
-        await useEnterprise.getState().fetchEnterprise(user.codigoEmpresa.slice(0, -2));
+        await useEnterprise.getState().fetchEnterprise(toCodigoEmpresaBase(user.codigoEmpresa));
       }
 
       await alert.success("Login realizado", `Bem-vindo, ${user?.nome}!`);
-    } catch (error: any) {
-      await alert.error(
-        "Erro ao entrar",
-        error?.response?.data?.message ?? error?.message ?? "Usuário ou senha inválidos.",
-      );
+    } catch (error) {
+      const err = error as { response?: { data?: { message?: string } }; message?: string };
+
+      await alert.error("Erro ao entrar", err?.response?.data?.message ?? err?.message ?? "Usuário ou senha inválidos.");
 
       throw error;
     }
@@ -134,7 +134,7 @@ const useAuth = create<AuthStore>((set, get) => ({
       });
 
       if (user.codigoEmpresa) {
-        await useEnterprise.getState().fetchEnterprise(user.codigoEmpresa.slice(0, -2));
+        await useEnterprise.getState().fetchEnterprise(toCodigoEmpresaBase(user.codigoEmpresa));
       }
 
       set({

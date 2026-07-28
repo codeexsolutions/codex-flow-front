@@ -1,4 +1,4 @@
-import UserType from "../../types/UserType";
+import UserType from "@/shared/domain/user";
 
 interface AuthFormInput {
   email: string;

@@ -1,25 +1,15 @@
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  Building2,
-  User,
-  FileText,
-  Hash,
-  Image as ImageIcon,
-  MessageCircle,
-  Mail,
-  Smartphone,
-  Phone,
-  MapPin,
-} from "lucide-react";
+import { Building2, User, FileText, Hash, Image as ImageIcon, MessageCircle, Mail, Smartphone, Phone, MapPin } from "lucide-react";
 
-import useEnterprise from "../../../../store/enterprise.store";
-import Field from "../../../../components/Input/Field";
-import { useAlert } from "../../../../components/Alert/Alert";
-import { onlyDigits, maskCep, formatDocument } from "../../../../utils/format";
+import useEnterprise from "@/features/empresa/store/enterprise.store";
+import Field from "@/shared/ui/inputs/Field";
+import { useAlert } from "@/shared/ui/Alert";
+import { onlyDigits, formatDocument } from "@/shared/utils/format";
+import { maskCep, maskPhone, UFS } from "@/shared/validation/masks";
 
-import { SettingsCard, SaveRow, SelectField, useSaver, UFS } from "../../ui";
-import { empresaSchema, EmpresaData } from "../../schema/company.schema";
+import { SettingsCard, SaveRow, SelectField, useSaver } from "@/features/config/components/ConfigUI";
+import { empresaSchema, type EmpresaData, type EmpresaInput } from "@/features/config/schema/company.schema";
 
 type EnterpriseLike = {
   id?: string;
@@ -42,22 +32,10 @@ type EnterpriseLike = {
   };
 };
 
-// máscara de telefone (string -> string)
-const maskPhone = (v: string) => {
-  const d = onlyDigits(v).slice(0, 11);
-  if (!d) return "";
-  const ddd = d.slice(0, 2);
-  const rest = d.slice(2);
-  if (d.length <= 2) return `(${ddd}`;
-  if (d.length <= 6) return `(${ddd}) ${rest}`;
-  if (d.length <= 10) return `(${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
-  return `(${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`;
-};
-
 const SubHeader = ({ icon, title }: { icon: React.ReactNode; title: string }) => (
-  <div className="mb-3 flex items-center gap-2 border-b border-white/[0.06] pb-2">
-    <span className="text-[#9b8ff5]">{icon}</span>
-    <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-[#8a86b0]">{title}</span>
+  <div className="mb-3 flex items-center gap-2 border-b border-fg/[0.06] pb-2">
+    <span className="text-accent-soft">{icon}</span>
+    <span className="text-[11px] uppercase tracking-[0.12em] text-mist">{title}</span>
   </div>
 );
 
@@ -74,7 +52,7 @@ const EmpresaForm = () => {
     setValue,
     getValues,
     formState: { errors },
-  } = useForm<EmpresaData>({
+  } = useForm<EmpresaInput, unknown, EmpresaData>({
     resolver: zodResolver(empresaSchema),
     defaultValues: {
       nomeFantasia: ent.nomeFantasia ?? ent.name ?? "",
@@ -139,7 +117,9 @@ const EmpresaForm = () => {
         contato: {
           email: data.email,
           celular: onlyDigits(data.celular),
-          telefone: Number(onlyDigits(data.telefone)),
+          // string, não Number: `Number()` descartava o zero à esquerda do DDD
+          // e fazia o telefone ser exibido com separador de milhar.
+          telefone: onlyDigits(data.telefone),
           whatsapp: onlyDigits(data.whatsapp),
         },
         endereco: {
@@ -162,60 +142,18 @@ const EmpresaForm = () => {
   const onInvalid = () => alert.error("Campos inválidos", "Revise os campos destacados e tente novamente.");
 
   return (
-    <SettingsCard
-      icon={<Building2 className="h-4 w-4" />}
-      title="Dados da empresa"
-      desc="Identificação, contato e endereço."
-      footer={<SaveRow {...saver} onSave={handleSubmit(onValid, onInvalid)} savedLabel="Empresa atualizada" />}
-    >
+    <SettingsCard icon={<Building2 className="h-4 w-4" />} title="Dados da empresa" desc="Identificação, contato e endereço." footer={<SaveRow {...saver} onSave={handleSubmit(onValid, onInvalid)} savedLabel="Empresa atualizada" />}>
       <div className="flex flex-col gap-6">
         {/* Empresa */}
         <section>
           <SubHeader icon={<Building2 size={14} />} title="Empresa" />
           <div className="grid grid-cols-1 gap-x-5 sm:grid-cols-2 xl:grid-cols-3">
-            <Field
-              label="Nome fantasia"
-              icon={<Building2 size={15} />}
-              placeholder="Nome da empresa"
-              error={errors.nomeFantasia?.message}
-              {...register("nomeFantasia")}
-            />
-            <Field
-              label="Representante"
-              icon={<User size={15} />}
-              placeholder="Nome do responsável"
-              error={errors.nomeRepresentante?.message}
-              {...register("nomeRepresentante")}
-            />
-            <Field
-              label="CPF ou CNPJ"
-              icon={<FileText size={15} />}
-              hint="Não editável"
-              disabled
-              readOnly
-              {...register("cpfCnpj")}
-            />
-            <Field
-              label="Inscrição municipal"
-              icon={<Hash size={15} />}
-              placeholder="Opcional"
-              error={errors.inscMunicipal?.message}
-              {...register("inscMunicipal")}
-            />
-            <Field
-              label="URL do logo"
-              icon={<ImageIcon size={15} />}
-              placeholder="https://..."
-              error={errors.urlLogo?.message}
-              {...register("urlLogo")}
-            />
-            <Field
-              label="URL da imagem"
-              icon={<ImageIcon size={15} />}
-              placeholder="https://..."
-              error={errors.urlImagem?.message}
-              {...register("urlImagem")}
-            />
+            <Field label="Nome fantasia" icon={<Building2 size={15} />} placeholder="Nome da empresa" error={errors.nomeFantasia?.message} {...register("nomeFantasia")} />
+            <Field label="Representante" icon={<User size={15} />} placeholder="Nome do responsável" error={errors.nomeRepresentante?.message} {...register("nomeRepresentante")} />
+            <Field label="CPF ou CNPJ" icon={<FileText size={15} />} hint="Não editável" disabled readOnly {...register("cpfCnpj")} />
+            <Field label="Inscrição municipal" icon={<Hash size={15} />} placeholder="Opcional" error={errors.inscMunicipal?.message} {...register("inscMunicipal")} />
+            <Field label="URL do logo" icon={<ImageIcon size={15} />} placeholder="https://..." error={errors.urlLogo?.message} {...register("urlLogo")} />
+            <Field label="URL da imagem" icon={<ImageIcon size={15} />} placeholder="https://..." error={errors.urlImagem?.message} {...register("urlImagem")} />
           </div>
         </section>
 
@@ -223,35 +161,10 @@ const EmpresaForm = () => {
         <section>
           <SubHeader icon={<MessageCircle size={14} />} title="Contato" />
           <div className="grid grid-cols-1 gap-x-5 sm:grid-cols-2 xl:grid-cols-4">
-            <Field
-              label="E-mail"
-              icon={<Mail size={15} />}
-              type="email"
-              placeholder="empresa@email.com"
-              error={errors.email?.message}
-              {...register("email")}
-            />
-            <Field
-              label="Celular"
-              icon={<Smartphone size={15} />}
-              placeholder="(00) 00000-0000"
-              error={errors.celular?.message}
-              {...phoneMasked("celular")}
-            />
-            <Field
-              label="Telefone"
-              icon={<Phone size={15} />}
-              placeholder="(00) 0000-0000"
-              error={errors.telefone?.message}
-              {...phoneMasked("telefone")}
-            />
-            <Field
-              label="WhatsApp"
-              icon={<MessageCircle size={15} />}
-              placeholder="(00) 00000-0000"
-              error={errors.whatsapp?.message}
-              {...phoneMasked("whatsapp")}
-            />
+            <Field label="E-mail" icon={<Mail size={15} />} type="email" placeholder="empresa@email.com" error={errors.email?.message} {...register("email")} />
+            <Field label="Celular" icon={<Smartphone size={15} />} placeholder="(00) 00000-0000" error={errors.celular?.message} {...phoneMasked("celular")} />
+            <Field label="Telefone" icon={<Phone size={15} />} placeholder="(00) 0000-0000" error={errors.telefone?.message} {...phoneMasked("telefone")} />
+            <Field label="WhatsApp" icon={<MessageCircle size={15} />} placeholder="(00) 00000-0000" error={errors.whatsapp?.message} {...phoneMasked("whatsapp")} />
           </div>
         </section>
 
@@ -274,18 +187,12 @@ const EmpresaForm = () => {
                 buscarCep();
               }}
             />
-            <Field
-              label="Número"
-              icon={<Hash size={15} />}
-              placeholder="123"
-              error={errors.numero?.message}
-              {...register("numero")}
-            />
+            <Field label="Número" icon={<Hash size={15} />} placeholder="123" error={errors.numero?.message} {...register("numero")} />
             <Controller
               control={control}
               name="uf"
               render={({ field }) => (
-                <SelectField label="UF" icon={<MapPin size={15} />} value={field.value} onChange={field.onChange}>
+                <SelectField label="UF" icon={<MapPin size={15} />} value={field.value ?? ""} onChange={field.onChange}>
                   <option value="">—</option>
                   {UFS.map((uf) => (
                     <option key={uf} value={uf}>
@@ -296,35 +203,11 @@ const EmpresaForm = () => {
               )}
             />
             <div className="sm:col-span-2 xl:col-span-3">
-              <Field
-                label="Logradouro"
-                icon={<MapPin size={15} />}
-                placeholder="Rua, avenida..."
-                error={errors.logradouro?.message}
-                {...register("logradouro")}
-              />
+              <Field label="Logradouro" icon={<MapPin size={15} />} placeholder="Rua, avenida..." error={errors.logradouro?.message} {...register("logradouro")} />
             </div>
-            <Field
-              label="Bairro"
-              icon={<MapPin size={15} />}
-              placeholder="Bairro"
-              error={errors.bairro?.message}
-              {...register("bairro")}
-            />
-            <Field
-              label="Complemento"
-              icon={<Hash size={15} />}
-              placeholder="Opcional"
-              error={errors.complemento?.message}
-              {...register("complemento")}
-            />
-            <Field
-              label="Cidade"
-              icon={<Building2 size={15} />}
-              placeholder="Cidade"
-              error={errors.cidade?.message}
-              {...register("cidade")}
-            />
+            <Field label="Bairro" icon={<MapPin size={15} />} placeholder="Bairro" error={errors.bairro?.message} {...register("bairro")} />
+            <Field label="Complemento" icon={<Hash size={15} />} placeholder="Opcional" error={errors.complemento?.message} {...register("complemento")} />
+            <Field label="Cidade" icon={<Building2 size={15} />} placeholder="Cidade" error={errors.cidade?.message} {...register("cidade")} />
           </div>
         </section>
       </div>

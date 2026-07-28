@@ -1,10 +1,10 @@
 import { Receipt, ArrowUpRight, FileText } from "lucide-react";
 
-import useEnterprise from "../../../store/enterprise.store";
-import { useAlert } from "../../../components/Alert/Alert";
-import { formatDocument } from "../../../utils/format";
+import useEnterprise from "@/features/empresa/store/enterprise.store";
+import { useAlert } from "@/shared/ui/Alert";
+import { formatDocument } from "@/shared/utils/format";
 
-import EmpresaForm from "../components/Form/Company.Form";
+import EmpresaForm from "@/features/config/components/EmpresaForm";
 
 type EnterpriseLike = {
   nomeFantasia?: string;
@@ -23,7 +23,7 @@ const EmpresaAside = () => {
 
   const initials =
     nome
-      .split(" ")
+      .split("")
       .slice(0, 2)
       .map((w) => w[0])
       .join("")
@@ -39,19 +39,19 @@ const EmpresaAside = () => {
           <div className="relative">
             <div className="absolute -inset-2 rounded-3xl bg-accent/25 blur-lg" />
             <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl border border-accent/40 bg-canvas shadow-[0_12px_40px_-16px_rgb(var(--accent)/0.7)]">
-              {ent.urlLogo ? <img src={ent.urlLogo} alt={nome} className="h-full w-full object-cover" /> : <span className="bg-gradient-to-br from-accent to-accent-soft bg-clip-text text-4xl font-bold text-transparent">{initials}</span>}
+              {ent.urlLogo ? <img src={ent.urlLogo} alt={nome} className="h-full w-full object-cover" /> : <span className="bg-gradient-to-br from-accent to-accent-soft bg-clip-text text-4xl text-transparent">{initials}</span>}
             </div>
           </div>
 
           <div className="min-w-0">
-            <p className="truncate text-base font-semibold text-ink">{nome}</p>
+            <p className="truncate text-base text-ink">{nome}</p>
             <p className="mt-0.5 flex items-center justify-center gap-1.5 text-[12px] text-mist">
               <FileText size={12} className="text-faint" />
               {doc}
             </p>
           </div>
 
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-success/20 px-3 py-1 text-[11px] font-medium text-success ring-1 ring-success/25">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-success/20 px-3 py-1 text-[11px] text-success ring-1 ring-success/25">
             <span className="h-1.5 w-1.5 rounded-full bg-success" /> Conta ativa
           </span>
 
@@ -64,7 +64,7 @@ const EmpresaAside = () => {
       </div>
 
       {/* Faturas */}
-      <button type="button" onClick={() => alert.info("Faturas", "O histórico de faturas ainda será integrado.")} className="flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-fg/[0.08] bg-surface p-4 text-left transition-colors hover:bg-fg/[0.03]">
+      <button type="button" onClick={() => alert.info("Faturas", "O histórico de faturas ainda será integrado.")} className="flex cursor-pointer items-center justify-between gap-3 card glass-sheen rounded-2xl p-4 text-left transition-colors hover:bg-fg/[0.03]">
         <span className="flex items-center gap-2.5 text-[13px] text-ink">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/[0.15]">
             <Receipt size={16} className="text-accent-soft" />

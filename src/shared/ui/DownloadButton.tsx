@@ -1,6 +1,19 @@
 import { toPng } from "html-to-image";
 import { RefObject } from "react";
 
+/**
+ * Resolve um token do tema para um valor de cor concreto.
+ *
+ * `html-to-image` desenha num canvas fora da cascata do documento, então
+ * `rgb(var(--surface))` chega literal e é descartado — o fundo sai transparente
+ * e a nota baixa quebrada. Por isso lemos o valor computado antes de capturar.
+ */
+const resolveToken = (token: string, fallback: string): string => {
+  if (typeof window === "undefined") return fallback;
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+  return raw ? `rgb(${raw})` : fallback;
+};
+
 export const handleDownload = async (ref: RefObject<HTMLDivElement>, filename = `nota-${Date.now()}.png`) => {
   const node = ref.current;
   if (!node) return;
@@ -14,7 +27,7 @@ export const handleDownload = async (ref: RefObject<HTMLDivElement>, filename = 
 
   try {
     const dataUrl = await toPng(node, {
-      backgroundColor: "#15132a",
+      backgroundColor: resolveToken("--surface", "#15132a"),
       width: node.scrollWidth,
       height: node.scrollHeight,
       pixelRatio: 2,

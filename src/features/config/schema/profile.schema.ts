@@ -1,19 +1,15 @@
 import { z } from "zod";
-import { onlyDigits } from "../../../utils/format";
-
-const optionalPhone = z.string().refine((v) => {
-  const d = onlyDigits(v);
-  return d === "" || d.length === 10 || d.length === 11;
-}, "Número inválido");
+import { optionalPhone, requiredEmail } from "@/shared/validation/fields";
 
 export const profileSchema = z.object({
   name: z.string().min(1, "Nome obrigatório"),
-  email: z.string().min(1, "E-mail obrigatório").email("E-mail inválido"),
+  email: requiredEmail,
   phone: optionalPhone,
   role: z.string().optional().default(""),
 });
 
-export type ProfileData = z.infer<typeof profileSchema>;
+export type ProfileInput = z.input<typeof profileSchema>;
+export type ProfileData = z.output<typeof profileSchema>;
 
 export const passwordSchema = z
   .object({
