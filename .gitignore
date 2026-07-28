@@ -10,7 +10,11 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dev-dist
 *.local
+
+# Saída do graphify
+graphify-out
 
 # Editor directories and files
 .vscode/*
