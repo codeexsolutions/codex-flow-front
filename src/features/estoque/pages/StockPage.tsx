@@ -8,6 +8,7 @@ import { Modal } from "@/shared/ui/Modal";
 import HeaderPage from "@/shared/ui/HeaderPage";
 import { PageBody } from "@/shared/ui/PageShell";
 import { useAlert } from "@/shared/ui/Alert";
+import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import { formatNumber, toPercent } from "@/shared/utils/format";
 import useVendaStore from "@/features/vendas/store/venda.store";
 import { estaCancelado } from "@/shared/domain/pedido";
@@ -117,8 +118,8 @@ const Estoque = () => {
       fechar();
       await load();
       alert.success("Produto cadastrado!", "O produto foi adicionado ao estoque.");
-    } catch {
-      alert.error("Erro ao cadastrar", "Não foi possível cadastrar o produto.");
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível cadastrar o produto."));
     }
   };
 
@@ -130,8 +131,8 @@ const Estoque = () => {
       fechar();
       await load();
       alert.success("Produto atualizado!", "As alterações foram salvas.");
-    } catch {
-      alert.error("Erro ao atualizar", "Não foi possível salvar as alterações.");
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível salvar as alterações."));
     }
   };
 
@@ -143,8 +144,8 @@ const Estoque = () => {
       fechar();
       await load();
       alert.success("Produto excluído!", "O produto foi removido do estoque.");
-    } catch {
-      alert.error("Erro ao excluir", "Não foi possível excluir o produto.");
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível excluir o produto."));
     }
   };
 

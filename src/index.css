@@ -158,6 +158,58 @@
   --aurora-1: 245 166 35;
 }
 
+:root[data-accent="teal"] {
+  --accent: 0 150 170;
+  --accent-soft: 0 175 195;
+  --accent-strong: 0 125 145;
+  --aurora-1: 0 160 180;
+}
+.dark[data-accent="teal"] {
+  --accent: 0 200 220;
+  --accent-soft: 80 220 240;
+  --accent-strong: 160 240 255;
+  --aurora-1: 0 200 220;
+}
+
+:root[data-accent="vinho"] {
+  --accent: 150 40 70;
+  --accent-soft: 175 52 86;
+  --accent-strong: 125 28 55;
+  --aurora-1: 160 45 75;
+}
+.dark[data-accent="vinho"] {
+  --accent: 220 70 110;
+  --accent-soft: 235 110 145;
+  --accent-strong: 250 160 185;
+  --aurora-1: 220 70 110;
+}
+
+:root[data-accent="dourado"] {
+  --accent: 180 130 30;
+  --accent-soft: 200 150 40;
+  --accent-strong: 155 110 20;
+  --aurora-1: 190 140 35;
+}
+.dark[data-accent="dourado"] {
+  --accent: 240 190 50;
+  --accent-soft: 245 210 110;
+  --accent-strong: 255 230 170;
+  --aurora-1: 240 190 50;
+}
+
+:root[data-accent="preto"] {
+  --accent: 60 60 80;
+  --accent-soft: 90 90 110;
+  --accent-strong: 40 40 55;
+  --aurora-1: 70 70 90;
+}
+.dark[data-accent="preto"] {
+  --accent: 200 200 220;
+  --accent-soft: 225 225 240;
+  --accent-strong: 240 240 250;
+  --aurora-1: 200 200 220;
+}
+
 /* ══════════════════════════════════════════════════════════════════════
    NÍVEIS DE EFEITO — data-fx no <html>
    Controla custo de GPU sem re-renderizar nada em React.

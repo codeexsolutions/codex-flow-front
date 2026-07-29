@@ -20,6 +20,10 @@ const ACCENTS: { id: AccentId; label: string; color: string }[] = [
   { id: "verde", label: "Verde", color: "#3ecf8e" },
   { id: "rosa", label: "Rosa", color: "#f062a0" },
   { id: "laranja", label: "Laranja", color: "#f5a623" },
+  { id: "teal", label: "Teal", color: "#00c8dc" },
+  { id: "vinho", label: "Vinho", color: "#dc466e" },
+  { id: "dourado", label: "Dourado", color: "#f0be32" },
+  { id: "preto", label: "Preto", color: "#3c3c50" },
 ];
 
 const FONT_SCALES: { id: FontScale; label: string; desc: string; sample: string }[] = [

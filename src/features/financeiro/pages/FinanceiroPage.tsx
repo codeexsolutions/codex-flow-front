@@ -8,6 +8,7 @@ import { TabelaCard, TabelaHead, TabelaRow, TabelaVazia, type Coluna } from "@/s
 import { Modal } from "@/shared/ui/Modal";
 import { Form, FormSection, FormGrid, FormActions, TextField, SelectBox } from "@/shared/ui/form/FormKit";
 import { useAlert } from "@/shared/ui/Alert";
+import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import useFinanceiroStore from "@/features/financeiro/store/financeiro.store";
 import type { MovimentacaoType, NovaMovimentacaoType, NovaParcelaType, ParcelaType } from "@/shared/domain/financeiro";
 import { formatCurrency as brl } from "@/shared/utils/currency";
@@ -94,8 +95,9 @@ export default function FinanceiroPage() {
       alert.success("Parcela criada!", "A parcela foi registrada com sucesso.");
       setShowNovaParcela(false);
       setNovaParcela({ pedidoId: "", numeroParcela: 1, valor: 0, vencimento: "" });
-    } catch {
-      alert.error("Erro ao criar parcela", "Não foi possível registrar a parcela.");
+    } catch (err) {
+
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível registrar a parcela."));
     } finally {
       setSalvando(false);
     }
@@ -108,8 +110,9 @@ export default function FinanceiroPage() {
       await baixarParcelaStore(parcelaParaBaixar.id, formaPagamentoBaixa);
       alert.success("Parcela baixada!", "O pagamento foi registrado.");
       setParcelaParaBaixar(null);
-    } catch {
-      alert.error("Erro ao baixar parcela", "Não foi possível registrar o pagamento.");
+    } catch (err) {
+
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível registrar o pagamento."));
     } finally {
       setSalvando(false);
     }
@@ -126,8 +129,9 @@ export default function FinanceiroPage() {
       alert.success("Movimentação registrada!", "O lançamento foi adicionado ao caixa.");
       setShowNovaMovimentacao(false);
       setNovaMovimentacao({ tipo: "ENTRADA", categoria: "", descricao: "", valor: 0, dataMovimentacao: "" });
-    } catch {
-      alert.error("Erro ao registrar", "Não foi possível registrar a movimentação.");
+    } catch (err) {
+
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível registrar a movimentação."));
     } finally {
       setSalvando(false);
     }
@@ -137,8 +141,9 @@ export default function FinanceiroPage() {
     try {
       await excluirMovimentacaoStore(id);
       alert.success("Excluída!", "A movimentação foi removida.");
-    } catch {
-      alert.error("Erro ao excluir", "Não foi possível excluir a movimentação.");
+    } catch (err) {
+
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível excluir a movimentação."));
     }
   };
 

@@ -13,6 +13,7 @@ import NoteService from "@/features/vendas/services/note.service";
 import CustomerType from "@/shared/domain/cliente";
 import type { PedidoClienteType } from "@/shared/domain/pedido";
 import { useAlert } from "@/shared/ui/Alert";
+import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import { getInitials, onlyDigits, formatDocument, formatNumber } from "@/shared/utils/format";
 import { formatDate } from "@/shared/utils/date";
 import { maskPhone } from "@/shared/validation/masks";
@@ -144,8 +145,9 @@ const ClienteDetalhe = () => {
       setShowEdit(false);
       await load();
       alert.success("Cliente atualizado", "As alterações foram salvas com sucesso.");
-    } catch {
-      alert.error("Erro ao salvar", "Não foi possível atualizar o cliente.");
+    } catch (err) {
+
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível atualizar o cliente."));
     } finally {
       setSaving(false);
     }

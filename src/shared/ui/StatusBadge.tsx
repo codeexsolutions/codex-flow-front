@@ -21,6 +21,11 @@ const PEDIDO_LOOK: Record<string, { label: string; wrap: string; dot: string }> 
     wrap: "border-warning/50 bg-warning/20 text-warning",
     dot: "bg-warning",
   },
+  [PEDIDO_STATUS.PENDENTE]: {
+    label: "Pendente",
+    wrap: "border-warning/50 bg-warning/20 text-warning",
+    dot: "bg-warning",
+  },
   [PEDIDO_STATUS.CANCELADO]: {
     label: "Cancelado",
     wrap: "border-fg/[0.08] bg-fg/[0.04] text-mist",

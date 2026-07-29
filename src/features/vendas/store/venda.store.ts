@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 import NoteService from "@/features/vendas/services/note.service";
 import { type PedidoClienteType, estaAberto, estaCancelado, estaFechado, isPedidoValido, totalDoPedido } from "@/shared/domain/pedido";
+
 import { isSameDay, isSameMonth } from "@/shared/utils/date";
 import { unwrapList } from "@/shared/api/types";
 
@@ -87,5 +88,5 @@ const useVendaStore = create<VendaState>((set, get) => ({
   },
 }));
 
-export { estaAberto, estaFechado, estaCancelado, totalDoPedido };
+export { estaAberto, estaPendente, estaFechado, estaCancelado, totalDoPedido };
 export default useVendaStore;

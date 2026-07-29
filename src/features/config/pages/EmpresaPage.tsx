@@ -1,91 +1,247 @@
-import { Receipt, ArrowUpRight, FileText } from "lucide-react";
+import { useState, useCallback } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Building2, MessageCircle, MapPin, Save, CircleCheck } from "lucide-react";
 
 import useEnterprise from "@/features/empresa/store/enterprise.store";
 import { useAlert } from "@/shared/ui/Alert";
-import { formatDocument } from "@/shared/utils/format";
+import { onlyDigits, formatDocument } from "@/shared/utils/format";
+import { maskCep, maskPhone } from "@/shared/validation/masks";
 
-import EmpresaForm from "@/features/config/components/EmpresaForm";
+import { SettingsCard } from "@/features/config/components/ConfigUI";
+import { empresaSchema, type EmpresaData, type EmpresaInput } from "@/features/config/schema/company.schema";
+import EmpresaIdentificacao from "@/features/config/components/EmpresaIdentificacao";
+import EmpresaContato from "@/features/config/components/EmpresaContato";
+import EmpresaEndereco from "@/features/config/components/EmpresaEndereco";
+import CorporateBadge from "@/features/config/components/CorporateBadge";
 
 type EnterpriseLike = {
+  id?: string;
   nomeFantasia?: string;
   name?: string;
+  nomeRepresentante?: string;
   cpfCnpj?: string;
+  inscMunicipal?: string;
   urlLogo?: string;
+  urlImagem?: string;
+  contato?: { email?: string; celular?: string | number; telefone?: string | number; whatsapp?: string | number };
+  endereco?: {
+    cep?: string;
+    logradouro?: string;
+    numero?: string;
+    complemento?: string;
+    bairro?: string;
+    cidade?: string;
+    uf?: string;
+  };
 };
 
-const EmpresaAside = () => {
-  const { enterprise } = useEnterprise();
-  const alert = useAlert();
-  const ent = (enterprise ?? {}) as EnterpriseLike;
+type TabId = "identificacao" | "contato" | "endereco";
 
-  const nome = ent.nomeFantasia || ent.name || "Sua empresa";
-  const doc = ent.cpfCnpj ? formatDocument(ent.cpfCnpj) : "—";
-
-  const initials =
-    nome
-      .split("")
-      .slice(0, 2)
-      .map((w) => w[0])
-      .join("")
-      .toUpperCase() || "E";
-
-  return (
-    <div className="flex min-w-0 flex-col gap-4 xl:sticky xl:top-0">
-      {/* Card da logo */}
-      <div className="relative overflow-hidden rounded-2xl border border-fg/[0.08] bg-gradient-to-b from-surface-raised to-surface p-6">
-        <div className="pointer-events-none absolute -top-16 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-accent/20 blur-3xl" />
-
-        <div className="relative flex flex-col items-center gap-4 text-center">
-          <div className="relative">
-            <div className="absolute -inset-2 rounded-3xl bg-accent/25 blur-lg" />
-            <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl border border-accent/40 bg-canvas shadow-[0_12px_40px_-16px_rgb(var(--accent)/0.7)]">
-              {ent.urlLogo ? <img src={ent.urlLogo} alt={nome} className="h-full w-full object-cover" /> : <span className="bg-gradient-to-br from-accent to-accent-soft bg-clip-text text-4xl text-transparent">{initials}</span>}
-            </div>
-          </div>
-
-          <div className="min-w-0">
-            <p className="truncate text-base text-ink">{nome}</p>
-            <p className="mt-0.5 flex items-center justify-center gap-1.5 text-[12px] text-mist">
-              <FileText size={12} className="text-faint" />
-              {doc}
-            </p>
-          </div>
-
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-success/20 px-3 py-1 text-[11px] text-success ring-1 ring-success/25">
-            <span className="h-1.5 w-1.5 rounded-full bg-success" /> Conta ativa
-          </span>
-
-          {!ent.urlLogo && (
-            <p className="text-[11px] leading-relaxed text-faint">
-              Adicione a <span className="text-mist">URL do logo</span> na Identificação para exibi-lo aqui.
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Faturas */}
-      <button type="button" onClick={() => alert.info("Faturas", "O histórico de faturas ainda será integrado.")} className="flex cursor-pointer items-center justify-between gap-3 card glass-sheen rounded-2xl p-4 text-left transition-colors hover:bg-fg/[0.03]">
-        <span className="flex items-center gap-2.5 text-[13px] text-ink">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/[0.15]">
-            <Receipt size={16} className="text-accent-soft" />
-          </span>
-          Ver faturas
-        </span>
-        <ArrowUpRight size={16} className="text-faint" />
-      </button>
-    </div>
-  );
-};
+const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
+  { id: "identificacao", label: "Identificação", icon: <Building2 size={15} /> },
+  { id: "contato", label: "Contato", icon: <MessageCircle size={15} /> },
+  { id: "endereco", label: "Endereço", icon: <MapPin size={15} /> },
+];
 
 const EmpresaPage = () => {
+  const { enterprise, updateEnterprise } = useEnterprise();
+  const ent = (enterprise ?? {}) as EnterpriseLike;
+  const alert = useAlert();
+  const [tab, setTab] = useState<TabId>("identificacao");
+
+  /* ─── Save states individuais ─── */
+  const [saving, setSaving] = useState<TabId | null>(null);
+  const [savedTab, setSavedTab] = useState<TabId | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    control,
+    setValue,
+    getValues,
+    formState: { errors },
+  } = useForm<EmpresaInput, unknown, EmpresaData>({
+    resolver: zodResolver(empresaSchema),
+    defaultValues: {
+      nomeFantasia: ent.nomeFantasia ?? ent.name ?? "",
+      nomeRepresentante: ent.nomeRepresentante ?? "",
+      cpfCnpj: formatDocument(ent.cpfCnpj ?? ""),
+      inscMunicipal: ent.inscMunicipal ?? "",
+      urlLogo: ent.urlLogo ?? "",
+      urlImagem: ent.urlImagem ?? "",
+      email: ent.contato?.email ?? "",
+      celular: maskPhone(String(ent.contato?.celular ?? "")),
+      telefone: maskPhone(String(ent.contato?.telefone ?? "")),
+      whatsapp: maskPhone(String(ent.contato?.whatsapp ?? "")),
+      cep: maskCep(ent.endereco?.cep ?? ""),
+      logradouro: ent.endereco?.logradouro ?? "",
+      numero: ent.endereco?.numero ?? "",
+      complemento: ent.endereco?.complemento ?? "",
+      bairro: ent.endereco?.bairro ?? "",
+      cidade: ent.endereco?.cidade ?? "",
+      uf: ent.endereco?.uf ?? "",
+    },
+  });
+
+  const allData = () => getValues() as EmpresaData;
+
+  const buscarCep = async () => {
+    const cep = onlyDigits(getValues("cep"));
+    if (cep.length !== 8) return;
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const data = await res.json();
+      if (data.erro) return;
+      if (data.logradouro) setValue("logradouro", data.logradouro);
+      if (data.bairro) setValue("bairro", data.bairro);
+      if (data.localidade) setValue("cidade", data.localidade);
+      if (data.uf) setValue("uf", data.uf);
+    } catch {
+      /* silencioso */
+    }
+  };
+
+  const doSave = async (tabId: TabId, saveFn: () => Promise<void>) => {
+    setSaving(tabId);
+    setSavedTab(null);
+    try {
+      await saveFn();
+      setSavedTab(tabId);
+      setTimeout(() => setSavedTab(null), 2500);
+    } catch {
+      alert.error("Erro ao salvar", "Não foi possível salvar.");
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const salvarIdentificacao = async () => {
+    if (!ent.id) return;
+    await handleSubmit(
+      async (data) => {
+        await updateEnterprise(ent.id, {
+          nomeFantasia: data.nomeFantasia,
+          nomeRepresentante: data.nomeRepresentante,
+          cpfCnpj: onlyDigits(data.cpfCnpj),
+          inscMunicipal: data.inscMunicipal,
+          urlLogo: data.urlLogo,
+          urlImagem: data.urlImagem,
+        });
+      },
+      () => alert.error("Campos inválidos", "Revise os campos de Identificação."),
+    )();
+  };
+
+  const salvarContato = async () => {
+    if (!ent.id) return;
+    const data = allData();
+    await updateEnterprise(ent.id, {
+      contato: {
+        email: data.email,
+        celular: onlyDigits(data.celular),
+        telefone: onlyDigits(data.telefone),
+        whatsapp: onlyDigits(data.whatsapp),
+      },
+    });
+  };
+
+  const salvarEndereco = async () => {
+    if (!ent.id) return;
+    const data = allData();
+    await updateEnterprise(ent.id, {
+      endereco: {
+        cep: onlyDigits(data.cep),
+        logradouro: data.logradouro,
+        numero: data.numero,
+        complemento: data.complemento,
+        bairro: data.bairro,
+        cidade: data.cidade,
+        uf: data.uf,
+      },
+    });
+  };
+
+  const SaveBtn = ({ tabId, onClick }: { tabId: TabId; onClick: () => void }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={saving === tabId}
+      className={`flex cursor-pointer items-center gap-2 rounded-xl px-4 py-2.5 text-[12px] transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${
+        savedTab === tabId
+          ? "bg-success/20 text-success"
+          : "bg-accent text-white shadow-[0_6px_20px_-6px_rgba(124,110,245,0.6)] hover:brightness-110"
+      }`}
+    >
+      {saving === tabId ? (
+        "Salvando..."
+      ) : savedTab === tabId ? (
+        <><CircleCheck size={15} /> Salvo</>
+      ) : (
+        <><Save size={15} /> Salvar</>
+      )}
+    </button>
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto xl:grid-cols-3">
-        <div className="min-w-0 xl:col-span-2">
-          <EmpresaForm />
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 overflow-y-auto xl:grid-cols-4">
+        {/* Coluna principal — 3/4 */}
+        <div className="flex min-w-0 flex-col gap-5 xl:col-span-3">
+          {/* Abas de navegação */}
+          <div className="flex items-center gap-1 rounded-lg border border-fg/[0.07] bg-fg/[0.03] p-1 w-fit">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`focus-ring flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-[12px] transition-all ${
+                  tab === t.id ? "bg-accent text-white shadow-glow" : "text-mist hover:bg-fg/[0.06] hover:text-ink"
+                }`}
+              >
+                {t.icon}
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Card ativo conforme a aba selecionada */}
+          {tab === "identificacao" && (
+            <SettingsCard
+              icon={<Building2 className="h-4 w-4" />}
+              title="Identificação"
+              desc="Dados principais da empresa"
+              footer={<SaveBtn tabId="identificacao" onClick={() => doSave("identificacao", salvarIdentificacao)} />}
+            >
+              <EmpresaIdentificacao register={register} errors={errors} />
+            </SettingsCard>
+          )}
+
+          {tab === "contato" && (
+            <SettingsCard
+              icon={<MessageCircle className="h-4 w-4" />}
+              title="Contato"
+              desc="Telefones e e-mail da empresa"
+              footer={<SaveBtn tabId="contato" onClick={() => doSave("contato", salvarContato)} />}
+            >
+              <EmpresaContato register={register} errors={errors} />
+            </SettingsCard>
+          )}
+
+          {tab === "endereco" && (
+            <SettingsCard
+              icon={<MapPin className="h-4 w-4" />}
+              title="Endereço"
+              desc="CEP e localização da empresa"
+              footer={<SaveBtn tabId="endereco" onClick={() => doSave("endereco", salvarEndereco)} />}
+            >
+              <EmpresaEndereco register={register} control={control} errors={errors} onBuscarCep={buscarCep} />
+            </SettingsCard>
+          )}
         </div>
-        <aside className="min-w-0">
-          <EmpresaAside />
+
+        {/* Badge lateral — 1/4 */}
+        <aside className="min-w-0 xl:col-span-1 xl:sticky xl:top-0 xl:self-start">
+          <CorporateBadge />
         </aside>
       </div>
     </div>

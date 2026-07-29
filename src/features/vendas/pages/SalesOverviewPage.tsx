@@ -3,12 +3,11 @@ import { ShoppingCart, TrendingUp, DollarSign, CheckCircle, AlertCircle, Star } 
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { Modal } from "@/shared/ui/Modal";
 import Invoice from "@/features/vendas/components/Invoice";
-import NoteService from "@/features/vendas/services/note.service";
 import { formatCurrency } from "@/shared/utils/currency";
-import { type PedidoClienteType, estaAberto, estaCancelado, estaFechado, isPedidoValido, totalDoPedido } from "@/shared/domain/pedido";
+import { type PedidoClienteType, estaAberto, estaCancelado, estaFechado, totalDoPedido } from "@/shared/domain/pedido";
 import { MONTHS, isSameMonth } from "@/shared/utils/date";
-import { unwrapList } from "@/shared/api/types";
 import { useChartColors } from "@/shared/theme/useChartColors";
+import useVendaStore from "@/features/vendas/store/venda.store";
 
 /** Nomes curtos usados pelos gráficos desta tela, ligados aos tokens do tema. */
 const useC = () => {
@@ -82,26 +81,19 @@ function CardHeader({ icon, chip, title, sub }: { icon: React.ReactNode; chip: s
 
 /* ======================= Overview Page ======================= */
 const SalesOverviewPage = () => {
-  const [vendas, setVendas] = useState<PedidoClienteType[]>([]);
+  const vendas = useVendaStore((s) => s.vendas);
+  const fetchVendas = useVendaStore((s) => s.fetchVendas);
+
   const [notaAberta, setNotaAberta] = useState<NotaAberta | null>(null);
 
-  const carregar = () => {
-    NoteService.getAll()
-      .then(({ data }) => {
-        const lista = unwrapList<PedidoClienteType>(data).filter(isPedidoValido);
-        setVendas(lista);
-      })
-      .catch(() => setVendas([]));
-  };
-
   useEffect(() => {
-    carregar();
-  }, []);
+    fetchVendas();
+  }, [fetchVendas]);
 
   const abrirNota = (nota: NotaAberta) => setNotaAberta(nota);
   const fecharNota = () => {
     setNotaAberta(null);
-    carregar();
+    fetchVendas(true);
   };
 
   const dados = useMemo(() => {

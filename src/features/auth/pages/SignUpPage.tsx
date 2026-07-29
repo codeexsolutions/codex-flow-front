@@ -232,7 +232,7 @@ const CadastroEmpresaPage = () => {
       if (response.primeiroAcesso && response.pix) {
         setPixInfo(response.pix);
       } else {
-        navigate("/");
+        navigate("/checkout");
       }
     } catch (error) {
       const mensagem = error instanceof Error ? error.message : "erro desconhecido";
@@ -700,15 +700,12 @@ const CadastroEmpresaPage = () => {
               type="button"
               onClick={() => {
                 setPixInfo(null);
-                navigate("/");
+                navigate("/checkout");
               }}
               className="group relative w-full overflow-hidden rounded-lg bg-gradient-to-r from-accent-soft via-accent to-accent-strong py-2.5 text-sm text-white shadow-[0_10px_25px_-8px_rgba(108,92,231,0.7)] transition-all duration-200 hover:shadow-[0_14px_35px_-8px_rgba(59,110,245,0.65)] hover:brightness-110 active:scale-[0.99]"
             >
               <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-fg/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
               <span className="relative">Já realizei o pagamento</span>
-            </button>
-            <button type="button" onClick={() => setPixInfo(null)} className="mt-2 w-full text-center text-[11px] text-muted transition-colors hover:text-accent">
-              Pagar depois
             </button>
           </div>
         </div>

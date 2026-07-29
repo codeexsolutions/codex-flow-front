@@ -25,6 +25,11 @@ import SalesList from "@/features/vendas/pages/SalesListPage";
 
 import CheckoutPage from "@/features/checkout/pages/CheckoutPage";
 
+import CorreiosPage from "@/features/correios/pages/CorreiosPage";
+import PrecosPrazosPage from "@/features/correios/pages/PrecosPrazosPage";
+import PostagemPage from "@/features/correios/pages/PostagemPage";
+import RastrearPage from "@/features/correios/pages/RastrearPage";
+
 import ClientesPage from "@/features/clientes/pages/ClientesPage";
 import CustomerDetailPage from "@/features/clientes/pages/ClienteDetailPage";
 
@@ -34,6 +39,7 @@ import ConfiguracoesPage from "@/features/config/pages/ConfigPage";
 import EmpresaPage from "@/features/config/pages/EmpresaPage";
 import ProfilePage from "@/features/config/pages/ProfilePage";
 import AparenciaTab from "@/features/config/pages/AparenciaPage";
+import FaturasPage from "@/features/config/pages/FaturasPage";
 
 const PUBLIC_PATHS = ["/login", "/cadastro", "/page"];
 
@@ -47,13 +53,19 @@ function AppRoutesContent({ isLogged }: { isLogged: boolean }) {
   if (!isLogged && !isPublic) {
     return <Navigate to="/login" replace />;
   }
+
+  // Usuário inativo (sem pagamento) → só pode acessar /checkout
+  if (isLogged && user && !user.ativo) {
+    if (path !== "/checkout") {
+      return <Navigate to="/checkout" replace />;
+    }
+    // Não carrega MainLayout — renderiza checkout sem sidebar
+    return <CheckoutPage />;
+  }
+
   if (isLogged && !enterprise) {
     return <LoadingScreen />;
   }
-
-  //  if (isLogged && user && !user.ativo && path !== "/checkout") {
-  //    return <Navigate to="/checkout" replace />;
-  //  }
 
   if (isLogged && user?.ativo && (path === "/checkout" || path === "/login")) {
     return <Navigate to="/" replace />;
@@ -79,12 +91,19 @@ function AppRoutesContent({ isLogged }: { isLogged: boolean }) {
           <Route path="estoque" element={<TableStock />} />
 
           <Route path="financeiro" element={<FinanceiroPage />} />
+          <Route path="correios" element={<CorreiosPage />}>
+            <Route index element={<PrecosPrazosPage />} />
+            <Route path="postagem" element={<PostagemPage />} />
+            <Route path="rastrear" element={<RastrearPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
           <Route path="relatorios" element={<RelatoriosPage />} />
 
           <Route path="configuracoes" element={<ConfiguracoesPage />}>
             <Route index element={<Navigate to="perfil" replace />} />
             <Route path="perfil" element={<ProfilePage />} />
             <Route path="empresa" element={<EmpresaPage />} />
+            <Route path="faturas" element={<FaturasPage />} />
             <Route path="aparencia" element={<AparenciaTab />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>

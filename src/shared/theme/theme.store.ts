@@ -4,7 +4,7 @@ import { persist } from "zustand/middleware";
 import type { FxLevel } from "./detectPerformance";
 
 export type ThemeMode = "escuro" | "claro" | "sistema";
-export type AccentId = "roxo" | "azul" | "verde" | "rosa" | "laranja";
+export type AccentId = "roxo" | "azul" | "verde" | "rosa" | "laranja" | "cinza" | "preto" | "teal" | "vinho" | "dourado";
 export type FontScale = "sm" | "md" | "lg";
 export type MotionPref = "auto" | "reduce";
 /** "auto" delega para a detecção de hardware. */

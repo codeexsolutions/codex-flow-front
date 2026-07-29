@@ -1,13 +1,6 @@
 import { toPng } from "html-to-image";
-import { RefObject } from "react";
+import type { RefObject } from "react";
 
-/**
- * Resolve um token do tema para um valor de cor concreto.
- *
- * `html-to-image` desenha num canvas fora da cascata do documento, então
- * `rgb(var(--surface))` chega literal e é descartado — o fundo sai transparente
- * e a nota baixa quebrada. Por isso lemos o valor computado antes de capturar.
- */
 const resolveToken = (token: string, fallback: string): string => {
   if (typeof window === "undefined") return fallback;
   const raw = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
@@ -22,8 +15,16 @@ export const handleDownload = async (ref: RefObject<HTMLDivElement>, filename = 
   const prevScroll = scrollParent?.scrollTop ?? 0;
   if (scrollParent) scrollParent.scrollTop = 0;
 
-  // Aguarda o próximo frame para o browser aplicar o scroll antes de medir
   await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+
+  /* ─── Esconde imagens temporariamente para não aparecerem no PNG ─── */
+  const imgs = node.querySelectorAll<HTMLImageElement>("img");
+  const restored: { el: HTMLImageElement; origDisplay: string }[] = [];
+  imgs.forEach((img) => {
+    const origDisplay = img.style.display;
+    img.style.display = "none";
+    restored.push({ el: img, origDisplay });
+  });
 
   try {
     const dataUrl = await toPng(node, {
@@ -33,8 +34,6 @@ export const handleDownload = async (ref: RefObject<HTMLDivElement>, filename = 
       pixelRatio: 2,
       cacheBust: true,
       style: {
-        // Garante que o nó capturado seja renderizado por inteiro,
-        // ignorando qualquer transform/scroll herdado
         transform: "none",
         transformOrigin: "top left",
       },
@@ -48,6 +47,10 @@ export const handleDownload = async (ref: RefObject<HTMLDivElement>, filename = 
     console.error("Erro ao gerar imagem da nota:", err);
     throw err;
   } finally {
+    /* ─── Restaura imagens ─── */
+    restored.forEach(({ el, origDisplay }) => {
+      el.style.display = origDisplay;
+    });
     if (scrollParent) scrollParent.scrollTop = prevScroll;
   }
 };

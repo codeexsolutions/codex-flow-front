@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { Package, Users, DollarSign, Settings, LogOut, ShoppingCart, BarChart3, Menu, X, LayoutDashboard, Wallet } from "lucide-react";
+import { Package, Users, DollarSign, Settings, LogOut, ShoppingCart, BarChart3, Menu, X, LayoutDashboard, Wallet, Truck } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import useAuth from "@/features/auth/store/auth.store";
@@ -126,6 +126,8 @@ const Sidebar = () => {
           {cat("Gerenciamento")}
           {item("estoque", <Package size={17} />, "Estoque")}
           {item("clientes", <Users size={17} />, "Clientes")}
+          {item("correios", <Truck size={17} />, "Correios", true) }
+          {item("correios", <Truck size={17} />, "Funcionarios", true) }
 
           {cat("Financeiro")}
           {item("vendas", <DollarSign size={17} />, "Vendas")}

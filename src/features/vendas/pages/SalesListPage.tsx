@@ -2,40 +2,32 @@ import { useEffect, useMemo, useState } from "react";
 import { ShoppingCart, Search, XCircle } from "lucide-react";
 import { Modal } from "@/shared/ui/Modal";
 import Invoice from "@/features/vendas/components/Invoice";
-import NoteService from "@/features/vendas/services/note.service";
 import { formatCurrency } from "@/shared/utils/currency";
-import { type PedidoClienteType, estaAberto, estaCancelado, estaFechado, isPedidoValido, totalDoPedido } from "@/shared/domain/pedido";
+import { type PedidoClienteType, estaAberto, estaCancelado, estaFechado, totalDoPedido } from "@/shared/domain/pedido";
 import { formatDateShort } from "@/shared/utils/date";
 import { PedidoStatusBadge } from "@/shared/ui/StatusBadge";
-import { unwrapList } from "@/shared/api/types";
+import useVendaStore from "@/features/vendas/store/venda.store";
 
 type StatusFiltro = "todos" | "pago" | "pendente" | "cancelado";
 type NotaAberta = { id?: string; clienteId: string; nome?: string };
 
 /* ======================= Sales / Outlet Page ======================= */
 const SalesList = () => {
-  const [vendas, setVendas] = useState<PedidoClienteType[]>([]);
+  const vendas = useVendaStore((s) => s.vendas);
+  const fetchVendas = useVendaStore((s) => s.fetchVendas);
+
   const [notaAberta, setNotaAberta] = useState<NotaAberta | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFiltro>("todos");
 
-  const carregar = () => {
-    NoteService.getAll()
-      .then(({ data }) => {
-        const lista = unwrapList<PedidoClienteType>(data).filter(isPedidoValido);
-        setVendas(lista);
-      })
-      .catch(() => setVendas([]));
-  };
-
   useEffect(() => {
-    carregar();
-  }, []);
+    fetchVendas();
+  }, [fetchVendas]);
 
   const abrirNota = (nota: NotaAberta) => setNotaAberta(nota);
   const fecharNota = () => {
     setNotaAberta(null);
-    carregar();
+    fetchVendas(true);
   };
 
   /* ======================= Filtros ======================= */
@@ -110,7 +102,7 @@ function TabSales({
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex max-w-xs flex-1 items-center gap-2 rounded-lg border border-fg/[0.08] bg-fg/[0.05] px-3 transition-colors focus-within:border-accent">
           <Search className="h-3.5 w-3.5 text-muted" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente…" className="flex-1 bg-transparent py-2 text-xs text-ink outline-none placeholder:text-faint" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente..." className="flex-1 bg-transparent py-2 text-xs text-ink outline-none placeholder:text-faint" />
         </div>
 
         <div className="flex gap-1.5">
@@ -122,14 +114,14 @@ function TabSales({
         </div>
       </div>
 
-      {/* Tabela */}
+      {/* Tabela com scroll horizontal responsivo */}
       <div className="flex min-h-0 flex-col overflow-hidden card glass-sheen rounded-xl">
         <div className="flex items-center justify-between border-b border-fg/[0.07] bg-fg/[0.02] px-4 py-3">
           <div>
             <h2 className="text-[13px] text-ink">Todas as vendas</h2>
             <p className="text-[11px] text-muted">
               {vendas.length} {vendas.length === 1 ? "nota" : "notas"}
-              {vendas.length !== todasCount ? ` de ${todasCount}` : ""}
+              {vendas.length !== todasCount ? " de " + todasCount : ""}
             </p>
           </div>
           <div className="text-right">
@@ -138,46 +130,48 @@ function TabSales({
           </div>
         </div>
 
-        <div className="grid grid-cols-7 border-b border-fg/[0.06] bg-fg/[0.03] py-2 text-center text-[10px] uppercase tracking-wide text-muted">
-          <p>ID</p>
-          <p>Cliente</p>
-          <p>Data</p>
-          <p>Status</p>
-          <p>Total</p>
-          <p className="text-success">Pago</p>
-          <p className="text-danger">Pendente</p>
-        </div>
-
-        <div className="flex-1 overflow-auto">
-          {vendas.length > 0 ? (
-            <div className="divide-y divide-fg/[0.04]">
-              {vendas.map((v) => {
-                const total = totalDoPedido(v);
-                const pago = estaFechado(v) ? total : 0;
-                const pendente = estaAberto(v) ? total : 0;
-                const idCurto = v.pedido.pedidoId?.slice(-6).toUpperCase() ?? "—";
-
-                return (
-                  <button key={v.pedido.pedidoId} onClick={() => onAbrir(v)} className="grid w-full grid-cols-7 items-center gap-2 px-2 py-2.5 text-center text-[11px] text-ink transition-colors hover:bg-fg/[0.04]">
-                    <p className="truncate font-mono text-[10px] text-mist">#{idCurto}</p>
-                    <p className="truncate text-left text-[11px]">{v.nomeCliente}</p>
-                    <p className="text-mist">{formatDateShort(v.pedido.dataPedido)}</p>
-                    <p className="flex justify-center">{<PedidoStatusBadge status={v.pedido.pedidoStatus} />}</p>
-                    <p>{formatCurrency(total)}</p>
-                    <p className={pago > 0 ? "text-success" : "text-muted"}>{formatCurrency(pago)}</p>
-                    <p className={pendente > 0 ? "text-danger" : "text-muted"}>{formatCurrency(pendente)}</p>
-                  </button>
-                );
-              })}
+        <div className="min-h-0 flex-1 overflow-x-auto">
+          <div className="min-w-[700px]">
+            <div className="grid grid-cols-7 border-b border-fg/[0.06] bg-fg/[0.03] py-2 text-center text-[10px] uppercase tracking-wide text-muted">
+              <p>ID</p>
+              <p>Cliente</p>
+              <p>Data</p>
+              <p>Status</p>
+              <p>Total</p>
+              <p className="text-success">Pago</p>
+              <p className="text-danger">Pendente</p>
             </div>
-          ) : (
-            <div className="flex h-full items-center justify-center">
-              <div className="flex flex-col items-center gap-2 text-muted">
-                {status === "cancelado" ? <XCircle className="h-6 w-6" /> : <ShoppingCart className="h-6 w-6" />}
-                <p>Nenhuma venda encontrada</p>
+
+            {vendas.length > 0 ? (
+              <div className="divide-y divide-fg/[0.04]">
+                {vendas.map((v) => {
+                  const total = totalDoPedido(v);
+                  const pago = estaFechado(v) ? total : 0;
+                  const pendente = estaAberto(v) ? total : 0;
+                  const idCurto = v.pedido.pedidoId?.slice(-6).toUpperCase() ?? "—";
+
+                  return (
+                    <button key={v.pedido.pedidoId} onClick={() => onAbrir(v)} className="grid w-full grid-cols-7 items-center gap-2 px-2 py-2.5 text-center text-[11px] text-ink transition-colors hover:bg-fg/[0.04]">
+                      <p className="truncate font-mono text-[10px] text-mist">#{idCurto}</p>
+                      <p className="truncate text-left text-[11px]">{v.nomeCliente}</p>
+                      <p className="text-mist">{formatDateShort(v.pedido.dataPedido)}</p>
+                      <p className="flex justify-center">{<PedidoStatusBadge status={v.pedido.pedidoStatus} />}</p>
+                      <p>{formatCurrency(total)}</p>
+                      <p className={pago > 0 ? "text-success" : "text-muted"}>{formatCurrency(pago)}</p>
+                      <p className={pendente > 0 ? "text-danger" : "text-muted"}>{formatCurrency(pendente)}</p>
+                    </button>
+                  );
+                })}
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="flex h-full items-center justify-center py-10">
+                <div className="flex flex-col items-center gap-2 text-muted">
+                  {status === "cancelado" ? <XCircle className="h-6 w-6" /> : <ShoppingCart className="h-6 w-6" />}
+                  <p>Nenhuma venda encontrada</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

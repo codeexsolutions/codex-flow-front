@@ -9,6 +9,7 @@
 
 export const PEDIDO_STATUS = {
   ABERTO: "ABERTO",
+  PENDENTE: "PENDENTE",
   FECHADO: "FECHADO",
   CANCELADO: "CANCELADO",
 } as const;
@@ -67,6 +68,8 @@ export type PedidoUpdateDto = {
 /* ─────────────────────────── Regras de negócio ─────────────────────────── */
 
 export const estaAberto = (v: PedidoClienteType): boolean => v.pedido.pedidoStatus === PEDIDO_STATUS.ABERTO;
+
+export const estaPendente = (v: PedidoClienteType): boolean => v.pedido.pedidoStatus === PEDIDO_STATUS.PENDENTE;
 
 export const estaFechado = (v: PedidoClienteType): boolean => v.pedido.pedidoStatus === PEDIDO_STATUS.FECHADO;
 

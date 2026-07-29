@@ -8,6 +8,7 @@ import ClienteForm from "@/features/clientes/components/ClienteForm";
 import type { ClienteFormData } from "@/features/clientes/schema/cliente.schema";
 import ClientesGrowthChart from "@/features/clientes/components/ClientesGrowthChart";
 import { useAlert } from "@/shared/ui/Alert";
+import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import { formatDocument, formatNumber, getInitials, onlyDigits, toPercent } from "@/shared/utils/format";
 import { formatDate } from "@/shared/utils/date";
 import { ClienteStatusBadge as StatusBadge } from "@/shared/ui/StatusBadge";
@@ -125,8 +126,8 @@ const Clientes = () => {
       setShowCreate(false);
       await load();
       alert.success("Cliente cadastrado!", "O cliente foi adicionado com sucesso.");
-    } catch {
-      alert.error("Erro ao cadastrar", "Não foi possível cadastrar o cliente.");
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível cadastrar o cliente."));
     } finally {
       setSaving(false);
     }
