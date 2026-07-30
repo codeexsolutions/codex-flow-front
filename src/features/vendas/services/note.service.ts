@@ -14,11 +14,7 @@ const NoteService = {
    * Busca pedido por ID → GET /pedidos/:id
    * Retorno: { statusCode, message, data: [clientePedido] }
    */
-  getById: async (pedidoId: string): Promise<PedidoClienteType | null> => {
-    const { data } = await sysgrafix.get(`/pedidos/${pedidoId}`);
-    const lista = unwrapList<PedidoClienteType>(data);
-    return lista.length > 0 ? lista[0] : null;
-  },
+  getById: async (pedidoId: string) => await sysgrafix.get(`/pedidos/${pedidoId}`).then(({ data }) => data.data),
 
   /**
    * Altera pedido → PATCH /pedidos/alterar/:id

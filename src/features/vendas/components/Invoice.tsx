@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import HeaderInterprise from "@/shared/ui/HeaderInterprise";
 
-import { formatDate, formatDateTime } from "@/shared/utils/date";
+import { formatDate } from "@/shared/utils/date";
 import { formatCurrency } from "@/shared/utils/currency";
 
 import ProductType from "@/shared/domain/produto";
@@ -17,10 +17,8 @@ import { useAlert } from "@/shared/ui/Alert";
 import PixSection from "@/features/vendas/components/PixSection";
 
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
-import { useDebounce } from "@/shared/hooks/useDebounce";
 
-import { CreditCard, Download, PackageSearch, Plus, Receipt, Save, Trash2, Wallet, X,
-  QrCode, Check, Loader2, Banknote } from "lucide-react";
+import { CreditCard, Download, PackageSearch, Plus, Receipt, Save, Trash2, Wallet, X, QrCode, Check, Loader2, Banknote } from "lucide-react";
 import { Skeleton, SkeletonInvoiceCard, SkeletonInvoiceHeader, SkeletonInvoiceRow, SkeletonProductList, SkeletonSummary } from "@/shared/ui/skeleton";
 
 import { getPixSettings, savePixSettings, isPixConfigured, generatePixPayload, type PixKeyType } from "@/shared/utils/pix";
@@ -113,19 +111,17 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
   /* ─── Carrega pedido ─── */
   useEffect(() => {
     if (!id) return;
+    console.log("CUIDA'");
 
     NoteService.getById(id)
-      .then((pedidoData: PedidoClienteType) => {
+      .then((pedidoData) => {
         if (!pedidoData) {
           alert.error("Pedido não encontrado", "Não localizamos esse pedido no sistema.");
           return;
         }
         setPedido(pedidoData);
-
-        const itensOriginais =
-          pedidoData.pedido.itensPedido && pedidoData.pedido.itensPedido.length > 0
-            ? pedidoData.pedido.itensPedido
-            : (pedidoData.pedido.produtosPedido ?? []);
+    
+        const itensOriginais = pedidoData.pedido.itensPedido && pedidoData.pedido.itensPedido.length > 0 ? pedidoData.pedido.itensPedido : (pedidoData.pedido.itensPedido ?? []);
         setItens(itensOriginais.map((item: ItemPedidoType) => ({ ...item })));
       })
       .catch((err) => alert.error(getErrorTitle(err), extractErrorMessage(err, "Erro ao carregar o pedido.")))
@@ -161,40 +157,22 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
     alert.toast("success", "Produto adicionado!", undefined, { position: "bottom-right", timer: 2000 });
   };
 
-  const atualizarLinha = (uid: string, patch: Partial<ItemPedidoType>) =>
-    setItens((prev) => prev.map((l) => (l.itemPedidoId === uid ? { ...l, ...patch } : l)));
+  const atualizarLinha = (uid: string, patch: Partial<ItemPedidoType>) => setItens((prev) => prev.map((l) => (l.itemPedidoId === uid ? { ...l, ...patch } : l)));
 
   const removerProduto = (uid: string) => setItens((prev) => prev.filter((l) => l.itemPedidoId !== uid));
 
-  const produtosFiltrados = useMemo(
-    () => products.filter((p) => p.nome?.toLowerCase().includes(busca.toLowerCase())),
-    [products, busca],
-  );
+  const produtosFiltrados = useMemo(() => products.filter((p) => p.nome?.toLowerCase().includes(busca.toLowerCase())), [products, busca]);
 
   /* ─── Totais ─── */
-  const totalLiquido = useMemo(
-    () => itens.reduce((acc, l) => acc + l.valorVendaItem * l.quantidadeItem, 0),
-    [itens],
-  );
-  const totalBruto = useMemo(
-    () => itens.reduce((acc, l) => acc + l.produto.valorProduto * l.quantidadeItem, 0),
-    [itens],
-  );
+  const totalLiquido = useMemo(() => itens.reduce((acc, l) => acc + l.valorVendaItem * l.quantidadeItem, 0), [itens]);
+  const totalBruto = useMemo(() => itens.reduce((acc, l) => acc + l.produto.valorProduto * l.quantidadeItem, 0), [itens]);
   const totalDesconto = Math.max(totalBruto - totalLiquido, 0);
   const total = totalLiquido;
   const temDesconto = totalDesconto > 0 && totalBruto > 0;
 
-  const totalPago = useMemo(
-    () => pagamentos.reduce((acc, p) => acc + Number(p.valor), 0),
-    [pagamentos],
-  );
+  const totalPago = useMemo(() => pagamentos.reduce((acc, p) => acc + Number(p.valor), 0), [pagamentos]);
   const pendente = Math.max(total - totalPago, 0);
-  const formaPagamento =
-    pagamentos.length > 0
-      ? pagamentos.every((p) => p.tipo === pagamentos[0].tipo)
-        ? pagamentos[0].tipo
-        : "Misto"
-      : "Não consta";
+  const formaPagamento = pagamentos.length > 0 ? (pagamentos.every((p) => p.tipo === pagamentos[0].tipo) ? pagamentos[0].tipo : "Misto") : "Não consta";
 
   /* ─── PIX payload ─── */
   const pixPayload = useMemo(() => {
@@ -220,9 +198,18 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
     }));
 
   const handleSalvar = async () => {
-    if (!clienteId) { alert.warning("Sem cliente", "Selecione um cliente para emitir a nota."); return; }
-    if (itens.length === 0) { alert.warning("Nota vazia", "Adicione ao menos um produto à nota."); return; }
-    if (itens.every((l) => l.quantidadeItem <= 0)) { alert.warning("Quantidade inválida", "Informe a quantidade dos produtos."); return; }
+    if (!clienteId) {
+      alert.warning("Sem cliente", "Selecione um cliente para emitir a nota.");
+      return;
+    }
+    if (itens.length === 0) {
+      alert.warning("Nota vazia", "Adicione ao menos um produto à nota.");
+      return;
+    }
+    if (itens.every((l) => l.quantidadeItem <= 0)) {
+      alert.warning("Quantidade inválida", "Informe a quantidade dos produtos.");
+      return;
+    }
 
     // Exige configurar PIX antes da primeira nota
     if (!id && !isPixConfigured()) {
@@ -234,6 +221,7 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
     try {
       if (id) {
         // UPDATE — usa PedidoUpdateDto
+        console.log("oiii'")
         const payload: PedidoUpdateDto = { clienteId, itensPedido: montarItens() };
         await NoteService.update(payload, id);
         alert.success("Nota alterada!", "As alterações foram salvas com sucesso.");
@@ -268,7 +256,10 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
 
   const handleAdicionarPagamento = () => {
     if (!tipoPagamento || valorPagamento <= 0) return;
-    if (!id) { alert.warning("Salve a nota primeiro", "A nota precisa ser salva antes de registrar pagamentos."); return; }
+    if (!id) {
+      alert.warning("Salve a nota primeiro", "A nota precisa ser salva antes de registrar pagamentos.");
+      return;
+    }
 
     const novoPagamento: PagamentoType = {
       id: gerarIdPagamento(),
@@ -303,19 +294,16 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
       {/* ════════════ MODAL: CONFIG PIX ════════════ */}
       <Modal open={modalPixConfig} onClose={() => setModalPixConfig(false)} title="Configurar PIX" subtitle="Informe sua chave para receber pagamentos" accent="rgb(var(--accent))" size="sm">
         <div className="flex flex-col gap-4">
-          <p className="text-[12px] leading-relaxed text-mist">
-            Esta chave será usada para gerar o QR Code na nota. Os dados ficam salvos no navegador.
-          </p>
+          <p className="text-[12px] leading-relaxed text-mist">Esta chave será usada para gerar o QR Code na nota. Os dados ficam salvos no navegador.</p>
           <div className="flex flex-col gap-1">
             <label className="text-[10px] uppercase tracking-[0.08em] text-faint">Tipo de chave</label>
             <div className="flex flex-wrap gap-1.5">
               {PIX_KEY_TYPES.map((t) => (
                 <button
-                  key={t.id} type="button"
+                  key={t.id}
+                  type="button"
                   onClick={() => setPixKeyType(t.id)}
-                  className={`cursor-pointer rounded-lg border px-3 py-1.5 text-[12px] transition-colors ${
-                    pixKeyType === t.id ? "border-accent/50 bg-accent/15 text-accent-soft" : "border-fg/[0.08] text-mist hover:border-fg/[0.15]"
-                  }`}
+                  className={`cursor-pointer rounded-lg border px-3 py-1.5 text-[12px] transition-colors ${pixKeyType === t.id ? "border-accent/50 bg-accent/15 text-accent-soft" : "border-fg/[0.08] text-mist hover:border-fg/[0.15]"}`}
                 >
                   {t.label}
                 </button>
@@ -326,21 +314,36 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
           <input value={pixOwner} onChange={(e) => setPixOwner(e.target.value)} placeholder="Nome do titular" className={campoBase} />
           <input value={pixCity} onChange={(e) => setPixCity(e.target.value)} placeholder="Cidade" className={campoBase} />
           <div className="mt-2 flex gap-2">
-            <button type="button" onClick={() => setModalPixConfig(false)} className="flex-1 cursor-pointer rounded-xl border border-fg/[0.08] bg-fg/[0.04] py-2.5 text-sm text-mist transition-colors hover:bg-fg/[0.08]">Cancelar</button>
-            <button type="button" onClick={salvarPixConfig} className="flex-1 cursor-pointer rounded-xl bg-accent py-2.5 text-sm text-white transition-all hover:brightness-110">Salvar</button>
+            <button type="button" onClick={() => setModalPixConfig(false)} className="flex-1 cursor-pointer rounded-xl border border-fg/[0.08] bg-fg/[0.04] py-2.5 text-sm text-mist transition-colors hover:bg-fg/[0.08]">
+              Cancelar
+            </button>
+            <button type="button" onClick={salvarPixConfig} className="flex-1 cursor-pointer rounded-xl bg-accent py-2.5 text-sm text-white transition-all hover:brightness-110">
+              Salvar
+            </button>
           </div>
         </div>
       </Modal>
 
       {/* ════════════ MODAL: PRODUTOS ════════════ */}
-      <Modal open={modalProdutos} onClose={() => { setModalProdutos(false); setBusca(""); }} title="Adicionar produto" subtitle="Toque para incluir na nota" accent="rgb(var(--success))">
+      <Modal
+        open={modalProdutos}
+        onClose={() => {
+          setModalProdutos(false);
+          setBusca("");
+        }}
+        title="Adicionar produto"
+        subtitle="Toque para incluir na nota"
+        accent="rgb(var(--success))"
+      >
         <div className="space-y-3">
           <div className="relative">
             <input autoFocus value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar produto..." className={`${campoBase} pl-9 focus:border-success/60`} />
             <PackageSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-mist" />
           </div>
           <div className="max-h-72 overflow-y-auto">
-            {loadingProdutos ? <SkeletonProductList rows={6} /> : produtosFiltrados.length === 0 ? (
+            {loadingProdutos ? (
+              <SkeletonProductList rows={6} />
+            ) : produtosFiltrados.length === 0 ? (
               <p className="py-10 text-center text-sm text-mist">Nenhum produto encontrado</p>
             ) : (
               <ul className="space-y-1">
@@ -367,8 +370,14 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
           <div className="space-y-2">
             <div className="relative">
               <select value={tipoPagamento} onChange={(e) => setTipoPagamento(e.target.value)} className={`${campoBase} appearance-none pl-9`}>
-                <option disabled value="">Tipo de pagamento</option>
-                {TIPOS_PAGAMENTO.map((op) => <option key={op} value={op}>{op}</option>)}
+                <option disabled value="">
+                  Tipo de pagamento
+                </option>
+                {TIPOS_PAGAMENTO.map((op) => (
+                  <option key={op} value={op}>
+                    {op}
+                  </option>
+                ))}
               </select>
               <CreditCard size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-mist" />
             </div>
@@ -430,8 +439,12 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
       <Modal open={modalExcluir} onClose={() => setModalExcluir(false)} title="Excluir nota" subtitle="Essa ação não pode ser desfeita" accent="rgb(var(--danger))" maxWidth="max-w-sm">
         <p className="text-sm text-mist">Deseja realmente excluir esta nota?</p>
         <div className="mt-5 flex justify-end gap-2">
-          <button onClick={() => setModalExcluir(false)} className="h-10 rounded-xl bg-fg/[0.05] px-4 text-sm text-ink transition-colors hover:bg-fg/[0.1]">Cancelar</button>
-          <button onClick={handleExcluir} className="h-10 rounded-xl bg-danger px-4 text-sm text-white transition-colors hover:bg-danger">Excluir</button>
+          <button onClick={() => setModalExcluir(false)} className="h-10 rounded-xl bg-fg/[0.05] px-4 text-sm text-ink transition-colors hover:bg-fg/[0.1]">
+            Cancelar
+          </button>
+          <button onClick={handleExcluir} className="h-10 rounded-xl bg-danger px-4 text-sm text-white transition-colors hover:bg-danger">
+            Excluir
+          </button>
         </div>
       </Modal>
 
@@ -449,25 +462,20 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
             )}
           </div>
           <div className="flex items-center gap-1.5">
-            <button title={pixConfig ? "PIX configurado" : "Configurar PIX"} onClick={() => setModalPixConfig(true)}
-              className={`${btnToolbar} ${pixConfig ? "bg-success/[0.1] text-success ring-success/20" : "bg-accent/[0.1] text-accent-soft ring-accent/20"}`}>
+            <button title={pixConfig ? "PIX configurado" : "Configurar PIX"} onClick={() => setModalPixConfig(true)} className={`${btnToolbar} ${pixConfig ? "bg-success/[0.1] text-success ring-success/20" : "bg-accent/[0.1] text-accent-soft ring-accent/20"}`}>
               {pixConfig ? <Check size={19} /> : <QrCode size={19} />}
             </button>
-            <button title="Adicionar produto" onClick={() => setModalProdutos(true)}
-              className={`${btnToolbar} bg-success/[0.1] text-success ring-success/20 hover:bg-success hover:text-success`}>
+            <button title="Adicionar produto" onClick={() => setModalProdutos(true)} className={`${btnToolbar} bg-success/[0.1] text-success ring-success/20 hover:bg-success hover:text-success`}>
               <PackageSearch size={19} />
             </button>
-            <button title="Pagamentos" onClick={() => setModalPagamentos(true)}
-              className={`relative ${btnToolbar} bg-accent/[0.1] text-accent-soft ring-accent/20 hover:bg-accent hover:text-white`}>
+            <button title="Pagamentos" onClick={() => setModalPagamentos(true)} className={`relative ${btnToolbar} bg-accent/[0.1] text-accent-soft ring-accent/20 hover:bg-accent hover:text-white`}>
               <Wallet size={19} />
               {total > 0 && pendente > 0 && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-warning ring-2 ring-surface" />}
             </button>
-            <button title="Baixar nota" onClick={() => handleDownload(notaRef)}
-              className={`${btnToolbar} bg-accent-soft/[0.1] text-accent-soft ring-accent-soft/20 hover:bg-accent-soft hover:text-accent`}>
+            <button title="Baixar nota" onClick={() => handleDownload(notaRef)} className={`${btnToolbar} bg-accent-soft/[0.1] text-accent-soft ring-accent-soft/20 hover:bg-accent-soft hover:text-accent`}>
               <Download size={19} />
             </button>
-            <button title="Excluir" onClick={() => (id ? setModalExcluir(true) : alert.warning("Nota não salva", "Essa nota não foi salva."))}
-              className={`${btnToolbar} bg-danger/[0.1] text-danger ring-danger/20 hover:bg-danger hover:text-white`}>
+            <button title="Excluir" onClick={() => (id ? setModalExcluir(true) : alert.warning("Nota não salva", "Essa nota não foi salva."))} className={`${btnToolbar} bg-danger/[0.1] text-danger ring-danger/20 hover:bg-danger hover:text-white`}>
               <Trash2 size={19} />
             </button>
           </div>
@@ -478,7 +486,9 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
           <div ref={notaRef} className="flex w-full flex-col bg-surface">
             {/* Cabeçalho */}
             <div className="border-b border-fg/[0.05] p-5">
-              {loadingPedido ? <SkeletonInvoiceHeader /> : (
+              {loadingPedido ? (
+                <SkeletonInvoiceHeader />
+              ) : (
                 <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                   <HeaderInterprise />
                   <div className="md:text-right">
@@ -492,7 +502,9 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
             {/* Cliente */}
             <div className="px-5 pt-5">
               <label className="mb-1.5 text-[11px] uppercase tracking-[0.08em] text-faint">Cliente</label>
-              {loadingPedido ? <Skeleton className="h-11 rounded-xl" /> : (
+              {loadingPedido ? (
+                <Skeleton className="h-11 rounded-xl" />
+              ) : (
                 <div className="flex h-11 items-center gap-2 rounded-xl border border-fg/[0.06] bg-fg/[0.04] px-3 text-sm text-ink">
                   <span>👤</span>
                   <span className="truncate">{pedido?.nomeCliente || nome || "Nome do cliente"}</span>
@@ -515,41 +527,51 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-fg/[0.05]">
-                      {loadingPedido ? Array.from({ length: 4 }).map((_, i) => <SkeletonInvoiceRow key={i} />) : itens.length > 0 ? itens.map((item) => (
-                        <tr key={item.itemPedidoId} className="transition-colors hover:bg-fg/[0.03]">
-                          <td className="max-w-[280px] p-2 align-middle">
-                            <p className="truncate px-1 text-ink" title={item.produto.nomeProduto}>{item.produto.nomeProduto}</p>
-                          </td>
-                          <td className="p-2 align-middle">
-                            <input type="number" min={0} inputMode="numeric" value={item.quantidadeItem}
-                              onChange={(e) => atualizarLinha(item.itemPedidoId, { quantidadeItem: Math.max(0, Number(e.target.value) || 0) })}
-                              className="h-10 w-20 rounded-lg border border-fg/[0.06] bg-fg/[0.03] px-2 text-center tabular-nums text-ink outline-none focus:border-accent/60" />
-                          </td>
-                          <td className="p-2 align-middle">
-                            <div className="flex items-center gap-1.5">
-                              <MoneyInput value={item.valorVendaItem} onChange={(v) => atualizarLinha(item.itemPedidoId, { valorVendaItem: v })} className="h-10 w-28 rounded-lg border border-fg/[0.06] bg-fg/[0.03] px-2 text-center tabular-nums text-ink outline-none focus:border-accent/60" />
-                              {item.valorVendaItem !== item.produto.valorProduto && (
-                                <span className="text-[10px] text-mist line-through">{formatCurrency(item.produto.valorProduto)}</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-2 align-middle">
-                            <p className="flex h-10 items-center rounded-lg bg-fg/[0.03] px-3 tabular-nums text-ink">{formatCurrency(item.valorVendaItem * item.quantidadeItem)}</p>
-                          </td>
-                          <td className="p-2 text-center align-middle">
-                            <button title="Remover" onClick={() => removerProduto(item.itemPedidoId)}
-                              className="grid h-9 w-9 place-items-center rounded-lg text-faint transition-colors hover:bg-danger/25 hover:text-danger">
-                              <Trash2 size={16} />
+                      {loadingPedido ? (
+                        Array.from({ length: 4 }).map((_, i) => <SkeletonInvoiceRow key={i} />)
+                      ) : itens.length > 0 ? (
+                        itens.map((item) => (
+                          <tr key={item.itemPedidoId} className="transition-colors hover:bg-fg/[0.03]">
+                            <td className="max-w-[280px] p-2 align-middle">
+                              <p className="truncate px-1 text-ink" title={item.produto.nomeProduto}>
+                                {item.produto.nomeProduto}
+                              </p>
+                            </td>
+                            <td className="p-2 align-middle">
+                              <input
+                                type="number"
+                                min={0}
+                                inputMode="numeric"
+                                value={item.quantidadeItem}
+                                onChange={(e) => atualizarLinha(item.itemPedidoId, { quantidadeItem: Math.max(0, Number(e.target.value) || 0) })}
+                                className="h-10 w-20 rounded-lg border border-fg/[0.06] bg-fg/[0.03] px-2 text-center tabular-nums text-ink outline-none focus:border-accent/60"
+                              />
+                            </td>
+                            <td className="p-2 align-middle">
+                              <div className="flex items-center gap-1.5">
+                                <MoneyInput value={item.valorVendaItem} onChange={(v) => atualizarLinha(item.itemPedidoId, { valorVendaItem: v })} className="h-10 w-28 rounded-lg border border-fg/[0.06] bg-fg/[0.03] px-2 text-center tabular-nums text-ink outline-none focus:border-accent/60" />
+                                {item.valorVendaItem !== item.produto.valorProduto && <span className="text-[10px] text-mist line-through">{formatCurrency(item.produto.valorProduto)}</span>}
+                              </div>
+                            </td>
+                            <td className="p-2 align-middle">
+                              <p className="flex h-10 items-center rounded-lg bg-fg/[0.03] px-3 tabular-nums text-ink">{formatCurrency(item.valorVendaItem * item.quantidadeItem)}</p>
+                            </td>
+                            <td className="p-2 text-center align-middle">
+                              <button title="Remover" onClick={() => removerProduto(item.itemPedidoId)} className="grid h-9 w-9 place-items-center rounded-lg text-faint transition-colors hover:bg-danger/25 hover:text-danger">
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={5} className="py-12 text-center text-mist">
+                            <p className="text-sm">Nenhum produto na nota</p>
+                            <button onClick={() => setModalProdutos(true)} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-dashed border-fg/[0.12] px-4 py-2 text-sm text-mist hover:border-success/60 hover:text-success">
+                              <Plus size={16} /> Adicionar produto
                             </button>
                           </td>
                         </tr>
-                      )) : (
-                        <tr><td colSpan={5} className="py-12 text-center text-mist">
-                          <p className="text-sm">Nenhum produto na nota</p>
-                          <button onClick={() => setModalProdutos(true)} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-dashed border-fg/[0.12] px-4 py-2 text-sm text-mist hover:border-success/60 hover:text-success">
-                            <Plus size={16} /> Adicionar produto
-                          </button>
-                        </td></tr>
                       )}
                     </tbody>
                   </table>
@@ -559,37 +581,46 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
 
             {/* Mobile */}
             <div className="space-y-3 px-5 pt-4 md:hidden">
-              {loadingPedido ? Array.from({ length: 3 }).map((_, i) => <SkeletonInvoiceCard key={i} />) : itens.length > 0 ? itens.map((item) => (
-                <div key={item.itemPedidoId} className="rounded-xl border border-fg/[0.06] bg-fg/[0.03] p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="min-w-0 text-sm text-ink">{item.produto.nomeProduto}</p>
-                    <button onClick={() => removerProduto(item.itemPedidoId)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-danger/20 text-danger">
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="mb-1 block text-[11px] text-mist">Qtde</label>
-                      <input type="number" min={0} inputMode="numeric" value={item.quantidadeItem}
-                        onChange={(e) => atualizarLinha(item.itemPedidoId, { quantidadeItem: Math.max(0, Number(e.target.value) || 0) })}
-                        className="h-10 w-full rounded-lg border border-fg/[0.06] bg-fg/[0.03] px-2 text-center tabular-nums text-ink outline-none" />
+              {loadingPedido ? (
+                Array.from({ length: 3 }).map((_, i) => <SkeletonInvoiceCard key={i} />)
+              ) : itens.length > 0 ? (
+                itens.map((item) => (
+                  <div key={item.itemPedidoId} className="rounded-xl border border-fg/[0.06] bg-fg/[0.03] p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="min-w-0 text-sm text-ink">{item.produto.nomeProduto}</p>
+                      <button onClick={() => removerProduto(item.itemPedidoId)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-danger/20 text-danger">
+                        <Trash2 size={15} />
+                      </button>
                     </div>
-                    <div>
-                      <label className="mb-1 block text-[11px] text-mist">V. Unit</label>
-                      <div className="flex items-center gap-1.5">
-                        <MoneyInput value={item.valorVendaItem} onChange={(v) => atualizarLinha(item.itemPedidoId, { valorVendaItem: v })} className="h-10 w-full rounded-lg border border-fg/[0.06] bg-fg/[0.03] px-2 text-center tabular-nums text-ink outline-none" />
-                        {item.valorVendaItem !== item.produto.valorProduto && (
-                          <span className="text-[10px] text-mist line-through">{formatCurrency(item.produto.valorProduto)}</span>
-                        )}
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="mb-1 block text-[11px] text-mist">Qtde</label>
+                        <input
+                          type="number"
+                          min={0}
+                          inputMode="numeric"
+                          value={item.quantidadeItem}
+                          onChange={(e) => atualizarLinha(item.itemPedidoId, { quantidadeItem: Math.max(0, Number(e.target.value) || 0) })}
+                          className="h-10 w-full rounded-lg border border-fg/[0.06] bg-fg/[0.03] px-2 text-center tabular-nums text-ink outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[11px] text-mist">V. Unit</label>
+                        <div className="flex items-center gap-1.5">
+                          <MoneyInput value={item.valorVendaItem} onChange={(v) => atualizarLinha(item.itemPedidoId, { valorVendaItem: v })} className="h-10 w-full rounded-lg border border-fg/[0.06] bg-fg/[0.03] px-2 text-center tabular-nums text-ink outline-none" />
+                          {item.valorVendaItem !== item.produto.valorProduto && <span className="text-[10px] text-mist line-through">{formatCurrency(item.produto.valorProduto)}</span>}
+                        </div>
                       </div>
                     </div>
+                    <div className="mt-3 flex items-center justify-between rounded-lg bg-fg/[0.03] px-3 py-2">
+                      <span className="text-xs text-mist">Subtotal</span>
+                      <span className="text-sm tabular-nums text-ink">{formatCurrency(item.valorVendaItem * item.quantidadeItem)}</span>
+                    </div>
                   </div>
-                  <div className="mt-3 flex items-center justify-between rounded-lg bg-fg/[0.03] px-3 py-2">
-                    <span className="text-xs text-mist">Subtotal</span>
-                    <span className="text-sm tabular-nums text-ink">{formatCurrency(item.valorVendaItem * item.quantidadeItem)}</span>
-                  </div>
-                </div>
-              )) : <div className="rounded-xl border border-dashed border-fg/[0.12] py-10 text-center text-sm text-mist">Nenhum produto</div>}
+                ))
+              ) : (
+                <div className="rounded-xl border border-dashed border-fg/[0.12] py-10 text-center text-sm text-mist">Nenhum produto</div>
+              )}
               {!loadingPedido && (
                 <button onClick={() => setModalProdutos(true)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-fg/[0.12] py-3 text-sm text-mist hover:border-success hover:text-success">
                   <Plus size={16} /> Adicionar produto
@@ -599,7 +630,9 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
 
             {/* Resumo */}
             <div className="p-5">
-              {loadingPedido ? <SkeletonSummary /> : (
+              {loadingPedido ? (
+                <SkeletonSummary />
+              ) : (
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
                   <div className="rounded-xl border border-fg/[0.06] bg-fg/[0.03] p-3">
                     <span className={lblResumo}>T. Bruto</span>
@@ -617,9 +650,7 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
                     <span className={lblResumo}>T. Pago</span>
                     <span className={`${valResumo} tabular-nums`}>{formatCurrency(totalPago)}</span>
                   </div>
-                  <button
-                    onClick={() => setModalPagamentos(true)}
-                    className={`rounded-xl border p-3 text-left transition-colors hover:bg-fg/[0.06] ${pendente > 0 ? "border-warning/20 bg-warning/[0.12]" : "border-success/20 bg-success/[0.12]"}`}>
+                  <button onClick={() => setModalPagamentos(true)} className={`rounded-xl border p-3 text-left transition-colors hover:bg-fg/[0.06] ${pendente > 0 ? "border-warning/20 bg-warning/[0.12]" : "border-success/20 bg-success/[0.12]"}`}>
                     <span className={`${lblResumo} ${pendente > 0 ? "text-warning" : "text-success"}`}>Pendente</span>
                     <span className={`mt-1 block truncate text-sm tabular-nums ${pendente > 0 ? "text-warning" : "text-success"}`}>{formatCurrency(pendente)}</span>
                   </button>
@@ -640,24 +671,14 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
         <footer className="flex items-center justify-between gap-3 border-t border-fg/[0.06] bg-surface px-4 py-3">
           <div className="min-w-0">
             <span className={lblResumo}>Total da nota</span>
-            {loadingPedido ? <Skeleton className="mt-1 h-7 w-32" /> : (
-              <span className="block truncate text-xl tabular-nums text-ink md:text-2xl">{formatCurrency(total)}</span>
-            )}
+            {loadingPedido ? <Skeleton className="mt-1 h-7 w-32" /> : <span className="block truncate text-xl tabular-nums text-ink md:text-2xl">{formatCurrency(total)}</span>}
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setModalPagamentos(true)}
-              disabled={loadingPedido}
-              className="flex h-12 items-center gap-2 rounded-xl border border-accent/30 bg-accent/[0.1] px-4 text-sm text-accent-soft transition-colors hover:bg-accent/20 disabled:opacity-40"
-            >
+            <button onClick={() => setModalPagamentos(true)} disabled={loadingPedido} className="flex h-12 items-center gap-2 rounded-xl border border-accent/30 bg-accent/[0.1] px-4 text-sm text-accent-soft transition-colors hover:bg-accent/20 disabled:opacity-40">
               <Wallet size={18} /> Pagamento
               {pendente > 0 && <span className="ml-1 rounded-full bg-warning/25 px-1.5 py-0.5 text-[10px] text-warning">{formatCurrency(pendente)}</span>}
             </button>
-            <button
-              onClick={handleSalvar}
-              disabled={salvarDesabilitado || savingNote || loadingPedido}
-              className="flex h-12 items-center gap-2 rounded-xl bg-accent px-5 text-sm text-white transition-all hover:bg-accent-soft active:scale-[0.98] disabled:opacity-40"
-            >
+            <button onClick={handleSalvar} disabled={salvarDesabilitado || savingNote || loadingPedido} className="flex h-12 items-center gap-2 rounded-xl bg-accent px-5 text-sm text-white transition-all hover:bg-accent-soft active:scale-[0.98] disabled:opacity-40">
               {savingNote ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
               {savingNote ? "Salvando..." : !id ? "Gerar Nota" : "Salvar"}
             </button>

@@ -36,7 +36,6 @@ export type PedidoType = {
   dataPedido: Date;
   pedidoStatus: string;
   itensPedido: ItemPedidoType[];
-  produtosPedido?: ItemPedidoType[];
 };
 
 /** Uma venda: o cliente e o pedido dele. */
