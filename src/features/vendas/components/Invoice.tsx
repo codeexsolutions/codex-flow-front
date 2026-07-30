@@ -194,7 +194,7 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
     itens.map((item) => ({
       produtoId: item.produto.produtoId,
       quantidade: item.quantidadeItem,
-      valorVenda: item.valorVendaItem,
+      valorVenda: item.valorVendaItem
     }));
 
   const handleSalvar = async () => {
@@ -222,7 +222,7 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
       if (id) {
         // UPDATE — usa PedidoUpdateDto
         console.log("oiii'")
-        const payload: PedidoUpdateDto = { clienteId, itensPedido: montarItens() };
+        const payload: PedidoUpdateDto = { clienteId, valorPago: totalPago, dataPagamento: new Date(), formaPagamento, itensPedido: montarItens() };
         await NoteService.update(payload, id);
         alert.success("Nota alterada!", "As alterações foram salvas com sucesso.");
       } else {

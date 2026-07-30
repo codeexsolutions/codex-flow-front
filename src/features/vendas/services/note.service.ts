@@ -1,7 +1,7 @@
 import type { NovoPedidoDto, PedidoUpdateDto } from "@/shared/domain/pedido";
-import type { PedidoClienteType } from "@/shared/domain/pedido";
+//import type { PedidoClienteType } from "@/shared/domain/pedido";
 import sysgrafix from "@/shared/api/sysgrafix";
-import { unwrapList } from "@/shared/api/types";
+//import { unwrapList } from "@/shared/api/types";
 
 const NoteService = {
   /** Cria novo pedido → POST /pedidos/novo-pedido */
@@ -21,10 +21,7 @@ const NoteService = {
    * O controller lê `data.itensPedido` do body
    */
   update: async (data: PedidoUpdateDto, pedidoId: string) => {
-    return await sysgrafix.patch(`/pedidos/alterar/${pedidoId}`, {
-      clienteId: data.clienteId,
-      itensPedido: data.itensPedido,
-    });
+    return await sysgrafix.patch(`/pedidos/alterar/${pedidoId}`, data);
   },
 
   /** Exclui pedido */

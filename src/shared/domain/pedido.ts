@@ -27,6 +27,9 @@ export type ItemPedidoType = {
   quantidadeItem: number;
   valorVendaItem: number;
   subtotalItens?: number;
+  valorPago?:number;
+  dataPagamento?:Date;
+  formaPagamento?:string;
   produto: ProdutoPedidoType;
 };
 
@@ -62,6 +65,9 @@ export type NovoPedidoDto = {
 export type PedidoUpdateDto = {
   clienteId: string | undefined;
   itensPedido: ItemPedidoDto[];
+  valorPago?:number,
+  dataPagamento?: Date,
+  formaPagamento?:string;
 };
 
 /* ─────────────────────────── Regras de negócio ─────────────────────────── */
