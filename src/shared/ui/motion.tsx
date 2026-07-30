@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, type HTMLMotionProps } from "framer-motion";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import useThemeStore from "@/shared/theme/theme.store";
 
 type AnimationLevel = "full" | "reduce";
@@ -30,7 +30,9 @@ export function MotionBox({ children, as: Tag = "div", ...props }: MotionBoxProp
   const level = useAnimationLevel();
 
   if (level === "reduce") {
-    return <Tag className={props.className} style={props.style}>{children}</Tag>;
+    // `MotionStyle` aceita MotionValue em cada propriedade; sem animação sobram
+    // apenas valores estáticos, então o estilo vira um CSSProperties comum.
+    return <Tag className={props.className} style={props.style as CSSProperties}>{children}</Tag>;
   }
 
   return <motion.div {...props}>{children}</motion.div>;

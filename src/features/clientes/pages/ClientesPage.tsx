@@ -10,7 +10,7 @@ import ClientesGrowthChart from "@/features/clientes/components/ClientesGrowthCh
 import { useAlert } from "@/shared/ui/Alert";
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import { formatDocument, formatNumber, getInitials, onlyDigits, toPercent } from "@/shared/utils/format";
-import { formatDate } from "@/shared/utils/date";
+import { formatDate, toDate } from "@/shared/utils/date";
 import { ClienteStatusBadge as StatusBadge } from "@/shared/ui/StatusBadge";
 import { SkeletonTableRows, SkeletonIdentityCell } from "@/shared/ui/skeleton";
 import { useAutoPageSize, ROW_HEIGHT } from "@/shared/hooks/useAutoPageSize";
@@ -26,6 +26,8 @@ const FILTROS: { value: Filtro; label: string }[] = [
 ];
 
 const COLS = "grid-cols-[1fr_150px_120px_120px]";
+/** Soma das colunas fixas + folga para a coluna flexível: abaixo disso a tabela rola. */
+const TABLE_MIN_WIDTH = 640;
 
 function contactDigits(contato?: ContactType) {
   if (!contato) return "";
@@ -102,8 +104,8 @@ const Clientes = () => {
     const now = new Date();
     const novos = customers.filter((c) => {
       if (!c.created_at) return false;
-      const d = new Date(c.created_at);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      const d = toDate(c.created_at);
+      return !!d && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).length;
     return { total, ativos, inativos: total - ativos, novos };
   }, [customers]);
@@ -155,7 +157,7 @@ const Clientes = () => {
         {/* Grid principal: tabela + lateral, ambos esticados até o fim */}
         <section className="flex min-h-0 flex-1 flex-col gap-3">
           {/* Card da tabela — altura fixa da viewport */}
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden card glass-sheen rounded-lg">
+          <div className="flex min-h-[260px] min-w-0 flex-1 flex-col overflow-hidden card glass-sheen rounded-lg">
             {/* Toolbar do card */}
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-fg/[0.06] px-4 py-3.5">
               <div className="flex items-center gap-2.5">
@@ -193,66 +195,71 @@ const Clientes = () => {
               </div>
             </div>
 
-            {/* Cabeçalho de colunas */}
-            <div className={`grid shrink-0 ${COLS} border-b border-fg/[0.06] bg-fg/[0.02] px-5 py-2.5 text-[10px] uppercase tracking-[0.12em] text-muted`}>
-              <p>Cliente</p>
-              <p>Documento</p>
-              <p>Status</p>
-              <p className="text-right">Cadastro</p>
-            </div>
-
-            {/* Corpo: sem scroll — o que não cabe vai pra próxima página */}
-            <div ref={bodyRef} className="min-h-0 flex-1 overflow-hidden">
-              {loading ? (
-                <SkeletonRows count={perPage} />
-              ) : filtered.length === 0 ? (
-                <div className="flex h-full items-center justify-center py-10">
-                  <div className="flex max-w-xs flex-col items-center gap-3 text-center text-faint">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-fg/[0.06] bg-fg/[0.03]">
-                      <Users className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <p className="text-[13px] text-mist">Nenhum cliente encontrado</p>
-                      <p className="mt-0.5 text-[11px]">{hasFilters ? "Ajuste a busca ou os filtros." : "Comece cadastrando seu primeiro cliente."}</p>
-                    </div>
-                    {!hasFilters && (
-                      <button onClick={() => setShowCreate(true)} className="mt-1 cursor-pointer rounded-xl bg-accent px-3.5 py-2 text-[12px] text-white transition-colors hover:bg-accent">
-                        Cadastrar primeiro cliente
-                      </button>
-                    )}
-                  </div>
+            {/* Colunas + linhas rolam juntas na horizontal quando a tela é estreita. */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
+              <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth: TABLE_MIN_WIDTH }}>
+                {/* Cabeçalho de colunas */}
+                <div className={`grid shrink-0 ${COLS} border-b border-fg/[0.06] bg-fg/[0.02] px-5 py-2.5 text-[10px] uppercase tracking-[0.12em] text-muted`}>
+                  <p>Cliente</p>
+                  <p>Documento</p>
+                  <p>Status</p>
+                  <p className="text-right">Cadastro</p>
                 </div>
-              ) : (
-                <>
-                  {pageItems.map((c) => (
-                    <button
-                      key={c.id ?? c.cpfCnpj}
-                      onClick={() => c.id && navigate(`/clientes/${c.id}`)}
-                      aria-label={`Abrir cliente ${c.nome}`}
-                      className={`group relative grid w-full ${COLS} items-center border-b border-fg/[0.04] px-5 text-left transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-r before:bg-accent before:opacity-0 before:transition-opacity hover:bg-fg/[0.03] hover:before:opacity-100`}
-                      style={{ height: ROW_HEIGHT }}
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent/25 bg-gradient-to-br from-accent/25 to-accent-soft/10 text-[11px] text-accent-soft">{getInitials(c.nome)}</div>
-                        <div className="flex min-w-0 flex-col">
-                          <span className="truncate text-[13px] text-ink">{c.nome}</span>
-                          {c.contato?.email && <span className="truncate text-[11px] text-faint">{c.contato.email}</span>}
-                        </div>
-                      </div>
-                      <span className="text-[12px] tabular-nums text-mist">{formatDocument(c.cpfCnpj)}</span>
-                      <span>
-                        <StatusBadge status={c.status} />
-                      </span>
-                      <span className="text-right text-[12px] tabular-nums text-mist">{formatDate(c.created_at)}</span>
-                    </button>
-                  ))}
 
-                  {/* Linhas vazias pra preencher o espaço quando a página não enche */}
-                  {Array.from({ length: emptySlots }).map((_, i) => (
-                    <div key={`empty-${i}`} aria-hidden className="border-b border-fg/[0.04]" style={{ height: ROW_HEIGHT }} />
-                  ))}
-                </>
-              )}
+                {/* Corpo: sem scroll — o que não cabe vai pra próxima página */}
+                <div ref={bodyRef} className="min-h-0 flex-1 overflow-hidden">
+                  {loading ? (
+                    <SkeletonRows count={perPage} />
+                  ) : filtered.length === 0 ? (
+                    <div className="flex h-full items-center justify-center py-10">
+                      <div className="flex max-w-xs flex-col items-center gap-3 text-center text-faint">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-fg/[0.06] bg-fg/[0.03]">
+                          <Users className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <p className="text-[13px] text-mist">Nenhum cliente encontrado</p>
+                          <p className="mt-0.5 text-[11px]">{hasFilters ? "Ajuste a busca ou os filtros." : "Comece cadastrando seu primeiro cliente."}</p>
+                        </div>
+                        {!hasFilters && (
+                          <button onClick={() => setShowCreate(true)} className="mt-1 cursor-pointer rounded-xl bg-accent px-3.5 py-2 text-[12px] text-white transition-colors hover:bg-accent">
+                            Cadastrar primeiro cliente
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {pageItems.map((c) => (
+                        <button
+                          key={c.id ?? c.cpfCnpj}
+                          onClick={() => c.id && navigate(`/clientes/${c.id}`)}
+                          aria-label={`Abrir cliente ${c.nome}`}
+                          className={`group relative grid w-full ${COLS} items-center border-b border-fg/[0.04] px-5 text-left transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-r before:bg-accent before:opacity-0 before:transition-opacity hover:bg-fg/[0.03] hover:before:opacity-100`}
+                          style={{ height: ROW_HEIGHT }}
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent/25 bg-gradient-to-br from-accent/25 to-accent-soft/10 text-[11px] text-accent-soft">{getInitials(c.nome)}</div>
+                            <div className="flex min-w-0 flex-col">
+                              <span className="truncate text-[13px] text-ink">{c.nome}</span>
+                              {c.contato?.email && <span className="truncate text-[11px] text-faint">{c.contato.email}</span>}
+                            </div>
+                          </div>
+                          <span className="text-[12px] tabular-nums text-mist">{formatDocument(c.cpfCnpj)}</span>
+                          <span>
+                            <StatusBadge status={c.status} />
+                          </span>
+                          <span className="text-right text-[12px] tabular-nums text-mist">{formatDate(c.created_at)}</span>
+                        </button>
+                      ))}
+
+                      {/* Linhas vazias pra preencher o espaço quando a página não enche */}
+                      {Array.from({ length: emptySlots }).map((_, i) => (
+                        <div key={`empty-${i}`} aria-hidden className="border-b border-fg/[0.04]" style={{ height: ROW_HEIGHT }} />
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Rodapé / paginação */}

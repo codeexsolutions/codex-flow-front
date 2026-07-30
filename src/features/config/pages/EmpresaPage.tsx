@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Building2, MessageCircle, MapPin, Save, CircleCheck } from "lucide-react";
 
@@ -117,18 +117,17 @@ const EmpresaPage = () => {
   };
 
   const salvarIdentificacao = async () => {
-    if (!ent.id) return;
+    const id = ent.id;
+    if (!id) return;
     await handleSubmit(
-      async (data) => {
-        await updateEnterprise(ent.id, {
-          nomeFantasia: data.nomeFantasia,
-          nomeRepresentante: data.nomeRepresentante,
-          cpfCnpj: onlyDigits(data.cpfCnpj),
-          inscMunicipal: data.inscMunicipal,
-          urlLogo: data.urlLogo,
-          urlImagem: data.urlImagem,
-        });
-      },
+      async (data) => await updateEnterprise(id, {
+        nomeFantasia: data.nomeFantasia,
+        nomeRepresentante: data.nomeRepresentante,
+        cpfCnpj: onlyDigits(data.cpfCnpj),
+        inscMunicipal: data.inscMunicipal,
+        urlLogo: data.urlLogo,
+        urlImagem: data.urlImagem,
+      }),
       () => alert.error("Campos inválidos", "Revise os campos de Identificação."),
     )();
   };
@@ -168,17 +167,19 @@ const EmpresaPage = () => {
       onClick={onClick}
       disabled={saving === tabId}
       className={`flex cursor-pointer items-center gap-2 rounded-xl px-4 py-2.5 text-[12px] transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${
-        savedTab === tabId
-          ? "bg-success/20 text-success"
-          : "bg-accent text-white shadow-[0_6px_20px_-6px_rgba(124,110,245,0.6)] hover:brightness-110"
+        savedTab === tabId ? "bg-success/20 text-success" : "bg-accent text-white shadow-[0_6px_20px_-6px_rgba(124,110,245,0.6)] hover:brightness-110"
       }`}
     >
       {saving === tabId ? (
         "Salvando..."
       ) : savedTab === tabId ? (
-        <><CircleCheck size={15} /> Salvo</>
+        <>
+          <CircleCheck size={15} /> Salvo
+        </>
       ) : (
-        <><Save size={15} /> Salvar</>
+        <>
+          <Save size={15} /> Salvar
+        </>
       )}
     </button>
   );
@@ -191,13 +192,7 @@ const EmpresaPage = () => {
           {/* Abas de navegação */}
           <div className="flex items-center gap-1 rounded-lg border border-fg/[0.07] bg-fg/[0.03] p-1 w-fit">
             {TABS.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`focus-ring flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-[12px] transition-all ${
-                  tab === t.id ? "bg-accent text-white shadow-glow" : "text-mist hover:bg-fg/[0.06] hover:text-ink"
-                }`}
-              >
+              <button key={t.id} onClick={() => setTab(t.id)} className={`focus-ring flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-[12px] transition-all ${tab === t.id ? "bg-accent text-white shadow-glow" : "text-mist hover:bg-fg/[0.06] hover:text-ink"}`}>
                 {t.icon}
                 {t.label}
               </button>
@@ -206,34 +201,19 @@ const EmpresaPage = () => {
 
           {/* Card ativo conforme a aba selecionada */}
           {tab === "identificacao" && (
-            <SettingsCard
-              icon={<Building2 className="h-4 w-4" />}
-              title="Identificação"
-              desc="Dados principais da empresa"
-              footer={<SaveBtn tabId="identificacao" onClick={() => doSave("identificacao", salvarIdentificacao)} />}
-            >
+            <SettingsCard icon={<Building2 className="h-4 w-4" />} title="Identificação" desc="Dados principais da empresa" footer={<SaveBtn tabId="identificacao" onClick={() => doSave("identificacao", salvarIdentificacao)} />}>
               <EmpresaIdentificacao register={register} errors={errors} />
             </SettingsCard>
           )}
 
           {tab === "contato" && (
-            <SettingsCard
-              icon={<MessageCircle className="h-4 w-4" />}
-              title="Contato"
-              desc="Telefones e e-mail da empresa"
-              footer={<SaveBtn tabId="contato" onClick={() => doSave("contato", salvarContato)} />}
-            >
+            <SettingsCard icon={<MessageCircle className="h-4 w-4" />} title="Contato" desc="Telefones e e-mail da empresa" footer={<SaveBtn tabId="contato" onClick={() => doSave("contato", salvarContato)} />}>
               <EmpresaContato register={register} errors={errors} />
             </SettingsCard>
           )}
 
           {tab === "endereco" && (
-            <SettingsCard
-              icon={<MapPin className="h-4 w-4" />}
-              title="Endereço"
-              desc="CEP e localização da empresa"
-              footer={<SaveBtn tabId="endereco" onClick={() => doSave("endereco", salvarEndereco)} />}
-            >
+            <SettingsCard icon={<MapPin className="h-4 w-4" />} title="Endereço" desc="CEP e localização da empresa" footer={<SaveBtn tabId="endereco" onClick={() => doSave("endereco", salvarEndereco)} />}>
               <EmpresaEndereco register={register} control={control} errors={errors} onBuscarCep={buscarCep} />
             </SettingsCard>
           )}

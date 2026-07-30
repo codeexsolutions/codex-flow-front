@@ -16,8 +16,17 @@ export type Coluna<T> = {
   align?: "left" | "right" | "center";
 };
 
-export const TabelaCard = ({ title, icon, count, countLabel, onAdd, addLabel = "Adicionar", filters, children, footer }: { title: string; icon?: ReactNode; count?: number; countLabel?: string; onAdd?: () => void; addLabel?: string; filters?: ReactNode; children: ReactNode; footer?: ReactNode }) => (
-  <section className="card glass-sheen flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+/**
+ * Largura mínima da área de linhas. As colunas têm larguras fixas em px; sem um
+ * piso a grade era espremida em telas estreitas e todas as células viravam
+ * reticências. Com o piso, a área rola na horizontal e o conteúdo fica legível.
+ */
+const MIN_TABLE_WIDTH = 720;
+
+export const TabelaCard = ({ title, icon, count, countLabel, onAdd, addLabel = "Adicionar", filters, children, footer, minWidth = MIN_TABLE_WIDTH }: { title: string; icon?: ReactNode; count?: number; countLabel?: string; onAdd?: () => void; addLabel?: string; filters?: ReactNode; children: ReactNode; footer?: ReactNode; minWidth?: number }) => (
+  // `min-h-[220px]`: em telas baixas a área de linhas não é achatada até
+  // desaparecer — a página rola e a tabela continua utilizável.
+  <section className="card glass-sheen flex min-h-[220px] min-w-0 flex-1 flex-col overflow-hidden">
     <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-fg/[0.07] px-4 py-3">
       <div className="flex min-w-0 items-center gap-2.5">
         {icon && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/20">{icon}</span>}
@@ -42,7 +51,9 @@ export const TabelaCard = ({ title, icon, count, countLabel, onAdd, addLabel = "
       </div>
     </header>
 
-    <div className="min-h-0 flex-1 overflow-auto">{children}</div>
+    <div className="min-h-0 flex-1 overflow-auto">
+      <div style={{ minWidth }}>{children}</div>
+    </div>
 
     {footer && <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-fg/[0.06] px-4 py-2.5 text-[12px] text-faint">{footer}</div>}
   </section>

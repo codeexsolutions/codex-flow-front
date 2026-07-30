@@ -4,8 +4,8 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Modal } from "@/shared/ui/Modal";
 import Invoice from "@/features/vendas/components/Invoice";
 import { formatCurrency } from "@/shared/utils/currency";
-import { type PedidoClienteType, estaAberto, estaCancelado, estaFechado, totalDoPedido } from "@/shared/domain/pedido";
-import { MONTHS, isSameMonth } from "@/shared/utils/date";
+import { estaAberto, estaCancelado, estaFechado, totalDoPedido } from "@/shared/domain/pedido";
+import { MONTHS, isSameMonth, toDate } from "@/shared/utils/date";
 import { useChartColors } from "@/shared/theme/useChartColors";
 import useVendaStore from "@/features/vendas/store/venda.store";
 
@@ -109,8 +109,8 @@ const SalesOverviewPage = () => {
 
     const porMes = MONTHS.map((name, i) => {
       const doMesI = naoCanceladas.filter((v) => {
-        const d = new Date(v.pedido.dataPedido);
-        return d.getFullYear() === anoAtual && d.getMonth() === i;
+        const d = toDate(v.pedido.dataPedido);
+        return !!d && d.getFullYear() === anoAtual && d.getMonth() === i;
       });
       return {
         name,

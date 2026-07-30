@@ -15,7 +15,7 @@ import useProdutoStore, { stockLevel } from "@/features/estoque/store/produto.st
 import { estaAberto, estaFechado, estaCancelado, totalDoPedido } from "@/shared/domain/pedido";
 import { formatCurrency } from "@/shared/utils/currency";
 import { formatNumber, getInitials } from "@/shared/utils/format";
-import { MONTHS, isSameMonth, formatDateShort } from "@/shared/utils/date";
+import { MONTHS, isSameMonth, formatDateShort, toDate } from "@/shared/utils/date";
 
 /* ─────────────────────────────── Componentes ─────────────────────────────── */
 
@@ -85,8 +85,8 @@ const DashboardPage = () => {
     const ano = agora.getFullYear();
     const porMes = MONTHS.map((name, i) => {
       const lista = ativas.filter((v) => {
-        const d = new Date(v.pedido.dataPedido);
-        return d.getFullYear() === ano && d.getMonth() === i;
+        const d = toDate(v.pedido.dataPedido);
+        return !!d && d.getFullYear() === ano && d.getMonth() === i;
       });
       return {
         name,
@@ -109,7 +109,7 @@ const DashboardPage = () => {
     <div className="aurora relative flex h-full w-full flex-col overflow-hidden text-ink">
       <HeaderPage icon={<LayoutDashboard className="h-5 w-5" />} title="Dashboard" subtitle="Visão geral do seu negócio" />
 
-      <PageBody scroll>
+      <PageBody>
         {/* KPIs */}
         <div className="stagger grid shrink-0 grid-cols-2 gap-3 xl:grid-cols-4">
           <Kpi icon={<DollarSign size={16} />} label="Faturado no mês" value={formatCurrency(dados.faturadoMes)} hint={`${dados.vendasNoMes} ${dados.vendasNoMes === 1 ? "venda" : "vendas"}`} tone="accent" />

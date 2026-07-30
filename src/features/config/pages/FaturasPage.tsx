@@ -1,13 +1,12 @@
-import { useMemo, useState, useEffect } from "react";
-import { Receipt, Crown, QrCode, Check, Copy, Loader2, ArrowRight, FileText, CircleCheck, Clock, AlertTriangle, CreditCard, Barcode, Sparkles, Hash, Building2, Settings2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Receipt, Crown, QrCode, Check, Copy, Loader2, ArrowRight, FileText, CircleCheck, Clock, Sparkles, Hash, Building2 } from "lucide-react";
 import { Modal } from "@/shared/ui/Modal";
 import { useAlert } from "@/shared/ui/Alert";
 import { formatCurrency } from "@/shared/utils/currency";
-import { formatDate } from "@/shared/utils/date";
 import { formatDocument } from "@/shared/utils/format";
 import useAuth from "@/features/auth/store/auth.store";
 import useEnterprise from "@/features/empresa/store/enterprise.store";
-import { getPixSettings, isPixConfigured, generatePixPayload, getQrCodeUrl } from "@/shared/utils/pix";
+import { getPixSettings, generatePixPayload, getQrCodeUrl } from "@/shared/utils/pix";
 
 const ASSINATURA = {
   nome: "Codex Flow Pro",
@@ -157,7 +156,13 @@ const FaturasPage = () => {
           {/* Filtros */}
           <div className="flex items-center gap-2">
             <div className="flex gap-1 rounded-lg bg-fg/[0.04] p-1">
-              {([["TODAS", "Todas"], ["A_PAGAR", "A pagar"], ["PAGA", "Pagas"]] as [Filtro, string][]).map(([id, label]) => (
+              {(
+                [
+                  ["TODAS", "Todas"],
+                  ["A_PAGAR", "A pagar"],
+                  ["PAGA", "Pagas"],
+                ] as [Filtro, string][]
+              ).map(([id, label]) => (
                 <button key={id} onClick={() => setFiltro(id)} className={`rounded-md px-3 py-1.5 text-[11px] transition-colors ${filtro === id ? "bg-accent text-white" : "text-mist hover:text-ink"}`}>
                   {label}
                 </button>
@@ -182,9 +187,7 @@ const FaturasPage = () => {
                   return (
                     <div key={f.id} className="flex items-center justify-between gap-3 px-5 py-4 hover:bg-fg/[0.02]">
                       <div className="flex min-w-0 items-center gap-3">
-                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${
-                          f.status === "VENCIDA" ? "border-danger/30 bg-danger/15 text-danger" : "border-warning/30 bg-warning/15 text-warning"
-                        }`}>
+                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${f.status === "VENCIDA" ? "border-danger/30 bg-danger/15 text-danger" : "border-warning/30 bg-warning/15 text-warning"}`}>
                           <Receipt size={16} />
                         </div>
                         <div className="min-w-0">
@@ -198,7 +201,13 @@ const FaturasPage = () => {
                           <StatusBadge status={f.status} />
                         </div>
                         <button onClick={() => abrirPagamento(f)} disabled={carregando} className="flex h-9 items-center gap-1.5 rounded-xl bg-accent px-3 text-xs text-white transition-all hover:bg-accent active:scale-95 disabled:opacity-70">
-                          {carregando ? <Loader2 size={14} className="animate-spin" /> : <><QrCode size={14} /> Pagar</>}
+                          {carregando ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <>
+                              <QrCode size={14} /> Pagar
+                            </>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -211,16 +220,11 @@ const FaturasPage = () => {
           {/* Pagas — colapsável */}
           {filtro !== "A_PAGAR" && pagas.length > 0 && (
             <div className="overflow-hidden rounded-2xl border border-fg/[0.07] bg-surface">
-              <button
-                onClick={() => setMostrarPagas(!mostrarPagas)}
-                className="flex w-full items-center justify-between gap-3 border-b border-fg/[0.06] px-5 py-3 text-left transition-colors hover:bg-fg/[0.02]"
-              >
+              <button onClick={() => setMostrarPagas(!mostrarPagas)} className="flex w-full items-center justify-between gap-3 border-b border-fg/[0.06] px-5 py-3 text-left transition-colors hover:bg-fg/[0.02]">
                 <p className="flex items-center gap-2 text-[13px] text-ink">
                   <CircleCheck size={15} className="text-success" /> Pagas
                 </p>
-                <span className="text-[11px] text-mist">
-                  {mostrarPagas ? "Ocultar" : `${pagas.length} ${pagas.length === 1 ? "fatura" : "faturas"}`}
-                </span>
+                <span className="text-[11px] text-mist">{mostrarPagas ? "Ocultar" : `${pagas.length} ${pagas.length === 1 ? "fatura" : "faturas"}`}</span>
               </button>
               {mostrarPagas && (
                 <div className="divide-y divide-fg/[0.05]">
@@ -246,9 +250,7 @@ const FaturasPage = () => {
             </div>
           )}
 
-          {filtradas.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-fg/[0.12] px-6 py-14 text-center text-sm text-faint">Nenhuma fatura neste filtro.</div>
-          )}
+          {filtradas.length === 0 && <div className="rounded-2xl border border-dashed border-fg/[0.12] px-6 py-14 text-center text-sm text-faint">Nenhuma fatura neste filtro.</div>}
         </div>
 
         {/* Aside — resumo financeiro */}
@@ -256,11 +258,7 @@ const FaturasPage = () => {
           <div className="overflow-hidden rounded-2xl border border-fg/[0.08] bg-gradient-to-b from-surface-raised to-surface p-5">
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/25 to-accent-soft/10">
-                {enterprise?.urlLogo ? (
-                  <img src={enterprise.urlLogo} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <Building2 className="h-6 w-6 text-accent-soft" />
-                )}
+                {enterprise?.urlLogo ? <img src={enterprise.urlLogo} alt="" className="h-full w-full object-cover" /> : <Building2 className="h-6 w-6 text-accent-soft" />}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm text-ink">{enterprise?.nomeFantasia || user?.nome || "—"}</p>
@@ -284,28 +282,29 @@ const FaturasPage = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="rounded-xl border border-warning/20 bg-warning/[0.08] p-4">
               <p className="flex items-center gap-1.5 text-[11px] text-warning">
                 <Clock size={14} /> Pendente
               </p>
               <p className="mt-1 text-xl text-ink">{formatCurrency(totalAPagar)}</p>
-              <p className="text-[11px] text-faint">{qtdPendentes} {qtdPendentes === 1 ? "fatura" : "faturas"}</p>
+              <p className="text-[11px] text-faint">
+                {qtdPendentes} {qtdPendentes === 1 ? "fatura" : "faturas"}
+              </p>
             </div>
             <div className="rounded-xl border border-success/20 bg-success/[0.08] p-4">
               <p className="flex items-center gap-1.5 text-[11px] text-success">
                 <CircleCheck size={14} /> Pago
               </p>
               <p className="mt-1 text-xl text-ink">{formatCurrency(totalPago)}</p>
-              <p className="text-[11px] text-faint">{pagas.length} {pagas.length === 1 ? "fatura" : "faturas"}</p>
+              <p className="text-[11px] text-faint">
+                {pagas.length} {pagas.length === 1 ? "fatura" : "faturas"}
+              </p>
             </div>
           </div>
 
           {proximaFatura && (
-            <button
-              onClick={() => abrirPagamento(proximaFatura)}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-accent to-accent-strong py-3.5 text-sm text-white shadow-lg shadow-accent/25 transition-all hover:brightness-110 active:scale-[0.99]"
-            >
+            <button onClick={() => abrirPagamento(proximaFatura)} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-accent to-accent-strong py-3.5 text-sm text-white shadow-lg shadow-accent/25 transition-all hover:brightness-110 active:scale-[0.99]">
               <QrCode size={18} /> Pagar agora
               <ArrowRight size={16} />
             </button>
@@ -327,7 +326,15 @@ const FaturasPage = () => {
           <p className="mb-4 text-center text-sm text-mist">Escaneie o QR Code ou copie o código abaixo</p>
           <div className="w-full select-all break-all rounded-2xl border border-fg/[0.08] bg-canvas p-4 font-mono text-xs text-mist">{pixPayload || "Configure sua chave PIX em Configurações"}</div>
           <button onClick={copiarPix} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-3.5 text-white transition-colors hover:bg-accent">
-            {copiado ? <><Check size={18} /> Copiado!</> : <><Copy size={18} /> Copiar código Pix</>}
+            {copiado ? (
+              <>
+                <Check size={18} /> Copiado!
+              </>
+            ) : (
+              <>
+                <Copy size={18} /> Copiar código Pix
+              </>
+            )}
           </button>
           <p className="mt-4 text-center text-xs text-faint">O pagamento é confirmado automaticamente em poucos segundos.</p>
         </div>

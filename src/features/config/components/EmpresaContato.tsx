@@ -1,13 +1,18 @@
 import { Mail, Smartphone, Phone, MessageCircle } from "lucide-react";
 import type { UseFormRegister, FieldErrors } from "react-hook-form";
 import Field from "@/shared/ui/inputs/Field";
+import { fieldError } from "@/shared/validation/fieldError";
+import type { EmpresaInput } from "@/features/config/schema/company.schema";
 
 type EmpresaContatoProps = {
-  register: UseFormRegister<any>;
-  errors: FieldErrors;
+  register: UseFormRegister<EmpresaInput>;
+  errors: FieldErrors<EmpresaInput>;
 };
 
-const phoneMasked = (register: UseFormRegister<any>, name: string) => {
+/** Campos de telefone da empresa — os únicos que recebem máscara aqui. */
+type CampoTelefone = "celular" | "telefone" | "whatsapp";
+
+const phoneMasked = (register: UseFormRegister<EmpresaInput>, name: CampoTelefone) => {
   const reg = register(name);
   return {
     ...reg,
@@ -29,10 +34,10 @@ function maskPhoneValue(value: string): string {
 
 const EmpresaContato = ({ register, errors }: EmpresaContatoProps) => (
   <div className="flex flex-col gap-4">
-    <Field label="E-mail" icon={<Mail size={15} />} type="email" placeholder="empresa@email.com" error={errors.email?.message} {...register("email")} />
-    <Field label="Celular" icon={<Smartphone size={15} />} placeholder="(00) 00000-0000" error={errors.celular?.message} {...phoneMasked(register, "celular")} />
-    <Field label="Telefone" icon={<Phone size={15} />} placeholder="(00) 0000-0000" error={errors.telefone?.message} {...phoneMasked(register, "telefone")} />
-    <Field label="WhatsApp" icon={<MessageCircle size={15} />} placeholder="(00) 00000-0000" error={errors.whatsapp?.message} {...phoneMasked(register, "whatsapp")} />
+    <Field label="E-mail" icon={<Mail size={15} />} type="email" placeholder="empresa@email.com" error={fieldError(errors.email)} {...register("email")} />
+    <Field label="Celular" icon={<Smartphone size={15} />} placeholder="(00) 00000-0000" error={fieldError(errors.celular)} {...phoneMasked(register, "celular")} />
+    <Field label="Telefone" icon={<Phone size={15} />} placeholder="(00) 0000-0000" error={fieldError(errors.telefone)} {...phoneMasked(register, "telefone")} />
+    <Field label="WhatsApp" icon={<MessageCircle size={15} />} placeholder="(00) 00000-0000" error={fieldError(errors.whatsapp)} {...phoneMasked(register, "whatsapp")} />
   </div>
 );
 

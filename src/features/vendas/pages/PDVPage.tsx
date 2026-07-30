@@ -14,7 +14,7 @@ import useClienteStore from "@/features/clientes/store/cliente.store";
 import { formatCurrency } from "@/shared/utils/currency";
 
 import { estaAberto as estaAberta, totalDoPedido } from "@/shared/domain/pedido";
-import { formatTime as horaVenda, isSameDay as ehHoje } from "@/shared/utils/date";
+import { formatTime as horaVenda, formatDate as dataVenda, isSameDay as ehHoje } from "@/shared/utils/date";
 import { getInitials as iniciais, formatDocument } from "@/shared/utils/format";
 
 // Só o essencial: quem é o cliente e (se existir) qual pedido.
@@ -208,7 +208,7 @@ const PontoDeVenda = () => {
                       <p className="truncate text-[13px] text-ink">{venda.nomeCliente}</p>
                       <p className="text-[11px] text-faint">
                         {horaVenda(venda.pedido.dataPedido)}
-                        {!somenteHoje && ` · ${new Date(venda.pedido.dataPedido).toLocaleDateString("pt-BR")}`}
+                        {!somenteHoje && ` · ${dataVenda(venda.pedido.dataPedido)}`}
                       </p>
                     </div>
 

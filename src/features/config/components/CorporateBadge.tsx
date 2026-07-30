@@ -1,6 +1,6 @@
 import { Building2, Hash, FileText, User, MapPin, Phone, Smartphone, MessageCircle, Mail, ShieldCheck } from "lucide-react";
 import useEnterprise from "@/features/empresa/store/enterprise.store";
-import { formatDocument, maskPhone } from "@/shared/utils/format";
+import { formatDocument } from "@/shared/utils/format";
 import { maskPhone as maskPhoneFn } from "@/shared/validation/masks";
 
 const CorporateBadge = () => {

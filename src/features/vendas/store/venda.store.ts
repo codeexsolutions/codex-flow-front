@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 import NoteService from "@/features/vendas/services/note.service";
-import { type PedidoClienteType, estaAberto, estaCancelado, estaFechado, isPedidoValido, totalDoPedido } from "@/shared/domain/pedido";
+import { type PedidoClienteType, estaAberto, estaCancelado, estaFechado, estaPendente, isPedidoValido, totalDoPedido } from "@/shared/domain/pedido";
 
 import { isSameDay, isSameMonth } from "@/shared/utils/date";
 import { unwrapList } from "@/shared/api/types";

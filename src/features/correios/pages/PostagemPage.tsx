@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Package, ClipboardList, Clock, CheckCircle2, Plus, MapPin, Search, FileText, XCircle, Printer, Truck, RotateCw, Hash, User } from "lucide-react";
+import { Package, ClipboardList, Clock, CheckCircle2, MapPin, FileText, XCircle, Printer, Truck } from "lucide-react";
 
 import CorreiosService from "@/features/correios/services/correios.service";
 import type { PostagemType, PrePostagemDto, ServicoCorreio } from "@/features/correios/types/correios.types";
@@ -265,7 +265,7 @@ const PostagemPage = () => {
   return (
     <div className="flex flex-col gap-4">
       {/* Resumo em cards */}
-      <div className="grid shrink-0 grid-cols-3 gap-3">
+      <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="card-interactive glass-sheen flex items-center gap-3 p-3.5">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset bg-accent/[0.15] text-accent-soft ring-accent/20">
             <Package size={17} />
