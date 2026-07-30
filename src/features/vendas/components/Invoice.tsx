@@ -493,7 +493,7 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
                   <HeaderInterprise />
                   <div className="md:text-right">
                     <h2 className="text-xl leading-none text-ink md:text-2xl">Nota de Venda</h2>
-                    <p className="mt-1.5 text-sm text-mist">Data: {formatDate(new Date(pedido?.pedido?.dataPedido ?? Date.now()))}</p>
+                    <p className="mt-1.5 text-sm text-mist">Data: {formatDate(pedido?.pedido?.dataPedido ?? new Date())}</p>
                   </div>
                 </div>
               )}

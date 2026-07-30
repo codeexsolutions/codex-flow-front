@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { TrendingUp } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import CustomerType from "@/shared/domain/cliente";
-import { MONTHS } from "@/shared/utils/date";
+import { MONTHS, toDate } from "@/shared/utils/date";
 import { useChartColors } from "@/shared/theme/useChartColors";
 
 interface ClientesGrowthChartProps {
@@ -17,8 +17,8 @@ const ClientesGrowthChart = ({ customers }: ClientesGrowthChartProps) => {
     const base = MONTHS.map((name) => ({ name, clientes: 0 }));
     customers.forEach((c) => {
       if (!c.created_at) return;
-      const d = new Date(c.created_at);
-      if (!isNaN(d.getTime()) && d.getFullYear() === year) base[d.getMonth()].clientes += 1;
+      const d = toDate(c.created_at);
+      if (d && d.getFullYear() === year) base[d.getMonth()].clientes += 1;
     });
     return base;
   }, [customers]);

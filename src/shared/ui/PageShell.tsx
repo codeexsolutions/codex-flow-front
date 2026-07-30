@@ -10,8 +10,16 @@ import type { ReactNode } from "react";
 export const PAGE_PAD = "px-4 py-3 lg:px-6 lg:py-4";
 export const PAGE_GAP = "gap-3";
 
-/** Corpo rolável de uma página, já com o padding padrão. */
-export const PageBody = ({ children, className = "", scroll = false }: { children: ReactNode; className?: string; scroll?: boolean }) => <main className={`relative flex min-h-0 flex-1 flex-col ${PAGE_GAP} ${PAGE_PAD} ${scroll ? "overflow-y-auto" : "overflow-hidden"} ${className}`}>{children}</main>;
+/**
+ * Corpo rolável de uma página, já com o padding padrão.
+ *
+ * O corpo **sempre** rola na vertical. Antes o padrão era `overflow-hidden` e
+ * cada tela precisava pedir `scroll` — quem esquecia ficava com o conteúdo
+ * cortado e inalcançável em qualquer tela mais baixa que 1080px, que é a altura
+ * em que tudo por acaso cabia. Em telas altas nada transborda e o resultado é
+ * idêntico ao de antes; em telas baixas o que sobra fica acessível.
+ */
+export const PageBody = ({ children, className = "" }: { children: ReactNode; className?: string }) => <main className={`relative flex min-h-0 flex-1 flex-col overflow-y-auto ${PAGE_GAP} ${PAGE_PAD} ${className}`}>{children}</main>;
 
 /**
  * Barra de ações da tela. É aqui que ficam"Novo cliente","Exportar" etc. —

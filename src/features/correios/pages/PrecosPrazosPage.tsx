@@ -157,7 +157,7 @@ const PrecosPrazosPage = () => {
         </div>
 
         {/* Dimensões */}
-        <div className="mt-4 grid grid-cols-3 gap-x-5 sm:grid-cols-5 lg:grid-cols-3">
+        <div className="mt-4 grid grid-cols-2 gap-x-5 sm:grid-cols-5 lg:grid-cols-3">
           <div className="flex flex-col">
             <label className="mb-1.5 text-[10px] uppercase tracking-[0.08em] text-faint">Comprimento (cm)</label>
             <div className={`${campoBase} flex items-center`}>

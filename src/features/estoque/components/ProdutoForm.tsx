@@ -63,7 +63,7 @@ export function ProdutoForm({ defaultValues, onSubmit, onCancel, onDelete, submi
     <form onSubmit={handleSubmit(handleValid, handleInvalid)} className="flex flex-col gap-3">
       <Field label="Nome do produto" icon={<ShoppingBag className="h-3.5 w-3.5" />} error={errors.nome?.message} {...register("nome")} />
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Preço de compra" type="number" step="0.01" icon={<DollarSign className="h-3.5 w-3.5" />} error={errors.valorCompra?.message} {...register("valorCompra", { valueAsNumber: true })} />
 
         <Field label="Preço de venda" type="number" step="0.01" icon={<DollarSign className="h-3.5 w-3.5" />} error={errors.valorVenda?.message} {...register("valorVenda", { valueAsNumber: true })} />

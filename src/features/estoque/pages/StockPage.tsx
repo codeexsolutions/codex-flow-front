@@ -31,6 +31,8 @@ const FILTROS: { value: Filtro; label: string }[] = [
 ];
 
 const COLS = "grid-cols-[1fr_120px_120px_90px_130px]";
+/** Soma das colunas fixas + folga para a coluna flexível: abaixo disso a tabela rola. */
+const TABLE_MIN_WIDTH = 660;
 
 type StockLevel = "disponivel" | "baixo" | "esgotado";
 function stockLevel(qtd?: number): StockLevel {
@@ -228,7 +230,7 @@ const Estoque = () => {
         {/* Grid principal: tabela + lateral, ambos esticados até o fim */}
         <section className="flex min-h-0 flex-1 flex-col gap-3">
           {/* Card da tabela — altura fixa da viewport */}
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden card glass-sheen rounded-lg">
+          <div className="flex min-h-[260px] min-w-0 flex-1 flex-col overflow-hidden card glass-sheen rounded-lg">
             {/* Toolbar do card */}
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-fg/[0.06] px-4 py-3.5">
               <div className="flex items-center gap-2.5">
@@ -266,73 +268,78 @@ const Estoque = () => {
               </div>
             </div>
 
-            {/* Cabeçalho de colunas */}
-            <div className={`grid shrink-0 ${COLS} border-b border-fg/[0.06] bg-fg/[0.02] px-5 py-2.5 text-[10px] uppercase tracking-[0.12em] text-muted`}>
-              <p>Produto</p>
-              <p className="text-right">Compra</p>
-              <p className="text-right">Venda</p>
-              <p className="text-right">Qtd.</p>
-              <p className="text-right">Estoque</p>
-            </div>
-
-            {/* Corpo: sem scroll — o que não cabe vai pra próxima página */}
-            <div ref={bodyRef} className="min-h-0 flex-1 overflow-hidden">
-              {loading ? (
-                <SkeletonRows count={perPage} />
-              ) : filtered.length === 0 ? (
-                <div className="flex h-full items-center justify-center py-10">
-                  <div className="flex max-w-xs flex-col items-center gap-3 text-center text-faint">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-fg/[0.06] bg-fg/[0.03]">
-                      <Package className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <p className="text-[13px] text-mist">Nenhum produto encontrado</p>
-                      <p className="mt-0.5 text-[11px]">{hasFilters ? "Ajuste a busca ou os filtros." : "Comece cadastrando seu primeiro produto."}</p>
-                    </div>
-                    {!hasFilters && (
-                      <button onClick={() => setModal("registrar")} className="mt-1 cursor-pointer rounded-xl bg-accent px-3.5 py-2 text-[12px] text-white transition-colors hover:bg-accent">
-                        Cadastrar primeiro produto
-                      </button>
-                    )}
-                  </div>
+            {/* Colunas + linhas rolam juntas na horizontal quando a tela é estreita. */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
+              <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth: TABLE_MIN_WIDTH }}>
+                {/* Cabeçalho de colunas */}
+                <div className={`grid shrink-0 ${COLS} border-b border-fg/[0.06] bg-fg/[0.02] px-5 py-2.5 text-[10px] uppercase tracking-[0.12em] text-muted`}>
+                  <p>Produto</p>
+                  <p className="text-right">Compra</p>
+                  <p className="text-right">Venda</p>
+                  <p className="text-right">Qtd.</p>
+                  <p className="text-right">Estoque</p>
                 </div>
-              ) : (
-                <>
-                  {pageItems.map((product) => (
-                    <button
-                      key={product.id}
-                      onClick={() => {
-                        setSelectedProduct(product);
-                        setModal("editar");
-                      }}
-                      aria-label={`Editar produto ${product.nome}`}
-                      className={`group relative grid w-full ${COLS} items-center border-b border-fg/[0.04] px-5 text-left transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-r before:bg-accent before:opacity-0 before:transition-opacity hover:bg-fg/[0.03] hover:before:opacity-100`}
-                      style={{ height: ROW_HEIGHT }}
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-accent/25 bg-gradient-to-br from-accent/25 to-accent-soft/10">
-                          {product.imagem ? <img src={product.imagem} alt={product.nome} className="h-full w-full object-cover" /> : <Package className="h-4 w-4 text-accent-soft" />}
-                        </div>
-                        <div className="flex min-w-0 flex-col">
-                          <span className="truncate text-[13px] text-ink">{product.nome}</span>
-                          <span className="truncate text-[11px] text-faint">{product.descricao || `#${product.id}`}</span>
-                        </div>
-                      </div>
-                      <span className="text-right text-[12px] tabular-nums text-mist">{brl(product.valorCompra)}</span>
-                      <span className="text-right text-[12px] tabular-nums text-ink">{brl(product.valorVenda)}</span>
-                      <span className="text-right text-[12px] tabular-nums text-mist">{product.quantidade ?? 0}</span>
-                      <span className="flex justify-end">
-                        <StockBadge quantidade={product.quantidade} />
-                      </span>
-                    </button>
-                  ))}
 
-                  {/* Linhas vazias pra preencher o espaço quando a página não enche */}
-                  {Array.from({ length: emptySlots }).map((_, i) => (
-                    <div key={`empty-${i}`} aria-hidden className="border-b border-fg/[0.04]" style={{ height: ROW_HEIGHT }} />
-                  ))}
-                </>
-              )}
+                {/* Corpo: sem scroll — o que não cabe vai pra próxima página */}
+                <div ref={bodyRef} className="min-h-0 flex-1 overflow-hidden">
+                  {loading ? (
+                    <SkeletonRows count={perPage} />
+                  ) : filtered.length === 0 ? (
+                    <div className="flex h-full items-center justify-center py-10">
+                      <div className="flex max-w-xs flex-col items-center gap-3 text-center text-faint">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-fg/[0.06] bg-fg/[0.03]">
+                          <Package className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <p className="text-[13px] text-mist">Nenhum produto encontrado</p>
+                          <p className="mt-0.5 text-[11px]">{hasFilters ? "Ajuste a busca ou os filtros." : "Comece cadastrando seu primeiro produto."}</p>
+                        </div>
+                        {!hasFilters && (
+                          <button onClick={() => setModal("registrar")} className="mt-1 cursor-pointer rounded-xl bg-accent px-3.5 py-2 text-[12px] text-white transition-colors hover:bg-accent">
+                            Cadastrar primeiro produto
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {pageItems.map((product) => (
+                        <button
+                          key={product.id}
+                          onClick={() => {
+                            setSelectedProduct(product);
+                            setModal("editar");
+                          }}
+                          aria-label={`Editar produto ${product.nome}`}
+                          className={`group relative grid w-full ${COLS} items-center border-b border-fg/[0.04] px-5 text-left transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-r before:bg-accent before:opacity-0 before:transition-opacity hover:bg-fg/[0.03] hover:before:opacity-100`}
+                          style={{ height: ROW_HEIGHT }}
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-accent/25 bg-gradient-to-br from-accent/25 to-accent-soft/10">
+                              {product.imagem ? <img src={product.imagem} alt={product.nome} className="h-full w-full object-cover" /> : <Package className="h-4 w-4 text-accent-soft" />}
+                            </div>
+                            <div className="flex min-w-0 flex-col">
+                              <span className="truncate text-[13px] text-ink">{product.nome}</span>
+                              <span className="truncate text-[11px] text-faint">{product.descricao || `#${product.id}`}</span>
+                            </div>
+                          </div>
+                          <span className="text-right text-[12px] tabular-nums text-mist">{brl(product.valorCompra)}</span>
+                          <span className="text-right text-[12px] tabular-nums text-ink">{brl(product.valorVenda)}</span>
+                          <span className="text-right text-[12px] tabular-nums text-mist">{product.quantidade ?? 0}</span>
+                          <span className="flex justify-end">
+                            <StockBadge quantidade={product.quantidade} />
+                          </span>
+                        </button>
+                      ))}
+
+                      {/* Linhas vazias pra preencher o espaço quando a página não enche */}
+                      {Array.from({ length: emptySlots }).map((_, i) => (
+                        <div key={`empty-${i}`} aria-hidden className="border-b border-fg/[0.04]" style={{ height: ROW_HEIGHT }} />
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Rodapé / paginação */}

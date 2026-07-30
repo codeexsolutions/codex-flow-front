@@ -12,7 +12,7 @@ import useEnterprise from "@/features/empresa/store/enterprise.store";
 
 import { estaAberto, estaCancelado, estaFechado, totalDoPedido, type PedidoClienteType } from "@/shared/domain/pedido";
 import { formatCurrency } from "@/shared/utils/currency";
-import { formatDate, formatDateTime } from "@/shared/utils/date";
+import { formatDate, formatDateTime, toDate } from "@/shared/utils/date";
 import { formatDocument, formatNumber } from "@/shared/utils/format";
 import ProductType from "@/shared/domain/produto";
 
@@ -87,7 +87,10 @@ const RelatoriosPage = () => {
     const inicio = inicioDoPeriodo(periodo);
     const base = vendas.filter((v) => !estaCancelado(v));
     if (!inicio) return base;
-    return base.filter((v) => new Date(v.pedido.dataPedido) >= inicio);
+    return base.filter((v) => {
+      const d = toDate(v.pedido.dataPedido);
+      return !!d && d >= inicio;
+    });
   }, [vendas, periodo]);
 
   const totais = useMemo(() => {
@@ -145,7 +148,7 @@ const RelatoriosPage = () => {
         <HeaderPage icon={<FileText className="h-5 w-5" />} title="Relatórios" subtitle="Escolha o período, confira a prévia e imprima em A4" />
       </div>
 
-      <PageBody scroll>
+      <PageBody>
         <PageToolbar
           className="no-print"
           left={

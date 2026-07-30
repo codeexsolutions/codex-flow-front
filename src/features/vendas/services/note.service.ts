@@ -1,7 +1,6 @@
 import type { NovoPedidoDto, PedidoUpdateDto } from "@/shared/domain/pedido";
-//import type { PedidoClienteType } from "@/shared/domain/pedido";
+
 import sysgrafix from "@/shared/api/sysgrafix";
-//import { unwrapList } from "@/shared/api/types";
 
 const NoteService = {
   /** Cria novo pedido → POST /pedidos/novo-pedido */

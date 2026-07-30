@@ -15,7 +15,7 @@ import type { PedidoClienteType } from "@/shared/domain/pedido";
 import { useAlert } from "@/shared/ui/Alert";
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import { getInitials, onlyDigits, formatDocument, formatNumber } from "@/shared/utils/format";
-import { formatDate } from "@/shared/utils/date";
+import { formatDate, toDate } from "@/shared/utils/date";
 import { maskPhone } from "@/shared/validation/masks";
 import { formatTime as horaPedido } from "@/shared/utils/date";
 import { ClienteStatusBadge as StatusBadge, PedidoStatusBadge } from "@/shared/ui/StatusBadge";
@@ -172,7 +172,7 @@ const ClienteDetalhe = () => {
     const count = pedidos.length;
     const ticket = count ? total / count : 0;
     const ultimo = pedidos.reduce<Date | null>((acc, p) => {
-      const d = p.pedido?.dataPedido ? new Date(p.pedido.dataPedido) : null;
+      const d = toDate(p.pedido?.dataPedido);
       if (!d) return acc;
       return !acc || d > acc ? d : acc;
     }, null);
@@ -191,8 +191,8 @@ const ClienteDetalhe = () => {
     });
     const idx = new Map(buckets.map((b, i) => [b.key, i]));
     pedidos.forEach((p) => {
-      if (!p.pedido?.dataPedido) return;
-      const d = new Date(p.pedido.dataPedido);
+      const d = toDate(p.pedido?.dataPedido);
+      if (!d) return;
       const k = `${d.getFullYear()}-${d.getMonth()}`;
       const i = idx.get(k);
       if (i !== undefined) buckets[i].total += p.pedido.totalPedido ?? 0;
@@ -256,7 +256,7 @@ const ClienteDetalhe = () => {
     <div className="aurora relative flex h-full w-full flex-col overflow-hidden text-ink">
       <HeaderPage title={client?.nome ?? "Cliente"} subtitle={client?.cpfCnpj ? formatDocument(client.cpfCnpj) : "—"} icon={headerIcon} />
 
-      <PageBody scroll>
+      <PageBody>
         <PageToolbar>{headerActions}</PageToolbar>
         {loading ? (
           <div className="flex h-full items-center justify-center">
