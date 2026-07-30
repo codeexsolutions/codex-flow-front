@@ -1,4 +1,4 @@
-import type { NovoPedidoDto, PedidoUpdateDto } from "@/shared/domain/pedido";
+import type { NovoPedidoDto, PedidoClienteType, PedidoUpdateDto } from "@/shared/domain/pedido";
 
 import sysgrafix from "@/shared/api/sysgrafix";
 
@@ -11,13 +11,13 @@ const NoteService = {
 
   /**
    * Busca pedido por ID → GET /pedidos/:id
-   * Retorno: { statusCode, message, data: [clientePedido] }
+   * Retorno: { statusCode, message, data: clientePedido }
    */
-  getById: async (pedidoId: string) => await sysgrafix.get(`/pedidos/${pedidoId}`).then(({ data }) => data.data),
+  getById: async (pedidoId: string): Promise<PedidoClienteType | null> => await sysgrafix.get(`/pedidos/${pedidoId}`).then(({ data }) => data.data ?? null),
 
   /**
    * Altera pedido → PATCH /pedidos/alterar/:id
-   * O controller lê `data.itensPedido` do body
+   * O controller lê `data.produtosPedido` do body (nome diferente do de criar!)
    */
   update: async (data: PedidoUpdateDto, pedidoId: string) => {
     return await sysgrafix.patch(`/pedidos/alterar/${pedidoId}`, data);

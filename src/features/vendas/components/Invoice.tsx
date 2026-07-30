@@ -9,6 +9,7 @@ import type { PedidoClienteType, ItemPedidoType, NovoPedidoDto, PedidoUpdateDto 
 
 import NoteService from "@/features/vendas/services/note.service";
 import ProductService from "@/features/estoque/services/product.service";
+import FinanceiroService from "@/features/financeiro/services/financeiro.service";
 
 import MoneyInput from "@/shared/ui/inputs/MoneyInput";
 import { Modal } from "@/shared/ui/Modal";
@@ -71,6 +72,8 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
   const [pedido, setPedido] = useState<PedidoClienteType | null>(null);
   const [itens, setItens] = useState<ItemPedidoType[]>([]);
   const [pagamentos, setPagamentos] = useState<PagamentoType[]>([]);
+  const [valorPagoAnterior, setValorPagoAnterior] = useState(0);
+  const [confirmandoPagamento, setConfirmandoPagamento] = useState(false);
 
   /* ─── UI state ─── */
   const [busca, setBusca] = useState("");
@@ -111,7 +114,6 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
   /* ─── Carrega pedido ─── */
   useEffect(() => {
     if (!id) return;
-    console.log("CUIDA'");
 
     NoteService.getById(id)
       .then((pedidoData) => {
@@ -120,8 +122,9 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
           return;
         }
         setPedido(pedidoData);
-    
-        const itensOriginais = pedidoData.pedido.itensPedido && pedidoData.pedido.itensPedido.length > 0 ? pedidoData.pedido.itensPedido : (pedidoData.pedido.itensPedido ?? []);
+        setValorPagoAnterior(Number(pedidoData.pedido.valorPago ?? 0));
+
+        const itensOriginais = pedidoData.pedido.itensPedido ?? [];
         setItens(itensOriginais.map((item: ItemPedidoType) => ({ ...item })));
       })
       .catch((err) => alert.error(getErrorTitle(err), extractErrorMessage(err, "Erro ao carregar o pedido.")))
@@ -170,9 +173,10 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
   const total = totalLiquido;
   const temDesconto = totalDesconto > 0 && totalBruto > 0;
 
-  const totalPago = useMemo(() => pagamentos.reduce((acc, p) => acc + Number(p.valor), 0), [pagamentos]);
+  const totalPagoNaSessao = useMemo(() => pagamentos.reduce((acc, p) => acc + Number(p.valor), 0), [pagamentos]);
+  const totalPago = valorPagoAnterior + totalPagoNaSessao;
   const pendente = Math.max(total - totalPago, 0);
-  const formaPagamento = pagamentos.length > 0 ? (pagamentos.every((p) => p.tipo === pagamentos[0].tipo) ? pagamentos[0].tipo : "Misto") : "Não consta";
+  const formaPagamento = pagamentos.length > 0 ? (pagamentos.every((p) => p.tipo === pagamentos[0].tipo) ? pagamentos[0].tipo : "Misto") : (pedido?.pedido?.formaPagamento ?? "Não consta");
 
   /* ─── PIX payload ─── */
   const pixPayload = useMemo(() => {
@@ -220,10 +224,18 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
     setSavingNote(true);
     try {
       if (id) {
-        // UPDATE — usa PedidoUpdateDto
-        console.log("oiii'")
-        const payload: PedidoUpdateDto = { clienteId, valorPago: totalPago, dataPagamento: new Date(), formaPagamento, itensPedido: montarItens() };
+        // UPDATE — usa PedidoUpdateDto. Atenção: esse endpoint lê `produtosPedido`,
+        // não `itensPedido`.
+        const payload: PedidoUpdateDto = { clienteId, produtosPedido: montarItens() };
         await NoteService.update(payload, id);
+
+        // Pagamentos lançados no modal (ainda não confirmados) são registrados
+        // agora também, pra não depender do usuário lembrar de apertar
+        // "Confirmar" dentro do modal antes de salvar a nota.
+        if (pagamentos.length > 0) {
+          await registrarPagamentosPendentes(id);
+        }
+
         alert.success("Nota alterada!", "As alterações foram salvas com sucesso.");
       } else {
         // CREATE — usa NovoPedidoDto
@@ -277,6 +289,32 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
   const handleRemoverPagamento = (pagamentoId: string) => {
     setPagamentos((prev) => prev.filter((p) => p.id !== pagamentoId));
     alert.toast("success", "Pagamento removido!", undefined, { position: "bottom-right", timer: 2000 });
+  };
+
+  const registrarPagamentosPendentes = async (pedidoId: string) => {
+    if (pagamentos.length === 0) return;
+
+    await FinanceiroService.registrarPagamentoNota(pedidoId, totalPagoNaSessao, formaPagamento);
+    const pedidoAtualizado = await NoteService.getById(pedidoId);
+    if (pedidoAtualizado) {
+      setPedido(pedidoAtualizado);
+      setValorPagoAnterior(Number(pedidoAtualizado.pedido.valorPago ?? 0));
+    }
+    setPagamentos([]);
+  };
+
+  const handleConfirmarPagamentos = async () => {
+    if (!id || pagamentos.length === 0) return;
+
+    setConfirmandoPagamento(true);
+    try {
+      await registrarPagamentosPendentes(id);
+      alert.success("Pagamento registrado!", "O valor foi somado ao pagamento da nota.");
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível registrar o pagamento."));
+    } finally {
+      setConfirmandoPagamento(false);
+    }
   };
 
   const statusPedido = pedido?.pedido?.pedidoStatus;
@@ -432,6 +470,17 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
               <span className={`text-sm tabular-nums ${pendente > 0 ? "text-warning" : "text-success"}`}>{formatCurrency(pendente)}</span>
             </div>
           </div>
+
+          {pagamentos.length > 0 && (
+            <button
+              onClick={handleConfirmarPagamentos}
+              disabled={confirmandoPagamento}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-2.5 text-sm text-white transition-all hover:bg-accent-soft disabled:opacity-40"
+            >
+              {confirmandoPagamento ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+              {confirmandoPagamento ? "Confirmando..." : `Confirmar ${formatCurrency(totalPagoNaSessao)}`}
+            </button>
+          )}
         </div>
       </Modal>
 

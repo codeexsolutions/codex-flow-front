@@ -1,12 +1,12 @@
 import sysgrafix from "@/shared/api/sysgrafix";
-import { NovaMovimentacaoType, NovaParcelaType } from "@/shared/domain/financeiro";
+import { NovaMovimentacaoType } from "@/shared/domain/financeiro";
 
 const FinanceiroService = {
   getResumo: () => sysgrafix.get("/financeiro/resumo"),
 
-  getParcelas: () => sysgrafix.get("/financeiro/parcelas"),
-  criarParcela: (parcela: NovaParcelaType) => sysgrafix.post("/financeiro/parcelas", parcela),
-  baixarParcela: (id: string, formaPagamento: string) => sysgrafix.patch(`/financeiro/parcelas/${id}/baixar`, { formaPagamento }),
+  getNotas: () => sysgrafix.get("/financeiro/notas"),
+  registrarPagamentoNota: (pedidoId: string, valor: number, formaPagamento: string) =>
+    sysgrafix.patch(`/financeiro/notas/${pedidoId}/pagar`, { valor, formaPagamento }),
 
   getMovimentacoes: () => sysgrafix.get("/financeiro/movimentacoes"),
   criarMovimentacao: (movimentacao: NovaMovimentacaoType) => sysgrafix.post("/financeiro/movimentacoes", movimentacao),

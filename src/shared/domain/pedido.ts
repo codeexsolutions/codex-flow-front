@@ -11,6 +11,7 @@ export const PEDIDO_STATUS = {
   ABERTO: "ABERTO",
   PENDENTE: "PENDENTE",
   FECHADO: "FECHADO",
+  PAGO: "PAGO",
   CANCELADO: "CANCELADO",
 } as const;
 
@@ -27,9 +28,6 @@ export type ItemPedidoType = {
   quantidadeItem: number;
   valorVendaItem: number;
   subtotalItens?: number;
-  valorPago?:number;
-  dataPagamento?:Date;
-  formaPagamento?:string;
   produto: ProdutoPedidoType;
 };
 
@@ -38,6 +36,10 @@ export type PedidoType = {
   totalPedido: number;
   dataPedido: Date;
   pedidoStatus: string;
+  /** Quanto já foi pago da nota (pagamento parcial acumulado). Vem do backend. */
+  valorPago?: number;
+  /** Forma do último pagamento registrado. Vem do backend. */
+  formaPagamento?: string | null;
   itensPedido: ItemPedidoType[];
 };
 
@@ -57,17 +59,20 @@ export type ItemPedidoDto = {
   valorVenda: number;
 };
 
+/** POST /pedidos/novo-pedido — o controller lê `itensPedido`. */
 export type NovoPedidoDto = {
   clienteId: string | undefined;
   itensPedido: ItemPedidoDto[];
 };
 
+/**
+ * PATCH /pedidos/alterar/:id — atenção: esse endpoint lê `produtosPedido`,
+ * não `itensPedido` (nome diferente do de criar o pedido). Pagamento NÃO
+ * passa por aqui — isso é feito à parte, em PATCH /financeiro/notas/:id/pagar.
+ */
 export type PedidoUpdateDto = {
   clienteId: string | undefined;
-  itensPedido: ItemPedidoDto[];
-  valorPago?:number,
-  dataPagamento?: Date,
-  formaPagamento?:string;
+  produtosPedido: ItemPedidoDto[];
 };
 
 /* ─────────────────────────── Regras de negócio ─────────────────────────── */
@@ -77,6 +82,8 @@ export const estaAberto = (v: PedidoClienteType): boolean => v.pedido.pedidoStat
 export const estaPendente = (v: PedidoClienteType): boolean => v.pedido.pedidoStatus === PEDIDO_STATUS.PENDENTE;
 
 export const estaFechado = (v: PedidoClienteType): boolean => v.pedido.pedidoStatus === PEDIDO_STATUS.FECHADO;
+
+export const estaPago = (v: PedidoClienteType): boolean => v.pedido.pedidoStatus === PEDIDO_STATUS.PAGO;
 
 export const estaCancelado = (v: PedidoClienteType): boolean => v.pedido.pedidoStatus === PEDIDO_STATUS.CANCELADO;
 

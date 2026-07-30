@@ -10,24 +10,22 @@ import { Form, FormSection, FormGrid, FormActions, TextField, SelectBox } from "
 import { useAlert } from "@/shared/ui/Alert";
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import useFinanceiroStore from "@/features/financeiro/store/financeiro.store";
-import type { MovimentacaoType, NovaMovimentacaoType, NovaParcelaType, ParcelaType } from "@/shared/domain/financeiro";
+import type { MovimentacaoType, NotaFinanceiroType, NovaMovimentacaoType } from "@/shared/domain/financeiro";
 import { formatCurrency as brl } from "@/shared/utils/currency";
 import { formatDate } from "@/shared/utils/date";
 
 const brDate = (v?: string | null) => (v ? formatDate(v, "-") : "-");
 const money = (v?: number) => brl(v ?? 0);
 
-type Aba = "parcelas" | "caixa";
+type Aba = "notas" | "caixa";
 
-const STATUS_LOOK: Record<ParcelaType["status"], { label: string; cls: string }> = {
+const STATUS_LOOK: Record<NotaFinanceiroType["status_pagamento"], { label: string; cls: string }> = {
   PENDENTE: { label: "Pendente", cls: "border-warning/40 bg-warning/15 text-warning" },
   PAGO: { label: "Pago", cls: "border-success/40 bg-success/15 text-success" },
-  ATRASADO: { label: "Atrasado", cls: "border-danger/40 bg-danger/15 text-danger" },
-  CANCELADO: { label: "Cancelado", cls: "border-fg/10 bg-fg/[0.04] text-mist" },
 };
 
-const StatusBadge = ({ status }: { status: ParcelaType["status"] }) => {
-  const s = STATUS_LOOK[status];
+const StatusBadge = ({ status }: { status: NotaFinanceiroType["status_pagamento"] }) => {
+  const s = STATUS_LOOK[status] ?? { label: status ?? "-", cls: "border-fg/10 bg-fg/[0.04] text-mist" };
   return <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] ${s.cls}`}>{s.label}</span>;
 };
 
@@ -50,31 +48,27 @@ const ResumoCard = ({ icon, label, value, tone }: { icon: ReactNode; label: stri
   );
 };
 
-const COLS_PARCELAS = "grid-cols-[1fr_90px_120px_120px_170px]";
+const COLS_NOTAS = "grid-cols-[1fr_120px_120px_170px]";
 const COLS_CAIXA = "grid-cols-[110px_1fr_130px_120px_60px]";
 
 export default function FinanceiroPage() {
   const alert = useAlert();
 
   const resumo = useFinanceiroStore((s) => s.resumo);
-  const parcelas = useFinanceiroStore((s) => s.parcelas);
+  const notas = useFinanceiroStore((s) => s.notas);
   const movimentacoes = useFinanceiroStore((s) => s.movimentacoes);
-  const pedidosDisponiveis = useFinanceiroStore((s) => s.pedidosDisponiveis);
   const loading = useFinanceiroStore((s) => s.loading);
   const error = useFinanceiroStore((s) => s.error);
   const fetchFinanceiro = useFinanceiroStore((s) => s.fetchFinanceiro);
-  const criarParcelaStore = useFinanceiroStore((s) => s.criarParcela);
-  const baixarParcelaStore = useFinanceiroStore((s) => s.baixarParcela);
+  const registrarPagamentoNotaStore = useFinanceiroStore((s) => s.registrarPagamentoNota);
   const criarMovimentacaoStore = useFinanceiroStore((s) => s.criarMovimentacao);
   const excluirMovimentacaoStore = useFinanceiroStore((s) => s.excluirMovimentacao);
 
-  const [aba, setAba] = useState<Aba>("parcelas");
-  const [showNovaParcela, setShowNovaParcela] = useState(false);
+  const [aba, setAba] = useState<Aba>("notas");
   const [showNovaMovimentacao, setShowNovaMovimentacao] = useState(false);
-  const [parcelaParaBaixar, setParcelaParaBaixar] = useState<ParcelaType | null>(null);
+  const [notaParaPagar, setNotaParaPagar] = useState<NotaFinanceiroType | null>(null);
   const [salvando, setSalvando] = useState(false);
 
-  const [novaParcela, setNovaParcela] = useState<NovaParcelaType>({ pedidoId: "", numeroParcela: 1, valor: 0, vencimento: "" });
   const [novaMovimentacao, setNovaMovimentacao] = useState<NovaMovimentacaoType>({ tipo: "ENTRADA", categoria: "", descricao: "", valor: 0, dataMovimentacao: "" });
   const [formaPagamentoBaixa, setFormaPagamentoBaixa] = useState("Pix");
 
@@ -84,32 +78,14 @@ export default function FinanceiroPage() {
 
   const carregar = () => fetchFinanceiro(true);
 
-  const handleCriarParcela = async () => {
-    if (!novaParcela.pedidoId || !novaParcela.vencimento || novaParcela.valor <= 0) {
-      alert.warning("Preencha os campos", "Selecione o pedido, o valor e o vencimento da parcela.");
-      return;
-    }
+  const handleRegistrarPagamentoNota = async () => {
+    if (!notaParaPagar) return;
+    const valorRestante = Number(notaParaPagar.total) - Number(notaParaPagar.valor_pago ?? 0);
     setSalvando(true);
     try {
-      await criarParcelaStore(novaParcela);
-      alert.success("Parcela criada!", "A parcela foi registrada com sucesso.");
-      setShowNovaParcela(false);
-      setNovaParcela({ pedidoId: "", numeroParcela: 1, valor: 0, vencimento: "" });
-    } catch (err) {
-
-      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível registrar a parcela."));
-    } finally {
-      setSalvando(false);
-    }
-  };
-
-  const handleBaixarParcela = async () => {
-    if (!parcelaParaBaixar) return;
-    setSalvando(true);
-    try {
-      await baixarParcelaStore(parcelaParaBaixar.id, formaPagamentoBaixa);
-      alert.success("Parcela baixada!", "O pagamento foi registrado.");
-      setParcelaParaBaixar(null);
+      await registrarPagamentoNotaStore(notaParaPagar.pedido_id, valorRestante, formaPagamentoBaixa);
+      alert.success("Nota paga!", "O pagamento foi registrado.");
+      setNotaParaPagar(null);
     } catch (err) {
 
       alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível registrar o pagamento."));
@@ -147,29 +123,32 @@ export default function FinanceiroPage() {
     }
   };
 
-  const colParcelas: Coluna<ParcelaType>[] = [
+  const colNotas: Coluna<NotaFinanceiroType>[] = [
     {
       id: "cliente",
       header: "Cliente / Pedido",
-      cell: (p) => (
+      cell: (n) => (
         <span className="block min-w-0">
-          <span className="block truncate text-ink">{p.cliente_nome}</span>
-          <span className="block truncate text-[11px] text-faint">Pedido #{p.codigo_pedido}</span>
+          <span className="block truncate text-ink">{n.cliente_nome}</span>
+          <span className="block truncate text-[11px] text-faint">
+            Pedido #{n.codigo_pedido}
+            {n.status_pagamento === "PAGO" && n.forma_pagamento ? ` · ${n.forma_pagamento}` : ""}
+            {n.status_pagamento === "PENDENTE" && Number(n.valor_pago) > 0 ? ` · pago ${brl(n.valor_pago)} de ${brl(n.total)}` : ""}
+          </span>
         </span>
       ),
     },
-    { id: "parcela", header: "Parcela", align: "right", cell: (p) => <span className="nums text-mist">{p.numero_parcela}</span> },
-    { id: "valor", header: "Valor", align: "right", cell: (p) => <span className="nums text-ink">{brl(p.valor)}</span> },
-    { id: "venc", header: "Vencimento", align: "right", cell: (p) => <span className="nums text-mist">{brDate(p.vencimento)}</span> },
+    { id: "total", header: "Total", align: "right", cell: (n) => <span className="nums text-ink">{brl(n.total)}</span> },
+    { id: "data", header: "Data", align: "right", cell: (n) => <span className="nums text-mist">{brDate(n.data_pedido)}</span> },
     {
       id: "status",
       header: "Status",
       align: "right",
-      cell: (p) => (
+      cell: (n) => (
         <span className="flex items-center justify-end gap-2">
-          <StatusBadge status={p.status} />
-          {p.status !== "PAGO" && p.status !== "CANCELADO" && (
-            <button onClick={() => setParcelaParaBaixar(p)} className="focus-ring shrink-0 rounded-lg bg-fg/[0.05] p-1.5 text-faint transition-colors hover:bg-accent/20 hover:text-accent-soft" title="Baixar pagamento">
+          <StatusBadge status={n.status_pagamento} />
+          {n.status_pagamento !== "PAGO" && (
+            <button onClick={() => setNotaParaPagar(n)} className="focus-ring shrink-0 rounded-lg bg-fg/[0.05] p-1.5 text-faint transition-colors hover:bg-accent/20 hover:text-accent-soft" title="Registrar pagamento">
               <CheckCircle2 size={15} />
             </button>
           )}
@@ -209,7 +188,7 @@ export default function FinanceiroPage() {
   ];
 
   const abas: { id: Aba; label: string; icon: ReactNode }[] = [
-    { id: "parcelas", label: "Parcelas", icon: <Receipt size={14} /> },
+    { id: "notas", label: "Notas", icon: <Receipt size={14} /> },
     { id: "caixa", label: "Fluxo de caixa", icon: <ArrowLeftRight size={14} /> },
   ];
 
@@ -231,7 +210,7 @@ export default function FinanceiroPage() {
 
   return (
     <div className="aurora relative flex h-full w-full flex-col overflow-hidden text-ink">
-      <HeaderPage icon={<Wallet className="h-5 w-5" />} title="Financeiro" subtitle="Parcelas de clientes e fluxo de caixa da empresa" />
+      <HeaderPage icon={<Wallet className="h-5 w-5" />} title="Financeiro" subtitle="Notas de clientes e fluxo de caixa da empresa" />
 
       <PageBody>
         {error && (
@@ -255,13 +234,25 @@ export default function FinanceiroPage() {
           <ResumoCard icon={<Wallet size={17} />} label="Saldo em caixa" value={money(resumo?.saldoCaixa)} tone="accent" />
         </div>
 
-        {aba === "parcelas" ? (
-          <TabelaCard title="Parcelas de clientes" icon={<Receipt size={15} />} count={parcelas.length} countLabel={parcelas.length === 1 ? "parcela" : "parcelas"} onAdd={() => setShowNovaParcela(true)} addLabel="Nova parcela" filters={filtros}>
-            <TabelaHead colunas={colParcelas} cols={COLS_PARCELAS} />
-            {parcelas.length === 0 ? (
-              <TabelaVazia icon={<Receipt size={20} />} title={loading ? "Carregando…" : "Nenhuma parcela cadastrada"} description="Crie uma parcela vinculada a um pedido para acompanhar o recebimento." />
+        {!!resumo?.recebidoPorFormaPagamento?.length && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <span className="text-[11px] text-faint">Recebido por forma de pagamento:</span>
+            {resumo.recebidoPorFormaPagamento.map((f) => (
+              <span key={f.formaPagamento} className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-[11px] text-success">
+                {f.formaPagamento}
+                <span className="nums text-ink">{money(f.valor)}</span>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {aba === "notas" ? (
+          <TabelaCard title="Notas de clientes" icon={<Receipt size={15} />} count={notas.length} countLabel={notas.length === 1 ? "nota" : "notas"} filters={filtros}>
+            <TabelaHead colunas={colNotas} cols={COLS_NOTAS} />
+            {notas.length === 0 ? (
+              <TabelaVazia icon={<Receipt size={20} />} title={loading ? "Carregando…" : "Nenhuma nota registrada"} description="As notas emitidas no Ponto de Venda aparecem aqui para você acompanhar o recebimento." />
             ) : (
-              parcelas.map((p) => <TabelaRow key={p.id} colunas={colParcelas} cols={COLS_PARCELAS} row={p} />)
+              notas.map((n) => <TabelaRow key={n.pedido_id} colunas={colNotas} cols={COLS_NOTAS} row={n} />)
             )}
           </TabelaCard>
         ) : (
@@ -274,36 +265,6 @@ export default function FinanceiroPage() {
             )}
           </TabelaCard>
         )}
-
-        {/* Modal: nova parcela */}
-        <Modal open={showNovaParcela} onClose={() => setShowNovaParcela(false)} title="Nova parcela" subtitle="Vincule uma parcela a um pedido existente">
-          <Form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleCriarParcela();
-            }}
-          >
-            <FormSection title="Parcela" icon={<Receipt size={14} />}>
-              <SelectBox label="Pedido" value={novaParcela.pedidoId} onChange={(e) => setNovaParcela({ ...novaParcela, pedidoId: e.target.value })}>
-                <option value="">Selecione um pedido</option>
-                {pedidosDisponiveis.map((p) => (
-                  <option key={p.pedidoId} value={p.pedidoId}>
-                    {p.nomeCliente} — {brl(p.totalPedido)}
-                  </option>
-                ))}
-              </SelectBox>
-
-              <FormGrid cols={2}>
-                <TextField label="Nº da parcela" type="number" min={1} value={novaParcela.numeroParcela} onChange={(e) => setNovaParcela({ ...novaParcela, numeroParcela: Number(e.target.value) })} />
-                <TextField label="Valor" type="number" min={0} step="0.01" value={novaParcela.valor} onChange={(e) => setNovaParcela({ ...novaParcela, valor: Number(e.target.value) })} />
-              </FormGrid>
-
-              <TextField label="Vencimento" type="date" value={novaParcela.vencimento} onChange={(e) => setNovaParcela({ ...novaParcela, vencimento: e.target.value })} />
-            </FormSection>
-
-            <FormActions onCancel={() => setShowNovaParcela(false)} saving={salvando} submitText="Criar" />
-          </Form>
-        </Modal>
 
         {/* Modal: nova movimentação de caixa */}
         <Modal open={showNovaMovimentacao} onClose={() => setShowNovaMovimentacao(false)} title="Nova movimentação" subtitle="Registre uma entrada ou saída no caixa">
@@ -339,12 +300,12 @@ export default function FinanceiroPage() {
           </Form>
         </Modal>
 
-        {/* Modal: baixar parcela */}
-        <Modal open={!!parcelaParaBaixar} onClose={() => setParcelaParaBaixar(null)} title="Baixar parcela" subtitle={parcelaParaBaixar ? `${parcelaParaBaixar.cliente_nome} — ${brl(parcelaParaBaixar.valor)}` : ""}>
+        {/* Modal: registrar pagamento da nota */}
+        <Modal open={!!notaParaPagar} onClose={() => setNotaParaPagar(null)} title="Registrar pagamento" subtitle={notaParaPagar ? `${notaParaPagar.cliente_nome} — restam ${brl(Number(notaParaPagar.total) - Number(notaParaPagar.valor_pago ?? 0))}` : ""}>
           <Form
             onSubmit={(e) => {
               e.preventDefault();
-              handleBaixarParcela();
+              handleRegistrarPagamentoNota();
             }}
           >
             <SelectBox label="Forma de pagamento" value={formaPagamentoBaixa} onChange={(e) => setFormaPagamentoBaixa(e.target.value)}>
@@ -355,7 +316,7 @@ export default function FinanceiroPage() {
               <option value="Boleto">Boleto</option>
             </SelectBox>
 
-            <FormActions onCancel={() => setParcelaParaBaixar(null)} saving={salvando} submitText="Confirmar" />
+            <FormActions onCancel={() => setNotaParaPagar(null)} saving={salvando} submitText="Confirmar" />
           </Form>
         </Modal>
       </PageBody>
