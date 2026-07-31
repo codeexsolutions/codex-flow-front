@@ -144,19 +144,29 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
 
   /* ─── Produtos ─── */
   const adicionarProduto = (produtoHandle: ProductType) => {
-    setItens((prev) => [
-      ...prev,
-      {
-        itemPedidoId: gerarUID(),
-        quantidadeItem: 1,
-        valorVendaItem: produtoHandle.valorVenda,
-        produto: {
-          nomeProduto: produtoHandle.nome,
-          produtoId: produtoHandle.id,
-          valorProduto: produtoHandle.valorVenda,
+    setItens((prev) => {
+      // Mesmo produto já está na nota → soma a quantidade na linha existente
+      // em vez de criar uma segunda linha (duas linhas do mesmo produto
+      // quebravam a edição/remoção da nota no backend).
+      const existente = prev.find((l) => l.produto.produtoId === produtoHandle.id);
+      if (existente) {
+        return prev.map((l) => (l.produto.produtoId === produtoHandle.id ? { ...l, quantidadeItem: l.quantidadeItem + 1 } : l));
+      }
+
+      return [
+        ...prev,
+        {
+          itemPedidoId: gerarUID(),
+          quantidadeItem: 1,
+          valorVendaItem: produtoHandle.valorVenda,
+          produto: {
+            nomeProduto: produtoHandle.nome,
+            produtoId: produtoHandle.id,
+            valorProduto: produtoHandle.valorVenda,
+          },
         },
-      },
-    ]);
+      ];
+    });
     alert.toast("success", "Produto adicionado!", undefined, { position: "bottom-right", timer: 2000 });
   };
 
