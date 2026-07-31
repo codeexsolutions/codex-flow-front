@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 import NoteService from "@/features/vendas/services/note.service";
-import { type PedidoClienteType, estaAberto, estaPendente, estaCancelado, estaFechado, isPedidoValido, totalDoPedido } from "@/shared/domain/pedido";
+import { type PedidoClienteType, estaAberto, estaPendente, estaCancelado, estaFechado, isPedidoValido, totalDoPedido, valorPagoDoPedido, valorPendenteDoPedido } from "@/shared/domain/pedido";
 
 import { isSameDay, isSameMonth } from "@/shared/utils/date";
 import { unwrapList } from "@/shared/api/types";
@@ -32,12 +32,13 @@ interface VendaState {
 const calcularResumo = (lista: PedidoClienteType[]): ResumoVendas => {
   const ativas = lista.filter((v) => !estaCancelado(v));
   const faturamento = ativas.reduce((acc, v) => acc + totalDoPedido(v), 0);
-  const recebido = ativas.filter(estaFechado).reduce((acc, v) => acc + totalDoPedido(v), 0);
+  const recebido = ativas.reduce((acc, v) => acc + valorPagoDoPedido(v), 0);
+  const pendente = ativas.reduce((acc, v) => acc + valorPendenteDoPedido(v), 0);
 
   return {
     faturamento,
     recebido,
-    pendente: Math.max(faturamento - recebido, 0),
+    pendente,
     ticketMedio: ativas.length ? faturamento / ativas.length : 0,
     quantidade: ativas.length,
   };

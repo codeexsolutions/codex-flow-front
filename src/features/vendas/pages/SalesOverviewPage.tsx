@@ -4,7 +4,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Modal } from "@/shared/ui/Modal";
 import Invoice from "@/features/vendas/components/Invoice";
 import { formatCurrency } from "@/shared/utils/currency";
-import { estaAberto, estaCancelado, estaFechado, totalDoPedido } from "@/shared/domain/pedido";
+import { estaAberto, estaCancelado, estaFechado, totalDoPedido, valorPagoDoPedido, valorPendenteDoPedido } from "@/shared/domain/pedido";
 import { MONTHS, isSameMonth, toDate } from "@/shared/utils/date";
 import { useChartColors } from "@/shared/theme/useChartColors";
 import useVendaStore from "@/features/vendas/store/venda.store";
@@ -103,8 +103,8 @@ const SalesOverviewPage = () => {
     const doMes = naoCanceladas.filter((v) => isSameMonth(v.pedido.dataPedido, agora));
 
     const faturadoMes = doMes.reduce((acc, v) => acc + totalDoPedido(v), 0);
-    const recebidoMes = doMes.filter(estaFechado).reduce((acc, v) => acc + totalDoPedido(v), 0);
-    const aReceberTotal = naoCanceladas.filter(estaAberto).reduce((acc, v) => acc + totalDoPedido(v), 0);
+    const recebidoMes = doMes.reduce((acc, v) => acc + valorPagoDoPedido(v), 0);
+    const aReceberTotal = naoCanceladas.reduce((acc, v) => acc + valorPendenteDoPedido(v), 0);
     const percentualRecebido = faturadoMes ? (recebidoMes / faturadoMes) * 100 : 0;
 
     const porMes = MONTHS.map((name, i) => {
@@ -115,7 +115,7 @@ const SalesOverviewPage = () => {
       return {
         name,
         faturado: doMesI.reduce((acc, v) => acc + totalDoPedido(v), 0),
-        recebido: doMesI.filter(estaFechado).reduce((acc, v) => acc + totalDoPedido(v), 0),
+        recebido: doMesI.reduce((acc, v) => acc + valorPagoDoPedido(v), 0),
       };
     });
 

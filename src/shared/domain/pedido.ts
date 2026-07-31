@@ -93,5 +93,18 @@ export const estaCancelado = (v: PedidoClienteType): boolean => v.pedido.pedidoS
  */
 export const totalDoPedido = (v: PedidoClienteType): number => Number(v.pedido.totalPedido) || (v.pedido.itensPedido ?? []).reduce((acc: number, item: ItemPedidoType) => acc + Number(item.valorVendaItem || 0) * Number(item.quantidadeItem || 0), 0);
 
+/** Quanto já foi pago nesta venda (pagamentos parciais acumulados). */
+export const valorPagoDoPedido = (v: PedidoClienteType): number =>
+  Number(v.pedido.valorPago ?? 0);
+
+/**
+ * Valor ainda pendente.
+ * Pedidos cancelados ou totalmente pagos/fechados ficam zerados.
+ */
+export const valorPendenteDoPedido = (v: PedidoClienteType): number => {
+  if (estaCancelado(v) || estaFechado(v) || estaPago(v)) return 0;
+  return Math.max(totalDoPedido(v) - valorPagoDoPedido(v), 0);
+};
+
 /** Type guard para respostas da API que podem trazer registros incompletos. */
 export const isPedidoValido = (v: unknown): v is PedidoClienteType => !!v && !!(v as PedidoClienteType).pedido;

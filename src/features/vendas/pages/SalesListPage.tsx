@@ -3,7 +3,7 @@ import { ShoppingCart, Search, XCircle } from "lucide-react";
 import { Modal } from "@/shared/ui/Modal";
 import Invoice from "@/features/vendas/components/Invoice";
 import { formatCurrency } from "@/shared/utils/currency";
-import { type PedidoClienteType, estaAberto, estaCancelado, estaFechado, totalDoPedido } from "@/shared/domain/pedido";
+import { type PedidoClienteType, estaAberto, estaCancelado, estaFechado, totalDoPedido, valorPagoDoPedido, valorPendenteDoPedido } from "@/shared/domain/pedido";
 import { formatDateShort } from "@/shared/utils/date";
 import { PedidoStatusBadge } from "@/shared/ui/StatusBadge";
 import useVendaStore from "@/features/vendas/store/venda.store";
@@ -44,9 +44,11 @@ const SalesList = () => {
     return base;
   }, [vendas, status, search]);
 
-  const totalEmAberto = useMemo(() => {
-    return vendas.filter(estaAberto).reduce((acc, v) => acc + totalDoPedido(v), 0);
-  }, [vendas]);
+const totalEmAberto = useMemo(() => {
+  return vendas
+    .filter((v) => !estaCancelado(v))
+    .reduce((acc, v) => acc + valorPendenteDoPedido(v), 0);
+}, [vendas]);
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -146,8 +148,8 @@ function TabSales({
               <div className="divide-y divide-fg/[0.04]">
                 {vendas.map((v) => {
                   const total = totalDoPedido(v);
-                  const pago = estaFechado(v) ? total : 0;
-                  const pendente = estaAberto(v) ? total : 0;
+                  const pago = valorPagoDoPedido(v);
+                  const pendente = valorPendenteDoPedido(v);
                   const idCurto = v.pedido.pedidoId?.slice(-6).toUpperCase() ?? "—";
 
                   return (

@@ -37,20 +37,41 @@ const Kpi = ({ icon, label, value, tone = "neutral" }: { icon: ReactNode; label:
   </div>
 );
 
-const StatusBadge = ({ aberta }: { aberta: boolean }) =>
-  aberta ? (
+const StatusBadge = ({ status }: { status: "ABERTA" | "PARCIAL" | "PAGA" }) => {
+  if (status === "PAGA")
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-success/40 bg-success/15 px-2.5 py-1 text-[11px] text-success">
+        <span className="h-1.5 w-1.5 rounded-full bg-success" /> Pago
+      </span>
+    );
+  if (status === "PARCIAL")
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-1 text-[11px] text-accent-soft">
+        <span className="h-1.5 w-1.5 rounded-full bg-accent-soft" /> Parcial
+      </span>
+    );
+  return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning/15 px-2.5 py-1 text-[11px] text-warning">
       <span className="h-1.5 w-1.5 rounded-full bg-warning" /> Em aberto
     </span>
-  ) : (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-success/40 bg-success/15 px-2.5 py-1 text-[11px] text-success">
-      <span className="h-1.5 w-1.5 rounded-full bg-success" /> Pago
-    </span>
   );
+};
 
 const Avatar = ({ name, size = "md" }: { name?: string; size?: "sm" | "md" }) => {
   const dim = size === "sm" ? "h-8 w-8 text-[10px]" : "h-9 w-9 text-[11px]";
   return <div className={`flex ${dim} shrink-0 items-center justify-center rounded-xl border border-accent/25 bg-gradient-to-br from-accent/30 to-accent-soft/10 text-accent-soft`}>{iniciais(name)}</div>;
+};
+
+/**
+ * Deriva o status de pagamento pelo valor já pago (não só pelo status do
+ * pedido) — assim uma nota com pagamento parcial aparece como "Parcial",
+ * não como "Em aberto" cheio.
+ */
+const statusPagamentoVenda = (v: { pedido: { valorPago?: number } }, total: number): "ABERTA" | "PARCIAL" | "PAGA" => {
+  const pago = Number(v.pedido.valorPago ?? 0);
+  if (pago <= 0) return "ABERTA";
+  if (pago >= total) return "PAGA";
+  return "PARCIAL";
 };
 
 const SearchBox = ({ value, onChange, placeholder, className = "" }: { value: string; onChange: (v: string) => void; placeholder?: string; className?: string }) => (
@@ -102,7 +123,7 @@ const PontoDeVenda = () => {
   }, [vendasVisiveis, busca]);
 
   const faturamento = vendasVisiveis.reduce((acc, v) => acc + totalDoPedido(v), 0);
-  const recebido = vendasVisiveis.filter((v) => !estaAberta(v)).reduce((acc, v) => acc + totalDoPedido(v), 0);
+  const recebido = vendasVisiveis.reduce((acc, v) => acc + Number(v.pedido.valorPago ?? 0), 0);
   const pendente = Math.max(faturamento - recebido, 0);
   const ticketMedio = vendasVisiveis.length ? faturamento / vendasVisiveis.length : 0;
 
@@ -196,7 +217,8 @@ const PontoDeVenda = () => {
             {vendasFiltradas.length > 0 ? (
               vendasFiltradas.map((venda) => {
                 const total = totalDoPedido(venda);
-                const aberta = estaAberta(venda);
+                const statusPag = statusPagamentoVenda(venda, total);
+                const pagoVenda = Number(venda.pedido.valorPago ?? 0);
                 return (
                   <button
                     key={venda.pedido.pedidoId}
@@ -209,16 +231,17 @@ const PontoDeVenda = () => {
                       <p className="text-[11px] text-faint">
                         {horaVenda(venda.pedido.dataPedido)}
                         {!somenteHoje && ` · ${dataVenda(venda.pedido.dataPedido)}`}
+                        {statusPag === "PARCIAL" && ` · pago ${formatCurrency(pagoVenda)} de ${formatCurrency(total)}`}
                       </p>
                     </div>
 
                     <span className="hidden sm:block">
-                      <StatusBadge aberta={aberta} />
+                      <StatusBadge status={statusPag} />
                     </span>
 
                     <div className="text-right">
                       <p className="text-[13px] tabular-nums text-ink">{formatCurrency(total)}</p>
-                      <p className={`text-[11px] tabular-nums ${aberta ? "text-warning" : "text-success"}`}>{aberta ? "aberta" : "paga"}</p>
+                      <p className={`text-[11px] tabular-nums ${statusPag === "PAGA" ? "text-success" : statusPag === "PARCIAL" ? "text-accent-soft" : "text-warning"}`}>{statusPag === "PAGA" ? "paga" : statusPag === "PARCIAL" ? "parcial" : "aberta"}</p>
                     </div>
                     <ChevronRight size={16} className="text-muted" />
                   </button>
