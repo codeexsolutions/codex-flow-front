@@ -35,3 +35,17 @@ export const empresaSchema = z.object({
  */
 export type EmpresaInput = z.input<typeof empresaSchema>;
 export type EmpresaData = z.output<typeof empresaSchema>;
+
+/**
+ * Só os campos da aba Identificação. Salvar essa aba não pode falhar por
+ * causa de um campo obrigatório de outra aba (ex: e-mail vazio na aba
+ * Contato) — cada aba salva e valida de forma independente.
+ */
+export const identificacaoSchema = empresaSchema.pick({
+  nomeFantasia: true,
+  nomeRepresentante: true,
+  cpfCnpj: true,
+  inscMunicipal: true,
+  urlLogo: true,
+  urlImagem: true,
+});

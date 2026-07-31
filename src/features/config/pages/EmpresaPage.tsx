@@ -9,7 +9,7 @@ import { onlyDigits, formatDocument } from "@/shared/utils/format";
 import { maskCep, maskPhone } from "@/shared/validation/masks";
 
 import { SettingsCard } from "@/features/config/components/ConfigUI";
-import { empresaSchema, type EmpresaData, type EmpresaInput } from "@/features/config/schema/company.schema";
+import { empresaSchema, identificacaoSchema, type EmpresaData, type EmpresaInput } from "@/features/config/schema/company.schema";
 import EmpresaIdentificacao from "@/features/config/components/EmpresaIdentificacao";
 import EmpresaContato from "@/features/config/components/EmpresaContato";
 import EmpresaEndereco from "@/features/config/components/EmpresaEndereco";
@@ -56,7 +56,6 @@ const EmpresaPage = () => {
 
   const {
     register,
-    handleSubmit,
     control,
     setValue,
     getValues,
@@ -109,8 +108,10 @@ const EmpresaPage = () => {
       await saveFn();
       setSavedTab(tabId);
       setTimeout(() => setSavedTab(null), 2500);
-    } catch {
-      alert.error("Erro ao salvar", "Não foi possível salvar.");
+    } catch (err) {
+      if (!(err instanceof Error && err.message === "VALIDATION_HANDLED")) {
+        alert.error("Erro ao salvar", "Não foi possível salvar.");
+      }
     } finally {
       setSaving(null);
     }
@@ -119,17 +120,25 @@ const EmpresaPage = () => {
   const salvarIdentificacao = async () => {
     const id = ent.id;
     if (!id) return;
-    await handleSubmit(
-      async (data) => await updateEnterprise(id, {
-        nomeFantasia: data.nomeFantasia,
-        nomeRepresentante: data.nomeRepresentante,
-        cpfCnpj: onlyDigits(data.cpfCnpj),
-        inscMunicipal: data.inscMunicipal,
-        urlLogo: data.urlLogo,
-        urlImagem: data.urlImagem,
-      }),
-      () => alert.error("Campos inválidos", "Revise os campos de Identificação."),
-    )();
+
+    // Valida só os campos desta aba — usar o schema inteiro faria essa aba
+    // falhar por causa de um campo obrigatório de Contato/Endereço (ex:
+    // e-mail vazio) que nem está sendo editado agora.
+    const parsed = identificacaoSchema.safeParse(getValues());
+    if (!parsed.success) {
+      alert.error("Campos inválidos", "Revise os campos de Identificação.");
+      throw new Error("VALIDATION_HANDLED");
+    }
+
+    const data = parsed.data;
+    await updateEnterprise(id, {
+      nomeFantasia: data.nomeFantasia,
+      nomeRepresentante: data.nomeRepresentante,
+      cpfCnpj: onlyDigits(data.cpfCnpj),
+      inscMunicipal: data.inscMunicipal,
+      urlLogo: data.urlLogo,
+      urlImagem: data.urlImagem,
+    });
   };
 
   const salvarContato = async () => {
