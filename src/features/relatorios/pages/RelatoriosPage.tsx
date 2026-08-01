@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileText, Printer, CalendarRange } from "lucide-react";
+import { FileText, Printer, CalendarRange, FileSpreadsheet } from "lucide-react";
+import * as XLSX from "xlsx";
 
 import HeaderPage from "@/shared/ui/HeaderPage";
 import { PageBody, PageToolbar, PrimaryAction } from "@/shared/ui/PageShell";
@@ -10,7 +11,7 @@ import useClienteStore from "@/features/clientes/store/cliente.store";
 import useProdutoStore, { stockLevel } from "@/features/estoque/store/produto.store";
 import useEnterprise from "@/features/empresa/store/enterprise.store";
 
-import { estaAberto, estaCancelado, estaFechado, totalDoPedido, type PedidoClienteType } from "@/shared/domain/pedido";
+import { estaAberto, estaCancelado, totalDoPedido, type PedidoClienteType } from "@/shared/domain/pedido";
 import { formatCurrency } from "@/shared/utils/currency";
 import { formatDate, formatDateTime, toDate } from "@/shared/utils/date";
 import { formatDocument, formatNumber } from "@/shared/utils/format";
@@ -95,7 +96,7 @@ const RelatoriosPage = () => {
 
   const totais = useMemo(() => {
     const faturado = vendasPeriodo.reduce((acc, v) => acc + totalDoPedido(v), 0);
-    const recebido = vendasPeriodo.filter(estaFechado).reduce((acc, v) => acc + totalDoPedido(v), 0);
+    const recebido = vendasPeriodo.reduce((acc, v) => acc + Number(v.pedido.valorPago ?? 0), 0);
     return {
       faturado,
       recebido,
@@ -140,6 +141,82 @@ const RelatoriosPage = () => {
 
   const emAberto = useMemo(() => vendasPeriodo.filter(estaAberto), [vendasPeriodo]);
 
+  /* ───────────────────── Exportar Excel (dia/mês/ano, geral e por cliente) ───────────────────── */
+
+  const exportarExcel = () => {
+    const agora = new Date();
+    const inicioDia = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+    const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
+    const inicioAno = new Date(agora.getFullYear(), 0, 1);
+
+    const vendasValidas = vendas.filter((v) => !estaCancelado(v));
+    const desde = (inicio: Date) =>
+      vendasValidas.filter((v) => {
+        const d = toDate(v.pedido.dataPedido);
+        return !!d && d >= inicio;
+      });
+
+    const doDia = desde(inicioDia);
+    const doMes = desde(inicioMes);
+    const doAno = desde(inicioAno);
+
+    const somaTotal = (lista: PedidoClienteType[]) => lista.reduce((acc, v) => acc + totalDoPedido(v), 0);
+    const somaRecebido = (lista: PedidoClienteType[]) => lista.reduce((acc, v) => acc + Number(v.pedido.valorPago ?? 0), 0);
+
+    // Aba "Resumo" — totais gerais do dia, do mês e do ano
+    const wsResumo = XLSX.utils.json_to_sheet([
+      { Período: "Dia", Vendas: doDia.length, Faturado: somaTotal(doDia), Recebido: somaRecebido(doDia), "A receber": somaTotal(doDia) - somaRecebido(doDia) },
+      { Período: "Mês", Vendas: doMes.length, Faturado: somaTotal(doMes), Recebido: somaRecebido(doMes), "A receber": somaTotal(doMes) - somaRecebido(doMes) },
+      { Período: "Ano", Vendas: doAno.length, Faturado: somaTotal(doAno), Recebido: somaRecebido(doAno), "A receber": somaTotal(doAno) - somaRecebido(doAno) },
+    ]);
+    wsResumo["!cols"] = [{ wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+
+    // Aba "Por Cliente" — total de cada cliente no dia, no mês e no ano
+    const totalPorClienteEmJanela = (lista: PedidoClienteType[]) => {
+      const mapa = new Map<string, number>();
+      lista.forEach((v) => mapa.set(v.clienteId, (mapa.get(v.clienteId) ?? 0) + totalDoPedido(v)));
+      return mapa;
+    };
+    const totaisDia = totalPorClienteEmJanela(doDia);
+    const totaisMes = totalPorClienteEmJanela(doMes);
+    const totaisAno = totalPorClienteEmJanela(doAno);
+
+    const nomesClientes = new Map<string, string>();
+    vendasValidas.forEach((v) => nomesClientes.set(v.clienteId, v.nomeCliente));
+
+    const linhasPorCliente = Array.from(nomesClientes.entries())
+      .map(([clienteId, nome]) => ({
+        Cliente: nome,
+        "Total no dia": totaisDia.get(clienteId) ?? 0,
+        "Total no mês": totaisMes.get(clienteId) ?? 0,
+        "Total no ano": totaisAno.get(clienteId) ?? 0,
+      }))
+      .filter((l) => l["Total no ano"] > 0)
+      .sort((a, b) => b["Total no ano"] - a["Total no ano"]);
+
+    const wsClientes = XLSX.utils.json_to_sheet(linhasPorCliente);
+    wsClientes["!cols"] = [{ wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+
+    // Aba "Vendas" — detalhe de cada venda no período escolhido na tela
+    const linhasVendas = vendasPeriodo.map((v) => ({
+      Data: formatDate(v.pedido.dataPedido),
+      Cliente: v.nomeCliente,
+      Status: estaAberto(v) ? "Em aberto" : "Pago",
+      Total: totalDoPedido(v),
+      Pago: Number(v.pedido.valorPago ?? 0),
+    }));
+    const wsVendas = XLSX.utils.json_to_sheet(linhasVendas);
+    wsVendas["!cols"] = [{ wch: 12 }, { wch: 28 }, { wch: 12 }, { wch: 14 }, { wch: 14 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsResumo, "Resumo");
+    XLSX.utils.book_append_sheet(wb, wsClientes, "Por Cliente");
+    XLSX.utils.book_append_sheet(wb, wsVendas, "Vendas do período");
+
+    const hoje = formatDate(new Date()).replaceAll("/", "-");
+    XLSX.writeFile(wb, `relatorio-${hoje}.xlsx`);
+  };
+
   const tituloRelatorio = TIPOS.find((t) => t.id === tipo)?.label ?? "Relatório";
 
   return (
@@ -174,6 +251,10 @@ const RelatoriosPage = () => {
             </div>
           }
         >
+          <button onClick={exportarExcel} className="focus-ring inline-flex items-center gap-2 rounded-lg border border-fg/[0.1] bg-fg/[0.03] px-3.5 py-2.5 text-[13px] text-mist transition-colors hover:bg-fg/[0.06] hover:text-ink">
+            <FileSpreadsheet className="h-4 w-4" />
+            Exportar Excel
+          </button>
           <PrimaryAction icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>
             Imprimir / PDF
           </PrimaryAction>

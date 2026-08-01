@@ -496,7 +496,7 @@ const CheckoutPage = () => {
             )}
           </button>
 
-          <p className="mt-4 text-center text-xs text-faint">O pagamento é confirmado automaticamente em poucos segundos.</p>
+          <p className="mt-4 text-center text-xs text-faint">Após o pagamento, nossa equipe confirma e libera seu acesso — normalmente em algumas horas.</p>
         </div>
       </Modal>
     </div>
