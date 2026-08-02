@@ -7,6 +7,8 @@ import { decodeToken, isTokenExpired } from "@/shared/utils/decodeToken";
 import { alert } from "@/shared/ui/Alert"; // ajuste o caminho se necessário
 import useEnterprise from "@/features/empresa/store/enterprise.store";
 import { toCodigoEmpresaBase } from "@/shared/domain/empresa";
+import useTransicao from "@/shared/session/transicao.store";
+import { resetarLojas } from "@/shared/session/resetarLojas";
 
 const TOKEN_KEY = "token";
 const REFRESH_TOKEN_KEY = "refreshToken";
@@ -72,7 +74,9 @@ const useAuth = create<AuthStore>((set, get) => ({
   clearAuth() {
     tokenStorage.clear();
 
-    useEnterprise.getState().clearEnterprise();
+    // Zera clientes, produtos, vendas, financeiro e empresa: sem isso os dados
+    // de quem saiu ficariam visíveis para quem entrar em seguida.
+    resetarLojas();
 
     set({
       user: null,
@@ -91,21 +95,27 @@ const useAuth = create<AuthStore>((set, get) => ({
         throw new Error("Resposta inválida da API.");
       }
 
-      // Deixa a tela reagir antes de a sessão valer (ver `aoAutenticar`).
-      if (aoAutenticar) await aoAutenticar(decodeToken(auth.accessToken).nome ?? "");
+      const usuario = getUserFromToken(auth.accessToken);
 
-      // Salva o token e cria o usuário
-      get().setAuth(auth.accessToken, auth.refreshToken);
+      /*
+       * O token é gravado ANTES de a sessão valer para que a busca da empresa
+       * já saia autorizada. É o que permite carregar os dados EM PARALELO com
+       * a animação: quando ela termina, o sistema entra pronto — sem a tela de
+       * "Carregando" que aparecia no meio e cortava o efeito.
+       */
+      tokenStorage.save(auth.accessToken, auth.refreshToken);
 
-      // Busca a empresa do usuário logado
-      const user = get().user;
+      const carregarEmpresa = usuario.codigoEmpresa
+        ? useEnterprise.getState().fetchEnterprise(toCodigoEmpresaBase(usuario.codigoEmpresa))
+        : Promise.resolve();
 
-      if (user?.codigoEmpresa) {
-        await useEnterprise.getState().fetchEnterprise(toCodigoEmpresaBase(user.codigoEmpresa));
-      }
+      await Promise.all([aoAutenticar ? aoAutenticar(usuario.nome ?? "") : Promise.resolve(), carregarEmpresa]);
+
+      // Só agora a sessão vale — e o roteador troca de tela com tudo carregado.
+      set({ user: usuario, isLogged: true, loading: false });
 
       // Sem alerta quando a tela já deu as boas-vindas com a animação.
-      if (!aoAutenticar) await alert.success("Login realizado", `Bem-vindo, ${user?.nome}!`);
+      if (!aoAutenticar) await alert.success("Login realizado", `Bem-vindo, ${usuario.nome}!`);
     } catch (error) {
       const err = error as { response?: { data?: { message?: string } }; message?: string };
 
@@ -152,10 +162,12 @@ const useAuth = create<AuthStore>((set, get) => ({
     }
   },
 
-  logout() {
-    get().clearAuth();
+  async logout() {
+    // A animação roda ANTES de a sessão cair; o overlay vive acima do roteador
+    // (ver `CamadaTransicao`), então sobrevive ao desmonte da tela atual.
+    await useTransicao.getState().tocar("saida", get().user?.nome ?? "");
 
-    alert.info("Logout realizado", "Você saiu do sistema com sucesso.");
+    get().clearAuth();
   },
 }));
 

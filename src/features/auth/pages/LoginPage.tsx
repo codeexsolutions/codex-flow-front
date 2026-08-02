@@ -1,12 +1,13 @@
-import { useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import useAuth from "@/features/auth/store/auth.store";
 
 import AuthForm from "@/features/auth/components/AuthForm";
 import AuthFormInputs from "@/features/auth/schema/auth.schema";
 import { onlyDigits } from "@/shared/utils/format";
-import TransicaoBoasVindas from "@/features/auth/components/TransicaoBoasVindas";
+import useTransicao from "@/shared/session/transicao.store";
 
 const LANDING_ROUTE = "/page";
 
@@ -17,9 +18,10 @@ const AuthPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [loginError, setLoginError] = useState(false);
 
-  /* A transição só termina quando a animação avisa — daí a promessa guardada. */
-  const [nomeBoasVindas, setNomeBoasVindas] = useState<string | null>(null);
-  const concluirAnimacao = useRef<(() => void) | null>(null);
+  /* O overlay mora acima do roteador (`CamadaTransicao`); aqui só disparamos.
+     `consumindo` serve para o card se desfazer junto. */
+  const [consumindo, setConsumindo] = useState(false);
+  const tocarTransicao = useTransicao((s) => s.tocar);
 
   const onSubmit = async (data: AuthFormInputs) => {
     if (isLoading) return;
@@ -35,15 +37,14 @@ const AuthPage = () => {
           cpfCnpjEmpresa: onlyDigits(data.cpfCnpjEmpresa),
         },
         // Toca a animação e segura o login aqui até ela acabar.
-        (nome) =>
-          new Promise<void>((resolver) => {
-            concluirAnimacao.current = resolver;
-            setNomeBoasVindas(nome);
-          }),
+        (nome) => {
+          setConsumindo(true);
+          return tocarTransicao("entrada", nome);
+        },
       );
     } catch {
       setLoginError(true);
-      setNomeBoasVindas(null);
+      setConsumindo(false);
     } finally {
       setIsLoading(false);
     }
@@ -60,7 +61,12 @@ const AuthPage = () => {
 
       <div className="relative z-10 w-full max-w-sm sm:max-w-md flex flex-col max-h-full">
         {/* Marca */}
-        <div className="cf-rise flex items-center justify-center gap-3 mb-3 sm:mb-4">
+        <motion.div
+          className="mb-3 flex items-center justify-center gap-3 sm:mb-4"
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.22, 0.61, 0.36, 1] }}
+        >
           <button type="button" onClick={() => navigate(LANDING_ROUTE)} className="group relative inline-flex items-center justify-center transition-transform duration-300 hover:scale-[1.04]" aria-label="Ir para a página inicial do CodeEx Flow">
             <span className="pointer-events-none absolute left-1/2 top-1/2 h-[80px] w-[80px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent blur-[36px]" style={{ opacity: "calc(0.5 * var(--fx-glow, 1))" }} />
             <img src="/logo.png" alt="CodeEx Flow" width={48} height={48} className="relative h-10 w-10 rounded-xl shadow-glow sm:h-12 sm:w-12" />
@@ -69,17 +75,14 @@ const AuthPage = () => {
             <span className="text-base tracking-tight text-ink sm:text-lg">CodeEx Flow</span>
             <span className="text-[10px] uppercase tracking-[2px] text-faint">Painel da empresa</span>
           </div>
-        </div>
+        </motion.div>
 
         {/* Card — ao entrar, ele é "consumido": encolhe, desfoca e some. */}
         <motion.div
           className="glass-strong glass-sheen elev-3 relative rounded-2xl p-4 sm:p-6"
-          animate={
-            nomeBoasVindas
-              ? { opacity: 0, scale: 0.94, filter: "blur(10px)", y: -12 }
-              : { opacity: 1, scale: 1, filter: "blur(0px)", y: 0 }
-          }
-          transition={{ duration: 0.55, ease: [0.4, 0, 0.2, 1] }}
+          initial={{ opacity: 0, y: 18, scale: 0.98 }}
+          animate={consumindo ? { opacity: 0, scale: 0.94, filter: "blur(10px)", y: -12 } : { opacity: 1, scale: 1, filter: "blur(0px)", y: 0 }}
+          transition={{ duration: consumindo ? 0.55 : 0.6, delay: consumindo ? 0 : 0.12, ease: [0.22, 0.61, 0.36, 1] }}
         >
           <span className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-accent-soft to-transparent opacity-70" />
 
@@ -96,25 +99,35 @@ const AuthPage = () => {
           </p>
         </motion.div>
 
-        <p className="mt-2 text-center text-[10px] text-muted sm:mt-3">
+        {/* No celular "conhecer o site" era um link de 10px espremido no rodapé —
+            invisível justamente para quem ainda não é cliente. Vira botão. */}
+        <motion.button
+          type="button"
+          onClick={() => navigate(LANDING_ROUTE)}
+          className="focus-ring mt-4 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl border border-fg/[0.1] text-[13.5px] text-mist transition-colors active:bg-fg/[0.05] sm:hidden"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.28 }}
+        >
+          <Sparkles size={15} className="text-accent-soft" />
+          Conhecer o CodeEx Flow
+        </motion.button>
+
+        <motion.p
+          className="mt-3 hidden text-center text-[10px] text-muted sm:block"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.35, duration: 0.5 }}
+        >
           © {new Date().getFullYear()} CodeEx Flow ·{" "}
           <button type="button" onClick={() => navigate(LANDING_ROUTE)} className="text-accent transition-colors hover:text-accent-soft">
             Conheça o CodeEx Flow
           </button>
-        </p>
+        </motion.p>
+
+        <p className="mt-3 text-center text-[10px] text-muted sm:hidden">© {new Date().getFullYear()} CodeEx Flow</p>
       </div>
 
-      <AnimatePresence>
-        {nomeBoasVindas !== null && (
-          <TransicaoBoasVindas
-            nome={nomeBoasVindas}
-            aoTerminar={() => {
-              concluirAnimacao.current?.();
-              concluirAnimacao.current = null;
-            }}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 };

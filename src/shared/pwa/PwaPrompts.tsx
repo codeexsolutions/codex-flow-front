@@ -48,7 +48,37 @@ const PwaPrompts = () => {
   const {
     needRefresh: [precisaAtualizar, setPrecisaAtualizar],
     updateServiceWorker,
-  } = useRegisterSW();
+  } = useRegisterSW({
+    /*
+     * O navegador só procura versão nova quando a página é aberta de novo — e
+     * um PWA instalado pode ficar dias sem ser fechado. Sem esta checagem, um
+     * deploy seu só chegaria ao cliente quando ele lembrasse de matar o app.
+     *
+     * Aqui a busca acontece de hora em hora e sempre que a pessoa volta para o
+     * app. `cache: "no-store"` porque o próprio sw.js pode estar em cache HTTP,
+     * e aí a checagem olharia para a versão antiga.
+     */
+    onRegisteredSW(url, registro) {
+      if (!registro) return;
+
+      const procurar = async () => {
+        if (registro.installing || !navigator.onLine) return;
+
+        try {
+          const resposta = await fetch(url, { cache: "no-store", headers: { "cache-control": "no-cache" } });
+          if (resposta?.status === 200) await registro.update();
+        } catch {
+          /* Offline ou servidor fora: tenta de novo no próximo ciclo. */
+        }
+      };
+
+      setInterval(procurar, 60 * 60 * 1000);
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") procurar();
+      });
+    },
+  });
 
   const [instalavel, setInstalavel] = useState<BeforeInstallPromptEvent | null>(null);
   const [offline, setOffline] = useState(() => !navigator.onLine);

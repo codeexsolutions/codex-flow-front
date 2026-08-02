@@ -1,6 +1,8 @@
 import { useEffect, useMemo } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 
+import type { ModoTransicao } from "@/shared/session/transicao.store";
+
 /**
  * A entrada no sistema.
  *
@@ -24,14 +26,17 @@ const QUANTIDADE_PARTICULAS = 26;
 
 type Props = {
   nome?: string;
+  /** `entrada` monta a sessão; `saida` desmonta. */
+  modo?: ModoTransicao;
   /** Chamado quando a animação termina — é aqui que a sessão é efetivada. */
   aoTerminar: () => void;
 };
 
-const TransicaoBoasVindas = ({ nome, aoTerminar }: Props) => {
+const TransicaoSessao = ({ nome, modo = "entrada", aoTerminar }: Props) => {
   const reduzirMovimento = useReducedMotion();
 
-  const primeiroNome = (nome ?? "").trim().split(/\s+/)[0] || "de volta";
+  const entrada = modo === "entrada";
+  const primeiroNome = (nome ?? "").trim().split(/\s+/)[0] || (entrada ? "de volta" : "");
 
   /* Posições sorteadas uma vez: recalcular a cada frame faria as partículas
      "pularem" de lugar durante a animação. */
@@ -47,14 +52,16 @@ const TransicaoBoasVindas = ({ nome, aoTerminar }: Props) => {
     [],
   );
 
-  const duracaoTotal = reduzirMovimento ? 900 : 2200;
+  /* A saída é bem mais curta: esperar para ENTRAR tem graça, esperar para
+     SAIR não tem nenhuma. */
+  const duracaoTotal = reduzirMovimento ? 700 : entrada ? 2200 : 1400;
 
   useEffect(() => {
     const t = setTimeout(aoTerminar, duracaoTotal);
     return () => clearTimeout(t);
   }, [aoTerminar, duracaoTotal]);
 
-  const letras = `Bem-vindo, ${primeiroNome}`.split("");
+  const letras = (entrada ? `Bem-vindo, ${primeiroNome}` : `Até logo${primeiroNome ? `, ${primeiroNome}` : ""}`).split("");
 
   return (
     <motion.div
@@ -85,8 +92,8 @@ const TransicaoBoasVindas = ({ nome, aoTerminar }: Props) => {
               className="absolute rounded-full bg-accent-soft"
               style={{ left: `${p.x}%`, top: "58%", width: p.tamanho, height: p.tamanho }}
               initial={{ opacity: 0, y: 0 }}
-              animate={{ opacity: [0, 1, 0], y: -p.distancia }}
-              transition={{ duration: 1.4, delay: p.atraso, ease: "easeOut" }}
+              animate={{ opacity: [0, 1, 0], y: entrada ? -p.distancia : p.distancia }}
+              transition={{ duration: entrada ? 1.4 : 1, delay: p.atraso, ease: "easeOut" }}
             />
           ))}
         </div>
@@ -116,7 +123,7 @@ const TransicaoBoasVindas = ({ nome, aoTerminar }: Props) => {
           className="text-[11px] uppercase tracking-[3px] text-faint"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: reduzirMovimento ? 0 : 0.35, duration: 0.4 }}
+          transition={{ delay: reduzirMovimento ? 0 : entrada ? 0.35 : 0.1, duration: 0.4 }}
         >
           CodeEx Flow
         </motion.p>
@@ -128,7 +135,7 @@ const TransicaoBoasVindas = ({ nome, aoTerminar }: Props) => {
               initial={{ opacity: 0, y: 14, filter: "blur(6px)" }}
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
               transition={{
-                delay: reduzirMovimento ? 0 : 0.5 + i * 0.028,
+                delay: reduzirMovimento ? 0 : (entrada ? 0.5 : 0.15) + i * (entrada ? 0.028 : 0.016),
                 duration: 0.42,
                 ease: [0.22, 0.61, 0.36, 1],
               }}
@@ -144,11 +151,11 @@ const TransicaoBoasVindas = ({ nome, aoTerminar }: Props) => {
           className="mt-6 h-px w-28 origin-center bg-gradient-to-r from-transparent via-accent to-transparent"
           initial={{ scaleX: 0, opacity: 0 }}
           animate={{ scaleX: 1, opacity: 1 }}
-          transition={{ delay: reduzirMovimento ? 0.1 : 1.1, duration: 0.6 }}
+          transition={{ delay: reduzirMovimento ? 0.1 : entrada ? 1.1 : 0.6, duration: 0.5 }}
         />
       </div>
     </motion.div>
   );
 };
 
-export default TransicaoBoasVindas;
+export default TransicaoSessao;
