@@ -7,6 +7,7 @@ import {
   Image as ImageIcon, ArrowLeft, ArrowRight, Loader2, Lock, Eye, EyeOff, Check, Sparkles,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -98,11 +99,30 @@ const STEP_FIELDS: Record<number, string[]> = {
 /* Componente */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Cada etapa entra pelo lado para onde o cliente está indo: avançar traz a
+ * próxima da direita, voltar traz a anterior da esquerda. É o que dá a sensação
+ * de percorrer um caminho em vez de trocar de tela.
+ *
+ * A troca usa `popLayout`, não `mode="wait"`: esperar a etapa antiga sair deixa
+ * o cartão vazio por meio segundo e faz os botões saltarem: quem tocasse nesse
+ * intervalo acertaria o nada. Com `popLayout` a etapa que sai deixa o fluxo na
+ * hora e a nova já ocupa o lugar dela.
+ */
+const VARIANTES = {
+  entra: (d: number) => ({ opacity: 0, x: d > 0 ? 26 : -26 }),
+  centro: { opacity: 1, x: 0 },
+  sai: (d: number) => ({ opacity: 0, x: d > 0 ? -26 : 26 }),
+};
+
 const CadastroEmpresaPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const [step, setStep] = useState(0);
+  /* +1 avançando, -1 voltando — decide de que lado a etapa entra. */
+  const [direcao, setDirecao] = useState(1);
+  const reduzir = useReducedMotion();
   const [isLoading, setIsLoading] = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
   const [planos, setPlanos] = useState<Plano[]>([]);
@@ -181,10 +201,15 @@ const CadastroEmpresaPage = () => {
 
   const nextStep = async () => {
     const valid = await trigger(STEP_FIELDS[step] as never[]);
-    if (valid) setStep((s) => Math.min(s + 1, STEPS.length - 1));
+    if (!valid) return;
+    setDirecao(1);
+    setStep((s) => Math.min(s + 1, STEPS.length - 1));
   };
 
-  const prevStep = () => setStep((s) => Math.max(s - 1, 0));
+  const prevStep = () => {
+    setDirecao(-1);
+    setStep((s) => Math.max(s - 1, 0));
+  };
 
   /* ------------------------- Submit ------------------------- */
 
@@ -305,7 +330,11 @@ const CadastroEmpresaPage = () => {
   };
 
   return (
-    <div className="relative flex min-h-[100dvh] w-full items-center justify-center overflow-x-hidden bg-canvas px-3 py-6 sm:px-4">
+    <div
+      className="vitrine relative flex min-h-[100dvh] w-full items-center justify-center overflow-x-hidden bg-canvas px-3 sm:px-4"
+      /* No iPhone o rodapé do cartão ficava sob a barra de gestos. */
+      style={{ paddingTop: "max(1.5rem, env(safe-area-inset-top))", paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
+    >
       <ToastContainer position="top-right" theme="dark" />
 
       <style>{`
@@ -382,7 +411,10 @@ const CadastroEmpresaPage = () => {
             {planoEscolhido && step > 0 && (
               <button
                 type="button"
-                onClick={() => setStep(0)}
+                onClick={() => {
+                  setDirecao(-1);
+                  setStep(0);
+                }}
                 className="flex items-center gap-1.5 rounded-full border border-accent/25 bg-accent/[0.1] px-2.5 py-1 text-[10px] text-accent-soft transition hover:bg-accent/[0.18]"
               >
                 <Sparkles size={11} />
@@ -402,6 +434,17 @@ const CadastroEmpresaPage = () => {
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-1.5 sm:gap-2">
+            <AnimatePresence mode="popLayout" initial={false} custom={direcao}>
+              <motion.div
+                key={step}
+                custom={direcao}
+                variants={reduzir ? undefined : VARIANTES}
+                initial="entra"
+                animate="centro"
+                exit="sai"
+                transition={{ duration: 0.2, ease: [0.22, 0.61, 0.36, 1] }}
+                className="flex flex-col gap-1.5 sm:gap-2"
+              >
             {/* ---------------- Etapa 1: Plano ---------------- */}
             {step === 0 && (
               <>
@@ -774,10 +817,13 @@ const CadastroEmpresaPage = () => {
               </>
             )}
 
+              </motion.div>
+            </AnimatePresence>
+
             {/* ---------------- Navegação entre etapas ---------------- */}
             <div className="mt-1 flex gap-2">
               {step > 0 && (
-                <button type="button" onClick={prevStep} className="flex items-center justify-center gap-1.5 rounded-lg border border-fg/[0.08] bg-fg/[0.04] px-4 py-2.5 text-xs text-mist transition hover:border-fg/[0.14] hover:bg-fg/[0.07] sm:text-sm">
+                <button type="button" onClick={prevStep} className="flex min-h-[48px] items-center justify-center gap-1.5 rounded-xl border border-fg/[0.08] bg-fg/[0.04] px-5 text-[14px] text-mist transition hover:border-fg/[0.14] hover:bg-fg/[0.07] active:scale-[0.99] sm:min-h-0 sm:rounded-lg sm:px-4 sm:py-2.5 sm:text-sm">
                   <ArrowLeft size={13} />
                   Voltar
                 </button>
@@ -787,7 +833,7 @@ const CadastroEmpresaPage = () => {
                 <button
                   type="button"
                   onClick={nextStep}
-                  className="group relative flex flex-1 items-center justify-center gap-1.5 overflow-hidden rounded-lg bg-gradient-to-r from-accent-soft via-accent to-accent-strong py-2.5 text-xs text-white shadow-[0_10px_25px_-8px_rgba(108,92,231,0.7)] transition-all duration-200 hover:brightness-110 hover:shadow-[0_14px_35px_-8px_rgba(59,110,245,0.65)] active:scale-[0.99] sm:text-sm"
+                  className="group relative flex min-h-[48px] flex-1 items-center justify-center gap-1.5 overflow-hidden rounded-xl bg-gradient-to-r from-accent-soft via-accent to-accent-strong text-[14px] text-white sm:min-h-0 sm:rounded-lg sm:py-2.5 shadow-[0_10px_25px_-8px_rgba(108,92,231,0.7)] transition-all duration-200 hover:brightness-110 hover:shadow-[0_14px_35px_-8px_rgba(59,110,245,0.65)] active:scale-[0.99] sm:text-sm"
                 >
                   <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-fg/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
                   <span className="relative flex items-center gap-1.5">
@@ -799,7 +845,7 @@ const CadastroEmpresaPage = () => {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="group relative flex-1 overflow-hidden rounded-lg bg-gradient-to-r from-accent-soft via-accent to-accent-strong py-2.5 text-xs text-white shadow-[0_10px_25px_-8px_rgba(108,92,231,0.7)] transition-all duration-200 hover:brightness-110 hover:shadow-[0_14px_35px_-8px_rgba(59,110,245,0.65)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100 sm:text-sm"
+                  className="group relative min-h-[48px] flex-1 overflow-hidden rounded-xl bg-gradient-to-r from-accent-soft via-accent to-accent-strong px-3 text-[14px] text-white sm:min-h-0 sm:rounded-lg sm:py-2.5 shadow-[0_10px_25px_-8px_rgba(108,92,231,0.7)] transition-all duration-200 hover:brightness-110 hover:shadow-[0_14px_35px_-8px_rgba(59,110,245,0.65)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100 sm:text-sm"
                 >
                   <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-fg/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
                   <span className="relative">{isLoading ? "Cadastrando..." : "Criar conta e ir para o pagamento"}</span>

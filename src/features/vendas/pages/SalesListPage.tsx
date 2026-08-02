@@ -7,12 +7,16 @@ import { type PedidoClienteType, estaAberto, estaCancelado, estaFechado, totalDo
 import { formatDateShort } from "@/shared/utils/date";
 import { PedidoStatusBadge } from "@/shared/ui/StatusBadge";
 import useVendaStore from "@/features/vendas/store/venda.store";
+import VendasMobile, { type VendaItem } from "@/features/vendas/components/VendasMobile";
+import Sheet from "@/shared/ui/Sheet";
+import { useIsMobile } from "@/shared/hooks/useIsMobile";
 
 type StatusFiltro = "todos" | "pago" | "pendente" | "cancelado";
 type NotaAberta = { id?: string; clienteId: string; nome?: string };
 
 /* ======================= Sales / Outlet Page ======================= */
 const SalesList = () => {
+  const mobile = useIsMobile();
   const vendas = useVendaStore((s) => s.vendas);
   const fetchVendas = useVendaStore((s) => s.fetchVendas);
 
@@ -49,6 +53,38 @@ const totalEmAberto = useMemo(() => {
     .filter((v) => !estaCancelado(v))
     .reduce((acc, v) => acc + valorPendenteDoPedido(v), 0);
 }, [vendas]);
+
+  if (mobile) {
+    const itens: VendaItem[] = vendasFiltradas.map((v) => ({
+      pedidoId: v.pedido.pedidoId,
+      clienteId: v.clienteId,
+      nomeCliente: v.nomeCliente,
+      data: v.pedido.dataPedido,
+      total: totalDoPedido(v),
+      pendente: valorPendenteDoPedido(v),
+      status: estaCancelado(v) ? "cancelado" : estaFechado(v) ? "pago" : "pendente",
+    }));
+
+    return (
+      <div className="h-full w-full overflow-y-auto text-ink">
+        <VendasMobile
+          vendas={itens}
+          totalVendas={vendas.length}
+          totalEmAberto={totalEmAberto}
+          busca={search}
+          onBusca={setSearch}
+          status={status}
+          onStatus={setStatus}
+          onAbrirNota={(v) => abrirNota({ id: v.pedidoId, clienteId: v.clienteId, nome: v.nomeCliente })}
+        />
+
+        {/* A nota ocupa a tela toda: é onde a venda é editada e recebida. */}
+        <Sheet open={!!notaAberta} onClose={fecharNota} title={notaAberta?.id ? "Venda" : "Nova venda"} subtitle={notaAberta?.nome} altura="cheia">
+          {notaAberta && <Invoice id={notaAberta.id} clienteId={notaAberta.clienteId} nome={notaAberta.nome} onSaved={fecharNota} />}
+        </Sheet>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full w-full flex-col">

@@ -205,7 +205,7 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
       );
     } catch (e) {
       const err = e as { response?: { data?: { message?: string } }; message?: string };
-      alert.error("Não foi possível registrar", err?.response?.data?.message ?? err?.message ?? "Tente novamente.");
+      alert.error("O aviso não foi registrado", err?.response?.data?.message ?? err?.message ?? "Tente de novo em instantes.");
     } finally {
       setEnviando(false);
     }
@@ -245,7 +245,7 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
       );
     } catch (e) {
       const err = e as { response?: { data?: { message?: string } }; message?: string };
-      alert.error("Não foi possível trocar o plano", err?.response?.data?.message ?? err?.message ?? "Tente novamente.");
+      alert.error("O plano não foi trocado", err?.response?.data?.message ?? err?.message ?? "Tente de novo em instantes.");
     }
   };
 
@@ -448,7 +448,7 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
           </div>
 
           {faturasFiltradas.length === 0 ? (
-            <p className="px-5 py-14 text-center text-[13px] text-faint">Nenhuma fatura neste filtro.</p>
+            <p className="px-5 py-14 text-center text-[13px] text-faint">Nenhuma fatura aqui. Troque o filtro para ver as demais.</p>
           ) : (
             <ul className="divide-y divide-fg/[0.05]">
               {faturasFiltradas.map((f) => (

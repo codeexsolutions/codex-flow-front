@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Sparkles } from "lucide-react";
+import { Sparkles, ShoppingCart, Package, Wallet, WifiOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import useAuth from "@/features/auth/store/auth.store";
 
@@ -8,8 +8,17 @@ import AuthForm from "@/features/auth/components/AuthForm";
 import AuthFormInputs from "@/features/auth/schema/auth.schema";
 import { onlyDigits } from "@/shared/utils/format";
 import useTransicao from "@/shared/session/transicao.store";
+import RedeAnimada from "@/features/landing/components/RedeAnimada";
 
 const LANDING_ROUTE = "/page";
+
+/** Três coisas concretas, não adjetivos. Aparecem só no painel do desktop. */
+const DESTAQUES = [
+  { icone: ShoppingCart, titulo: "PDV de balcão", texto: "Lança a venda, recebe em partes e emite a nota." },
+  { icone: Package, titulo: "Estoque que avisa", texto: "O que está acabando aparece antes de faltar." },
+  { icone: Wallet, titulo: "Dinheiro no lugar", texto: "Notas a receber e caixa do dia na mesma tela." },
+  { icone: WifiOff, titulo: "Wi-Fi caiu, e daí", texto: "O sistema continua abrindo com os últimos dados." },
+];
 
 const AuthPage = () => {
   const navigate = useNavigate();
@@ -51,9 +60,50 @@ const AuthPage = () => {
   };
 
   return (
-    <div className="relative flex h-[100dvh] w-full items-center justify-center overflow-hidden bg-canvas px-3 py-3 sm:px-4 sm:py-5">
+    /* No desktop o cartão sozinho boiava num monitor inteiro. Vira duas colunas:
+       à esquerda a marca com a mesma rede animada da página inicial — quem entra
+       reconhece de onde veio; à direita o formulário. Abaixo de `lg` nada muda. */
+    <div className="vitrine relative h-[100dvh] w-full overflow-hidden bg-canvas lg:grid lg:grid-cols-[1.05fr_1fr]">
+      <aside className="relative hidden overflow-hidden border-r border-fg/[0.07] lg:flex lg:flex-col lg:justify-between lg:p-12">
+        <RedeAnimada className="absolute inset-0" />
+
+        <div className="relative flex items-center gap-3">
+          <img src="/logo.png" alt="" width={40} height={40} className="h-10 w-10 rounded-xl shadow-glow" />
+          <span className="text-[17px] tracking-tight text-ink">CodeEx Flow</span>
+        </div>
+
+        <div className="relative max-w-md">
+          <h2 className="text-[34px] leading-[1.1] tracking-tight text-ink">
+            Sua loja inteira
+            <br />
+            <span className="text-accent-soft">num lugar só.</span>
+          </h2>
+
+          <ul className="mt-8 flex flex-col gap-4">
+            {DESTAQUES.map(({ icone: Icone, titulo, texto }) => (
+              <li key={titulo} className="flex items-start gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-accent/[0.12] text-accent-soft ring-1 ring-inset ring-accent/20">
+                  <Icone size={16} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[13.5px] text-ink">{titulo}</span>
+                  <span className="block text-[12.5px] leading-relaxed text-mist">{texto}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <p className="relative text-[11.5px] text-faint">
+          © {new Date().getFullYear()} CodeEx Flow · CodEx Solutions
+        </p>
+      </aside>
+
+    <div className="relative flex h-full w-full items-center justify-center overflow-hidden px-3 py-3 sm:px-4 sm:py-5">
       {/* Glows de fundo — seguem o accent e somem no modo leve */}
-      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" style={{ opacity: "var(--fx-aurora, 1)" }}>
+      {/* `absolute`, não `fixed`: preso à coluna do formulário. Fixo na viewport
+          ele passaria por cima da rede animada do painel da esquerda. */}
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" style={{ opacity: "var(--fx-aurora, 1)" }}>
         <div className="absolute -left-24 -top-24 h-[420px] w-[420px] rounded-full bg-accent opacity-[0.18] blur-[130px]" />
         <div className="absolute -bottom-24 -right-24 h-[420px] w-[420px] rounded-full opacity-[0.16] blur-[130px]" style={{ background: "rgb(var(--aurora-2))" }} />
         <div className="absolute left-1/2 top-1/2 h-[300px] w-[300px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-soft opacity-[0.1] blur-[110px]" />
@@ -133,6 +183,7 @@ const AuthPage = () => {
         <p className="mt-3 text-center text-[10px] text-muted sm:hidden">© {new Date().getFullYear()} CodeEx Flow</p>
       </motion.div>
 
+      </div>
     </div>
   );
 };

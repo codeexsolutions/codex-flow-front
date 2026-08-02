@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { Outlet, useLocation } from "react-router-dom";
 
 import useTransicao from "@/shared/session/transicao.store";
+import TourInicial from "@/features/tour/TourInicial";
 
 import Sidebar from "@/shared/ui/Sidebar";
 import BottomNav from "@/shared/ui/BottomNav";
@@ -37,6 +38,9 @@ const Main = () => {
       </main>
 
       <BottomNav />
+
+      {/* Apresentação do sistema — uma vez por usuário. */}
+      <TourInicial />
     </motion.div>
   );
 };

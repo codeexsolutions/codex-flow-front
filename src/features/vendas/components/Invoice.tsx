@@ -633,8 +633,12 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
 
             {/* Tabela de itens */}
             <div className="hidden px-5 pt-4 md:block">
+              {/* Sem altura máxima e sem rolagem própria aqui. O teto de 42vh
+                  cortava a tabela pela metade na tela e, no download, capturava
+                  só a parte visível — nota com muitos itens saía truncada. Quem
+                  rola é o container da nota, um nível acima. */}
               <div className="overflow-hidden rounded-xl border border-fg/[0.06]">
-                <div className="max-h-[42vh] overflow-auto">
+                <div>
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 z-10 bg-surface-raised">
                       <tr className="border-b border-fg/[0.06] text-[11px] uppercase tracking-[0.08em] text-faint">
@@ -780,24 +784,43 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
                 </div>
               )}
             </div>
-          </div>
 
-          {/* ─── PIX → componente separado ─── */}
-          <PixSection pixPayload={pixPayload} />
+            {/* ─── PIX ───
+                Precisa ficar DENTRO de `notaRef`: é esse nó que vira PNG no
+                download. Como irmão, o QR aparecia na tela e sumia do arquivo. */}
+            <PixSection pixPayload={pixPayload} />
+          </div>
         </div>
 
         {/* Footer */}
-        <footer className="flex items-center justify-between gap-3 border-t border-fg/[0.06] bg-surface px-4 py-3">
+        {/* No celular o total e os dois botões não cabiam lado a lado: "Pagamento"
+            com o valor pendente mais "Gerar Nota" estouravam os 390px. Aqui o
+            rodapé empilha — total em cima, botões dividindo a linha de baixo —
+            e a partir de `sm` volta a ser uma linha só. */}
+        <footer
+          className="flex flex-col gap-3 border-t border-fg/[0.06] bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+        >
           <div className="min-w-0">
             <span className={lblResumo}>Total da nota</span>
             {loadingPedido ? <Skeleton className="mt-1 h-7 w-32" /> : <span className="block truncate text-xl tabular-nums text-ink md:text-2xl">{formatCurrency(total)}</span>}
           </div>
+
           <div className="flex items-center gap-2">
-            <button onClick={() => setModalPagamentos(true)} disabled={loadingPedido} className="flex h-12 items-center gap-2 rounded-xl border border-accent/30 bg-accent/[0.1] px-4 text-sm text-accent-soft transition-colors hover:bg-accent/20 disabled:opacity-40">
+            <button
+              onClick={() => setModalPagamentos(true)}
+              disabled={loadingPedido}
+              className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent/[0.1] px-4 text-sm text-accent-soft transition-colors hover:bg-accent/20 disabled:opacity-40 sm:flex-none"
+            >
               <Wallet size={18} /> Pagamento
-              {pendente > 0 && <span className="ml-1 rounded-full bg-warning/25 px-1.5 py-0.5 text-[10px] text-warning">{formatCurrency(pendente)}</span>}
+              {pendente > 0 && <span className="rounded-full bg-warning/25 px-1.5 py-0.5 text-[10px] tabular-nums text-warning">{formatCurrency(pendente)}</span>}
             </button>
-            <button onClick={handleSalvar} disabled={salvarDesabilitado || savingNote || loadingPedido} className="flex h-12 items-center gap-2 rounded-xl bg-accent px-5 text-sm text-white transition-all hover:bg-accent-soft active:scale-[0.98] disabled:opacity-40">
+
+            <button
+              onClick={handleSalvar}
+              disabled={salvarDesabilitado || savingNote || loadingPedido}
+              className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-accent px-5 text-sm text-white transition-all hover:bg-accent-soft active:scale-[0.98] disabled:opacity-40 sm:flex-none"
+            >
               {savingNote ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
               {savingNote ? "Salvando..." : !id ? "Gerar Nota" : "Salvar"}
             </button>

@@ -16,6 +16,8 @@ import { formatCurrency as brl } from "@/shared/utils/currency";
 import { SkeletonTableRows, SkeletonIdentityCell } from "@/shared/ui/skeleton";
 import { useAutoPageSize, ROW_HEIGHT } from "@/shared/hooks/useAutoPageSize";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
+import { useIsMobile } from "@/shared/hooks/useIsMobile";
+import EstoqueMobile from "@/features/estoque/components/EstoqueMobile";
 
 const LOW_STOCK = 5;
 
@@ -81,6 +83,7 @@ const SkeletonRows = ({ count }: { count: number }) => (
 
 const Estoque = () => {
   const alert = useAlert();
+  const mobile = useIsMobile();
 
   const [products, setProducts] = useState<ProductType[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
@@ -214,6 +217,67 @@ const Estoque = () => {
   const maiorVenda = maisVendidos[0]?.qtd ?? 0;
 
   const hasFilters = Boolean(search) || filtro !== "todos";
+
+  /* Os mesmos formulários servem as duas versões — o que muda é a moldura. */
+  const modais = (
+    <>
+      <Modal open={modal === "registrar"} onClose={fechar} title="Novo produto" subtitle="Preencha os dados do produto a cadastrar">
+        <ProdutoForm submitText="Criar produto" onCancel={fechar} onSubmit={handleCreateProduct} />
+      </Modal>
+
+      <Modal open={modal === "editar"} onClose={fechar} title="Editar produto" subtitle="Atualize os dados do produto">
+        <ProdutoForm
+          submitText="Salvar alterações"
+          onCancel={fechar}
+          onDelete={handleDeleteProduct}
+          defaultValues={{
+            nome: selectedProduct?.nome,
+            valorCompra: selectedProduct?.valorCompra,
+            valorVenda: selectedProduct?.valorVenda,
+            quantidade: selectedProduct?.quantidade,
+            descricao: selectedProduct?.descricao,
+            imagem: selectedProduct?.imagem,
+          }}
+          onSubmit={handleUpdateProduct}
+        />
+      </Modal>
+    </>
+  );
+
+  if (mobile) {
+    return (
+      <>
+        <EstoqueMobile
+          produtos={filtered.map((p) => ({
+            id: String(p.id),
+            nome: p.nome,
+            descricao: p.descricao,
+            imagem: p.imagem,
+            valorVenda: p.valorVenda ?? 0,
+            quantidade: p.quantidade ?? 0,
+            nivel: stockLevel(p.quantidade),
+          }))}
+          valorEstoque={stats.valorEstoque}
+          unidades={stats.unidades}
+          emFalta={stats.esgotados}
+          estoqueBaixo={stats.baixos}
+          busca={search}
+          onBusca={setSearch}
+          filtro={filtro}
+          onFiltro={setFiltro}
+          carregando={loading}
+          onAbrir={(item) => {
+            const alvo = products.find((p) => String(p.id) === item.id);
+            if (!alvo) return;
+            setSelectedProduct(alvo);
+            setModal("editar");
+          }}
+          onNovo={() => setModal("registrar")}
+        />
+        {modais}
+      </>
+    );
+  }
 
   return (
     <PageScreen icon={<Tags className="h-5 w-5" />} title="Estoque" subtitle={`${formatNumber(stats.total)} ${stats.total === 1 ? "produto cadastrado" : "produtos cadastrados"}`}>
@@ -468,26 +532,7 @@ const Estoque = () => {
       
 
       {/* Modais */}
-      <Modal open={modal === "registrar"} onClose={fechar} title="Novo produto" subtitle="Preencha os dados do produto a cadastrar">
-        <ProdutoForm submitText="Criar produto" onCancel={fechar} onSubmit={handleCreateProduct} />
-      </Modal>
-
-      <Modal open={modal === "editar"} onClose={fechar} title="Editar produto" subtitle="Atualize os dados do produto">
-        <ProdutoForm
-          submitText="Salvar alterações"
-          onCancel={fechar}
-          onDelete={handleDeleteProduct}
-          defaultValues={{
-            nome: selectedProduct?.nome,
-            valorCompra: selectedProduct?.valorCompra,
-            valorVenda: selectedProduct?.valorVenda,
-            quantidade: selectedProduct?.quantidade,
-            descricao: selectedProduct?.descricao,
-            imagem: selectedProduct?.imagem,
-          }}
-          onSubmit={handleUpdateProduct}
-        />
-      </Modal>
+      {modais}
     </PageScreen>
   );
 };

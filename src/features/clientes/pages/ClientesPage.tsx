@@ -5,6 +5,8 @@ import CustomerService from "@/features/clientes/services/client.service";
 import useClienteStore from "@/features/clientes/store/cliente.store";
 import { eStatus, type ContactType } from "@/shared/domain/cliente";
 import ClienteForm from "@/features/clientes/components/ClienteForm";
+import ClientesMobile, { type ClienteItem } from "@/features/clientes/components/ClientesMobile";
+import { useIsMobile } from "@/shared/hooks/useIsMobile";
 import type { ClienteFormData } from "@/features/clientes/schema/cliente.schema";
 import ClientesGrowthChart from "@/features/clientes/components/ClientesGrowthChart";
 import { useAlert } from "@/shared/ui/Alert";
@@ -44,6 +46,7 @@ const SkeletonRows = ({ count }: { count: number }) => (
 
 const Clientes = () => {
   const navigate = useNavigate();
+  const mobile = useIsMobile();
   const alert = useAlert();
 
   // Estado dos clientes vive no store — assim PDV, Dashboard e Relatórios
@@ -135,6 +138,36 @@ const Clientes = () => {
   };
 
   const hasFilters = Boolean(search) || filtro !== "todos";
+
+  if (mobile) {
+    const itens: ClienteItem[] = filtered.map((c) => ({
+      id: String(c.id ?? ""),
+      nome: c.nome,
+      cpfCnpj: c.cpfCnpj,
+      telefone: c.contato?.telefone ? String(c.contato.telefone) : undefined,
+      whatsapp: c.contato?.whatsapp ? String(c.contato.whatsapp) : undefined,
+      ativo: c.status === eStatus.ATIVO,
+    }));
+
+    return (
+      <div className="h-full w-full overflow-y-auto text-ink">
+        <ClientesMobile
+          clientes={itens}
+          total={customers.length}
+          ativos={customers.filter((c) => c.status === eStatus.ATIVO).length}
+          busca={search}
+          onBusca={setSearch}
+          filtro={filtro}
+          onFiltro={setFiltro}
+          carregando={loading}
+          onAbrir={(c) => navigate(`/clientes/${c.id}`)}
+          onNovo={() => setShowCreate(true)}
+        />
+
+        {showCreate && <ClienteForm saving={saving} onClose={() => setShowCreate(false)} onSubmit={handleCreate} />}
+      </div>
+    );
+  }
 
   return (
     <PageScreen title="Clientes" subtitle="Cadastre, organize e acompanhe sua base de clientes" icon={<Users />}>

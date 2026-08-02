@@ -26,7 +26,9 @@ export default {
         danger: "rgb(var(--danger) / <alpha-value>)",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        // `sans` é a de texto: ela é o padrão herdado por toda a interface.
+        sans: ["Plus Jakarta Sans", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        display: ["Space Grotesk", "system-ui", "sans-serif"],
       },
       borderColor: {
         DEFAULT: "rgb(var(--fg) / 0.08)",

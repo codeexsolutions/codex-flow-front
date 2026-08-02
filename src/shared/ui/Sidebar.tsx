@@ -107,26 +107,22 @@ const Sidebar = () => {
         </div>
 
         <nav className="relative flex-1 overflow-y-auto px-3 py-3">
-          {/* Vendedor enxerga só o que ele pode abrir. Mostrar item que leva a
-              403 é pior do que não mostrar. */}
+          {/* O funcionário opera a loja inteira: o menu é o mesmo para todos.
+              O que é do dono não vive aqui — está em Configurações (empresa e
+              faturas) e na aba Funcionários, dentro de Vendas. */}
           {cat("Operação")}
-          {gestor && item("", <LayoutDashboard size={17} />, "Dashboard")}
+          {item("", <LayoutDashboard size={17} />, "Dashboard")}
           {item("pdv", <ShoppingCart size={17} />, "PDV")}
-          {!gestor && item("vendas", <DollarSign size={17} />, "Minhas vendas")}
 
-          {gestor && (
-            <>
-              {cat("Gerenciamento")}
-              {item("estoque", <Package size={17} />, "Estoque")}
-              {item("clientes", <Users size={17} />, "Clientes")}
-              {item("correios", <Truck size={17} />, "Correios", true)}
+          {cat("Gerenciamento")}
+          {item("estoque", <Package size={17} />, "Estoque")}
+          {item("clientes", <Users size={17} />, "Clientes")}
+          {item("correios", <Truck size={17} />, "Correios", true)}
 
-              {cat("Financeiro")}
-              {item("vendas", <DollarSign size={17} />, "Vendas")}
-              {item("financeiro", <Wallet size={17} />, "Financeiro")}
-              {item("relatorios", <BarChart3 size={17} />, "Relatórios")}
-            </>
-          )}
+          {cat("Financeiro")}
+          {item("vendas", <DollarSign size={17} />, "Vendas")}
+          {item("financeiro", <Wallet size={17} />, "Financeiro")}
+          {item("relatorios", <BarChart3 size={17} />, "Relatórios")}
         </nav>
 
         {/* Usuário */}

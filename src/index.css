@@ -1,4 +1,15 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+/*
+ * Duas famílias com papéis distintos, no lugar do Inter para tudo.
+ *
+ * `Space Grotesk` (display) tem numerais de personalidade — e este sistema é
+ * feito de dinheiro na tela: total do dia, valor da nota, saldo do caixa. Os
+ * números viram parte da identidade em vez de carga neutra.
+ *
+ * `Plus Jakarta Sans` (texto/interface) foi escolhida pelo tamanho pequeno:
+ * a maior parte da interface vive entre 11 e 14px, e ela mantém a abertura
+ * das letras nesse corpo melhor que a média das grotescas.
+ */
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -54,6 +65,9 @@
   --blur-lg: 28px;
 
   --ring-focus: 0 0 0 3px rgb(var(--accent) / 0.28);
+
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-body: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 .dark {
@@ -212,17 +226,23 @@
 }
 
 /* ---------- Accents ---------- */
+/*
+ * Roxo revisto: o anterior (109 92 232 / 124 110 245) era o violeta médio que
+ * todo painel usa — pouca saturação e nenhum sentido de direção. Este puxa
+ * para a íris: mais cromático, base mais profunda e o `soft` claramente mais
+ * claro, o que dá degrau visível entre estado normal, hover e ativo.
+ */
 :root[data-accent="roxo"] {
-  --accent: 109 92 232;
-  --accent-soft: 128 112 240;
-  --accent-strong: 86 68 208;
-  --aurora-1: 109 92 232;
+  --accent: 96 64 226;
+  --accent-soft: 124 94 240;
+  --accent-strong: 72 42 182;
+  --aurora-1: 104 72 232;
 }
 .dark[data-accent="roxo"] {
-  --accent: 124 110 245;
-  --accent-soft: 169 156 248;
-  --accent-strong: 196 186 255;
-  --aurora-1: 124 110 245;
+  --accent: 141 112 255;
+  --accent-soft: 182 160 255;
+  --accent-strong: 214 200 255;
+  --aurora-1: 141 112 255;
 }
 
 :root[data-accent="azul"] {
@@ -368,6 +388,51 @@
 [data-fx="lite"] .glass-panel {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   VITRINE — identidade fixa, imune ao tema salvo
+   ══════════════════════════════════════════════════════════════════════
+   A landing é página pública: quem chega nela pode nunca ter usado o
+   sistema. O tema e o destaque que o cliente escolheu em Aparência valem
+   dentro do produto, não na propaganda dele — senão a mesma página aparece
+   verde para um e vinho para outro, e a marca deixa de ter cara própria.
+
+   Por isso a vitrine redeclara os tokens que usa. Como a regra mora num
+   contêiner e não no `html`, ela ganha de qualquer `[data-theme]` ou
+   `[data-accent]` herdado, sem precisar de `!important`.
+   ══════════════════════════════════════════════════════════════════════ */
+.vitrine {
+  --canvas: 12 11 24;
+  --surface: 22 20 42;
+  --surface-raised: 30 27 55;
+
+  --ink: 240 237 255;
+  --mist: 166 161 202;
+  --faint: 122 116 160;
+  --muted: 88 83 122;
+  --fg: 255 255 255;
+
+  --accent: 141 112 255;
+  --accent-soft: 182 160 255;
+  --accent-strong: 214 200 255;
+
+  --success: 93 202 165;
+  --warning: 250 199 117;
+  --danger: 240 149 149;
+
+  --glass-bg: 36 33 64;
+  --glass-alpha: 0.55;
+  --glass-border: 255 255 255;
+  --glass-border-alpha: 0.09;
+  --glass-highlight: 255 255 255;
+
+  --aurora-1: 141 112 255;
+  --aurora-2: 80 140 255;
+  --aurora-alpha: 0.16;
+
+  background-color: rgb(var(--canvas));
+  color: rgb(var(--ink));
 }
 
 /* ---------- Modo aplicativo instalado ---------- */
@@ -763,5 +828,70 @@ input[type="number"]::-webkit-outer-spin-button {
 @media (max-width: 767px) {
   main .overflow-y-auto {
     padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ---------- Papéis tipográficos ---------- */
+/*
+ * A display entra só em título e número grande. Espalhá-la pelo texto corrido
+ * anularia o contraste entre as duas famílias — que é justamente o ponto.
+ */
+h1, h2, h3,
+.display,
+.nums {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+}
+
+/* Valores em coluna precisam de dígito de largura fixa para alinharem. */
+.nums,
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Foco visível: padrão da casa ---------- */
+/*
+ * Piso de acessibilidade aplicado num lugar só, em vez de depender de cada
+ * tela lembrar de pôr `.focus-ring`. Auditoria encontrou a maioria dos botões
+ * sem indicador nenhum — quem navega por teclado ficava sem saber onde está.
+ *
+ * O prefixo `:root` existe por especificidade, não por escopo. Sem ele a
+ * regra perdia para as utilidades `outline-none` / `focus:outline-none` do
+ * Tailwind (0-2-0) e o anel saía transparente. Com `:root` a conta vai a
+ * 0-2-1 e ganha, sem precisar de `!important`.
+ *
+ * `outline` (e não `box-shadow`) porque não disputa com as sombras já
+ * existentes e acompanha o `border-radius`.
+ *
+ * `:focus-visible` e não `:focus`: quem clica com o mouse não vê anel.
+ */
+:root a:focus-visible,
+:root button:focus-visible,
+:root input:focus-visible,
+:root select:focus-visible,
+:root textarea:focus-visible,
+:root summary:focus-visible,
+:root [role="button"]:focus-visible,
+:root [tabindex]:focus-visible {
+  outline: 2px solid rgb(var(--accent));
+  outline-offset: 2px;
+}
+
+/* ---------- Reveal da landing ---------- */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.6s cubic-bezier(0.22, 0.61, 0.36, 1), transform 0.6s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+[data-reveal].revelado {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
 }

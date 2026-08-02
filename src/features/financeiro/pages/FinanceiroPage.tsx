@@ -12,6 +12,8 @@ import useFinanceiroStore from "@/features/financeiro/store/financeiro.store";
 import type { MovimentacaoType, NotaFinanceiroType, NovaMovimentacaoType } from "@/shared/domain/financeiro";
 import { formatCurrency as brl } from "@/shared/utils/currency";
 import { formatDate } from "@/shared/utils/date";
+import { useIsMobile } from "@/shared/hooks/useIsMobile";
+import FinanceiroMobile from "@/features/financeiro/components/FinanceiroMobile";
 
 const brDate = (v?: string | null) => (v ? formatDate(v, "-") : "-");
 const money = (v?: number) => brl(v ?? 0);
@@ -60,6 +62,7 @@ const COLUNA_VAO = { id: "vao", header: "", cell: () => null };
 
 export default function FinanceiroPage() {
   const alert = useAlert();
+  const mobile = useIsMobile();
 
   const resumo = useFinanceiroStore((s) => s.resumo);
   const notas = useFinanceiroStore((s) => s.notas);
@@ -217,6 +220,107 @@ export default function FinanceiroPage() {
     </div>
   );
 
+  /* Os mesmos formulários servem as duas versões — o que muda é a moldura. */
+  const modais = (
+    <>
+        {/* Modal: nova movimentação de caixa */}
+        <Modal open={showNovaMovimentacao} onClose={() => setShowNovaMovimentacao(false)} title="Nova movimentação" subtitle="Registre uma entrada ou saída no caixa">
+          <Form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCriarMovimentacao();
+            }}
+          >
+            <FormSection title="Lançamento" icon={<ArrowLeftRight size={14} />}>
+              <div className="flex gap-2">
+                {(["ENTRADA", "SAIDA"] as const).map((t) => {
+                  const ativo = novaMovimentacao.tipo === t;
+                  const cor = t === "ENTRADA" ? "border-success/50 bg-success/15 text-success" : "border-danger/50 bg-danger/15 text-danger";
+                  return (
+                    <button key={t} type="button" onClick={() => setNovaMovimentacao({ ...novaMovimentacao, tipo: t })} className={`focus-ring flex-1 cursor-pointer rounded-lg border px-3 py-2 text-sm transition-colors ${ativo ? cor : "border-fg/[0.1] text-faint hover:text-mist"}`}>
+                      {t === "ENTRADA" ? "Entrada" : "Saída"}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <TextField label="Descrição" value={novaMovimentacao.descricao} onChange={(e) => setNovaMovimentacao({ ...novaMovimentacao, descricao: e.target.value })} placeholder="Ex: Aluguel, fornecedor, venda avulsa…" />
+              <TextField label="Categoria (opcional)" value={novaMovimentacao.categoria ?? ""} onChange={(e) => setNovaMovimentacao({ ...novaMovimentacao, categoria: e.target.value })} />
+
+              <FormGrid cols={2}>
+                <TextField label="Valor" type="number" min={0} step="0.01" value={novaMovimentacao.valor} onChange={(e) => setNovaMovimentacao({ ...novaMovimentacao, valor: Number(e.target.value) })} />
+                <TextField label="Data" type="date" value={novaMovimentacao.dataMovimentacao} onChange={(e) => setNovaMovimentacao({ ...novaMovimentacao, dataMovimentacao: e.target.value })} />
+              </FormGrid>
+            </FormSection>
+
+            <FormActions onCancel={() => setShowNovaMovimentacao(false)} saving={salvando} submitText="Registrar" />
+          </Form>
+        </Modal>
+
+        {/* Modal: registrar pagamento da nota */}
+        <Modal open={!!notaParaPagar} onClose={() => setNotaParaPagar(null)} title="Registrar pagamento" subtitle={notaParaPagar ? `${notaParaPagar.cliente_nome} — restam ${brl(Number(notaParaPagar.total) - Number(notaParaPagar.valor_pago ?? 0))}` : ""}>
+          <Form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleRegistrarPagamentoNota();
+            }}
+          >
+            <SelectBox label="Forma de pagamento" value={formaPagamentoBaixa} onChange={(e) => setFormaPagamentoBaixa(e.target.value)}>
+              <option value="Pix">Pix</option>
+              <option value="Dinheiro">Dinheiro</option>
+              <option value="Cartão de crédito">Cartão de crédito</option>
+              <option value="Cartão de débito">Cartão de débito</option>
+              <option value="Boleto">Boleto</option>
+            </SelectBox>
+
+            <FormActions onCancel={() => setNotaParaPagar(null)} saving={salvando} submitText="Confirmar" />
+          </Form>
+        </Modal>
+    </>
+  );
+
+  if (mobile) {
+    return (
+      <>
+        <FinanceiroMobile
+          aba={aba}
+          onAba={setAba}
+          saldoCaixa={resumo?.saldoCaixa ?? 0}
+          aReceber={resumo?.totalAReceber ?? 0}
+          atrasado={resumo?.totalAtrasado ?? 0}
+          entradas={resumo?.totalEntradas ?? 0}
+          saidas={resumo?.totalSaidas ?? 0}
+          notas={notas.map((n) => ({
+            id: String(n.pedido_id),
+            cliente: n.cliente_nome,
+            pedido: n.codigo_pedido,
+            total: Number(n.total ?? 0),
+            pago: Number(n.valor_pago ?? 0),
+            data: brDate(n.data_pedido),
+            quitada: n.status_pagamento === "PAGO",
+            formaPagamento: n.forma_pagamento,
+          }))}
+          movimentacoes={movimentacoes.map((m) => ({
+            id: String(m.id),
+            descricao: m.descricao,
+            categoria: m.categoria,
+            valor: Number(m.valor ?? 0),
+            data: brDate(m.data_movimentacao),
+            entrada: m.tipo === "ENTRADA",
+          }))}
+          carregando={loading}
+          onPagar={(item) => {
+            const alvo = notas.find((n) => String(n.pedido_id) === item.id);
+            if (alvo) setNotaParaPagar(alvo);
+          }}
+          onExcluir={handleExcluirMovimentacao}
+          onNovaMovimentacao={() => setShowNovaMovimentacao(true)}
+        />
+        {modais}
+      </>
+    );
+  }
+
   return (
     <PageScreen icon={<Wallet className="h-5 w-5" />} title="Financeiro" subtitle="Notas de clientes e fluxo de caixa da empresa">
         {error && (
@@ -272,59 +376,7 @@ export default function FinanceiroPage() {
           </TabelaCard>
         )}
 
-        {/* Modal: nova movimentação de caixa */}
-        <Modal open={showNovaMovimentacao} onClose={() => setShowNovaMovimentacao(false)} title="Nova movimentação" subtitle="Registre uma entrada ou saída no caixa">
-          <Form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleCriarMovimentacao();
-            }}
-          >
-            <FormSection title="Lançamento" icon={<ArrowLeftRight size={14} />}>
-              <div className="flex gap-2">
-                {(["ENTRADA", "SAIDA"] as const).map((t) => {
-                  const ativo = novaMovimentacao.tipo === t;
-                  const cor = t === "ENTRADA" ? "border-success/50 bg-success/15 text-success" : "border-danger/50 bg-danger/15 text-danger";
-                  return (
-                    <button key={t} type="button" onClick={() => setNovaMovimentacao({ ...novaMovimentacao, tipo: t })} className={`focus-ring flex-1 cursor-pointer rounded-lg border px-3 py-2 text-sm transition-colors ${ativo ? cor : "border-fg/[0.1] text-faint hover:text-mist"}`}>
-                      {t === "ENTRADA" ? "Entrada" : "Saída"}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <TextField label="Descrição" value={novaMovimentacao.descricao} onChange={(e) => setNovaMovimentacao({ ...novaMovimentacao, descricao: e.target.value })} placeholder="Ex: Aluguel, fornecedor, venda avulsa…" />
-              <TextField label="Categoria (opcional)" value={novaMovimentacao.categoria ?? ""} onChange={(e) => setNovaMovimentacao({ ...novaMovimentacao, categoria: e.target.value })} />
-
-              <FormGrid cols={2}>
-                <TextField label="Valor" type="number" min={0} step="0.01" value={novaMovimentacao.valor} onChange={(e) => setNovaMovimentacao({ ...novaMovimentacao, valor: Number(e.target.value) })} />
-                <TextField label="Data" type="date" value={novaMovimentacao.dataMovimentacao} onChange={(e) => setNovaMovimentacao({ ...novaMovimentacao, dataMovimentacao: e.target.value })} />
-              </FormGrid>
-            </FormSection>
-
-            <FormActions onCancel={() => setShowNovaMovimentacao(false)} saving={salvando} submitText="Registrar" />
-          </Form>
-        </Modal>
-
-        {/* Modal: registrar pagamento da nota */}
-        <Modal open={!!notaParaPagar} onClose={() => setNotaParaPagar(null)} title="Registrar pagamento" subtitle={notaParaPagar ? `${notaParaPagar.cliente_nome} — restam ${brl(Number(notaParaPagar.total) - Number(notaParaPagar.valor_pago ?? 0))}` : ""}>
-          <Form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleRegistrarPagamentoNota();
-            }}
-          >
-            <SelectBox label="Forma de pagamento" value={formaPagamentoBaixa} onChange={(e) => setFormaPagamentoBaixa(e.target.value)}>
-              <option value="Pix">Pix</option>
-              <option value="Dinheiro">Dinheiro</option>
-              <option value="Cartão de crédito">Cartão de crédito</option>
-              <option value="Cartão de débito">Cartão de débito</option>
-              <option value="Boleto">Boleto</option>
-            </SelectBox>
-
-            <FormActions onCancel={() => setNotaParaPagar(null)} saving={salvando} submitText="Confirmar" />
-          </Form>
-        </Modal>
+        {modais}
       </PageScreen>
   );
 }

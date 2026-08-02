@@ -115,7 +115,7 @@ const FuncionariosPage = () => {
       await FuncionarioService.alterar(editando.id, edicao);
       setEditando(null);
       await carregar();
-      alert.success("Funcionário atualizado");
+      alert.success("Alterações salvas", `Os dados de ${editando.nome} foram atualizados.`);
     } catch (e) {
       alert.error("Não foi possível atualizar", (e as Error).message);
     } finally {
@@ -134,9 +134,9 @@ const FuncionariosPage = () => {
     try {
       await FuncionarioService.alterarStatus(f.id, ativando);
       await carregar();
-      alert.success(ativando ? "Acesso liberado" : "Acesso desativado");
+      alert.success(ativando ? "Acesso liberado" : "Acesso desativado", `${f.nome} ${ativando ? "já pode entrar no sistema." : "não consegue mais entrar."}`);
     } catch (e) {
-      alert.error("Não foi possível alterar", (e as Error).message);
+      alert.error("As alterações não foram salvas", (e as Error).message);
     }
   };
 

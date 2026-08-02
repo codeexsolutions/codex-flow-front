@@ -57,9 +57,21 @@ export const handleDownload = async (ref: RefObject<HTMLDivElement>, filename = 
   const node = ref.current;
   if (!node) return;
 
-  const scrollParent = node.parentElement;
-  const prevScroll = scrollParent?.scrollTop ?? 0;
-  if (scrollParent) scrollParent.scrollTop = 0;
+  /* Qualquer elemento rolado — o container da nota ou um scroller aninhado —
+     mostra só um pedaço do conteúdo, e é esse pedaço que vai para o PNG. Zeramos
+     todos antes de fotografar e devolvemos depois. */
+  const rolados: { el: HTMLElement; top: number; left: number }[] = [];
+
+  const guardarERolarAoTopo = (el: HTMLElement | null) => {
+    if (!el || (el.scrollTop === 0 && el.scrollLeft === 0)) return;
+
+    rolados.push({ el, top: el.scrollTop, left: el.scrollLeft });
+    el.scrollTop = 0;
+    el.scrollLeft = 0;
+  };
+
+  guardarERolarAoTopo(node.parentElement);
+  node.querySelectorAll<HTMLElement>("*").forEach(guardarERolarAoTopo);
 
   await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
 
@@ -114,6 +126,9 @@ export const handleDownload = async (ref: RefObject<HTMLDivElement>, filename = 
       }
     });
 
-    if (scrollParent) scrollParent.scrollTop = prevScroll;
+    rolados.forEach(({ el, top, left }) => {
+      el.scrollTop = top;
+      el.scrollLeft = left;
+    });
   }
 };

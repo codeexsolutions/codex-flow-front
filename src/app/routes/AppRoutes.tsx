@@ -81,12 +81,18 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
     return <Navigate to="/" replace />;
   }
 
-  // Vendedor só tem PDV e as próprias vendas. Esconder do menu não basta:
-  // digitar a rota na mão não pode abrir a tela.
+  // O funcionário opera a loja inteira. O que é do dono são duas coisas: o
+  // cadastro da empresa (com a assinatura e as faturas) e a gestão de quem tem
+  // acesso. O resto — PDV, estoque, clientes, vendas, financeiro, relatórios —
+  // é trabalho do dia e fica aberto.
+  //
+  // A lista é de bloqueio, não de liberação: tela nova nasce acessível, e
+  // esquecer de incluí-la aqui não tranca ninguém para fora do próprio serviço.
+  // Esconder do menu não basta — digitar a rota na mão não pode abrir a tela.
   if (isLogged && user?.ativo && !ehGestor(user)) {
-    const liberado = path === "/pdv" || path === "/vendas" || path.startsWith("/vendas/lista") || path.startsWith("/configuracoes/perfil") || path === "/configuracoes/aparencia";
+    const soDoDono = path.startsWith("/configuracoes/empresa") || path.startsWith("/configuracoes/faturas") || path.startsWith("/vendas/funcionarios");
 
-    if (!liberado) return <Navigate to="/pdv" replace />;
+    if (soDoDono) return <Navigate to="/" replace />;
   }
 
   return (

@@ -26,28 +26,24 @@ const BottomNav = () => {
 
   const gestor = ehGestor(user);
 
-  const principais: Item[] = gestor
-    ? [
-        { rota: "/", label: "Início", icon: <LayoutDashboard size={19} /> },
-        { rota: "/pdv", label: "PDV", icon: <ShoppingCart size={19} /> },
-        { rota: "/vendas", label: "Vendas", icon: <DollarSign size={19} /> },
-      ]
-    : [
-        { rota: "/pdv", label: "PDV", icon: <ShoppingCart size={19} /> },
-        { rota: "/vendas", label: "Minhas vendas", icon: <DollarSign size={19} /> },
-      ];
+  /* A barra é a mesma para todos: o funcionário opera a loja inteira. */
+  const principais: Item[] = [
+    { rota: "/", label: "Início", icon: <LayoutDashboard size={19} /> },
+    { rota: "/pdv", label: "PDV", icon: <ShoppingCart size={19} /> },
+    // Direto na lista: a "Visão geral" é o que o Início já mostra.
+    { rota: "/vendas/lista", label: "Vendas", icon: <DollarSign size={19} /> },
+  ];
 
   /** O resto vai para a folha "Mais" — não cabe e não é de uso constante. */
-  const secundarios: Item[] = gestor
-    ? [
-        { rota: "/clientes", label: "Clientes", icon: <Users size={18} /> },
-        { rota: "/estoque", label: "Estoque", icon: <Package size={18} /> },
-        { rota: "/financeiro", label: "Financeiro", icon: <Wallet size={18} /> },
-        { rota: "/relatorios", label: "Relatórios", icon: <BarChart3 size={18} /> },
-        { rota: "/vendas/funcionarios", label: "Funcionários", icon: <UserCircle size={18} /> },
-        { rota: "/configuracoes", label: "Configurações", icon: <Settings size={18} /> },
-      ]
-    : [{ rota: "/configuracoes/perfil", label: "Meu perfil", icon: <UserCircle size={18} /> }];
+  const secundarios: Item[] = [
+    { rota: "/clientes", label: "Clientes", icon: <Users size={18} /> },
+    { rota: "/estoque", label: "Estoque", icon: <Package size={18} /> },
+    { rota: "/financeiro", label: "Financeiro", icon: <Wallet size={18} /> },
+    { rota: "/relatorios", label: "Relatórios", icon: <BarChart3 size={18} /> },
+    // Gestão de acesso é do dono: a API recusa, então nem mostramos o caminho.
+    ...(gestor ? [{ rota: "/vendas/funcionarios", label: "Funcionários", icon: <UserCircle size={18} /> }] : []),
+    { rota: "/configuracoes", label: "Configurações", icon: <Settings size={18} /> },
+  ];
 
   const ativo = (rota: string) => (rota === "/" ? pathname === "/" : pathname === rota || pathname.startsWith(`${rota}/`));
 
