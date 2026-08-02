@@ -68,6 +68,12 @@ const TransicaoSessao = ({ nome, modo = "entrada", aoTerminar }: Props) => {
       className="fixed inset-0 z-[400] flex items-center justify-center overflow-hidden bg-canvas"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
+      /*
+       * O `exit` é o que faz a troca ser cruzada em vez de corte: o overlay
+       * dissolve enquanto o sistema (ou o login) já está aparecendo atrás.
+       * Na entrada ele se abre revelando o app; na saída ele se fecha por cima.
+       */
+      exit={{ opacity: 0, scale: entrada ? 1.12 : 0.96, filter: "blur(8px)" }}
       transition={{ duration: 0.25 }}
     >
       {/* Halo que respira atrás do texto */}

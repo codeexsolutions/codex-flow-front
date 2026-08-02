@@ -311,7 +311,7 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
   return (
     <div className="relative w-full text-ink">
       {/* Cabeçalho — só quando a tela é a página inteira */}
-      <header className={`sticky top-0 z-20 border-b border-fg/[0.06] bg-canvas/80 backdrop-blur-xl ${embutido ? "hidden" : ""}`}>
+      <header className={`safe-top sticky top-0 z-20 border-b border-fg/[0.06] bg-canvas/80 backdrop-blur-xl ${embutido ? "hidden" : ""}`}>
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-3.5 lg:px-8">
           {contaLiberada && (
             <button onClick={() => navigate(-1)} className="focus-ring flex h-9 w-9 items-center justify-center rounded-xl border border-fg/[0.07] text-mist transition-colors hover:bg-fg/[0.04]" aria-label="Voltar">

@@ -78,7 +78,7 @@ const PDVMobile = ({
   return (
     <div className="flex min-h-full flex-col">
       {/* ---------- Saudação ---------- */}
-      <div className="flex items-center justify-between gap-3 px-5 pt-5">
+      <div className="safe-top flex items-center justify-between gap-3 px-5 pt-5">
         <div className="min-w-0">
           <p className="text-[19px] leading-tight text-ink">
             {saudacao()}

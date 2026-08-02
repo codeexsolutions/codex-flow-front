@@ -114,6 +114,9 @@ const useAuth = create<AuthStore>((set, get) => ({
       // Só agora a sessão vale — e o roteador troca de tela com tudo carregado.
       set({ user: usuario, isLogged: true, loading: false });
 
+      // Com o sistema montado atrás, o overlay dissolve revelando-o.
+      useTransicao.getState().fechar();
+
       // Sem alerta quando a tela já deu as boas-vindas com a animação.
       if (!aoAutenticar) await alert.success("Login realizado", `Bem-vindo, ${usuario.nome}!`);
     } catch (error) {
@@ -168,6 +171,9 @@ const useAuth = create<AuthStore>((set, get) => ({
     await useTransicao.getState().tocar("saida", get().user?.nome ?? "");
 
     get().clearAuth();
+
+    // Login já montado atrás: só então o overlay sai.
+    useTransicao.getState().fechar();
   },
 }));
 

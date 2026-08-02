@@ -10,7 +10,10 @@ type Estado = {
 
   /** Toca a transição e só resolve quando ela acabar. */
   tocar: (modo: ModoTransicao, nome: string) => Promise<void>;
+  /** A animação terminou — libera quem estava esperando. NÃO tira o overlay. */
   encerrar: () => void;
+  /** Tira o overlay, já com a tela nova montada atrás. */
+  fechar: () => void;
 };
 
 /**
@@ -30,10 +33,17 @@ const useTransicao = create<Estado>((set, get) => ({
       set({ modo, nome, resolver });
     }),
 
+  /*
+   * Separar as duas coisas é o que evita o piscar: se o overlay saísse junto
+   * com o fim da animação, a tela antiga reapareceria por um frame antes de
+   * ser desmontada. Aqui ele fica no ar até a tela nova estar montada atrás.
+   */
   encerrar: () => {
     get().resolver?.();
-    set({ modo: null, resolver: null });
+    set({ resolver: null });
   },
+
+  fechar: () => set({ modo: null }),
 }));
 
 export default useTransicao;

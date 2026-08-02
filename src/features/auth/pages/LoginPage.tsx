@@ -59,7 +59,12 @@ const AuthPage = () => {
         <div className="absolute left-1/2 top-1/2 h-[300px] w-[300px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-soft opacity-[0.1] blur-[110px]" />
       </div>
 
-      <div className="relative z-10 w-full max-w-sm sm:max-w-md flex flex-col max-h-full">
+      <motion.div
+        className="relative z-10 flex max-h-full w-full max-w-sm flex-col sm:max-w-md"
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5, ease: [0.22, 0.61, 0.36, 1] }}
+      >
         {/* Marca */}
         <motion.div
           className="mb-3 flex items-center justify-center gap-3 sm:mb-4"
@@ -126,7 +131,7 @@ const AuthPage = () => {
         </motion.p>
 
         <p className="mt-3 text-center text-[10px] text-muted sm:hidden">© {new Date().getFullYear()} CodeEx Flow</p>
-      </div>
+      </motion.div>
 
     </div>
   );

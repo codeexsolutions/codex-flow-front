@@ -396,6 +396,25 @@
   user-select: text;
 }
 
+/* ---------- Área segura do topo (iPhone) ---------- */
+/*
+ * Com `apple-mobile-web-app-status-bar-style: black-translucent` o app ocupa a
+ * tela inteira — inclusive por baixo do relógio e da bateria. É o visual certo
+ * para um aplicativo, mas exige devolver o espaço no conteúdo: sem isto o
+ * cabeçalho de cada tela nascia debaixo da barra de status e ficava ilegível.
+ *
+ * Vale só no app instalado; no navegador o inset é 0 e a regra não muda nada.
+ */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Barras fixas com vidro precisam do inset dentro delas, não fora, senão o
+   desfoque para antes da barra de status e aparece uma faixa cortada. */
+.safe-top-fixed {
+  padding-top: env(safe-area-inset-top);
+}
+
 /* ---------- Escala tipográfica ---------- */
 html {
   font-size: 16px;

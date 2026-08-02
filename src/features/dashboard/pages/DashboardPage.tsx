@@ -5,6 +5,9 @@ import { LayoutDashboard, DollarSign, Wallet, AlertCircle, Users, Package, Arrow
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 import { PageScreen } from "@/shared/ui/PageShell";
+import DashboardMobile from "@/features/dashboard/components/DashboardMobile";
+import { useIsMobile } from "@/shared/hooks/useIsMobile";
+import useAuth from "@/features/auth/store/auth.store";
 import { useChartColors } from "@/shared/theme/useChartColors";
 
 import useVendaStore from "@/features/vendas/store/venda.store";
@@ -57,6 +60,8 @@ const Vazio = ({ children }: { children: ReactNode }) => <p className="px-4 py-8
 
 const DashboardPage = () => {
   const navigate = useNavigate();
+  const mobile = useIsMobile();
+  const { user } = useAuth();
   const C = useChartColors();
 
   const vendas = useVendaStore((s) => s.vendas);
@@ -103,6 +108,35 @@ const DashboardPage = () => {
 
     return { faturadoMes, recebidoMes, aReceber, vendasNoMes: doMes.length, porMes, recentes, criticos };
   }, [vendas, produtos]);
+
+  if (mobile) {
+    return (
+      <div className="h-full w-full overflow-y-auto text-ink">
+        <DashboardMobile
+          nomeUsuario={user?.nome}
+          faturadoMes={dados.faturadoMes}
+          recebidoMes={dados.recebidoMes}
+          aReceber={dados.aReceber}
+          vendasNoMes={dados.vendasNoMes}
+          totalClientes={clientes.length}
+          totalProdutos={produtos.length}
+          porMes={dados.porMes}
+          recentes={dados.recentes.map((v) => ({
+            id: v.pedido.pedidoId,
+            cliente: v.nomeCliente,
+            data: v.pedido.dataPedido,
+            total: totalDoPedido(v),
+            paga: estaFechado(v),
+          }))}
+          criticos={dados.criticos.map((p) => ({ id: String(p.id), nome: p.nome ?? "Produto", quantidade: p.quantidade ?? 0 }))}
+          onVenda={() => navigate("/vendas/lista")}
+          onIrParaEstoque={() => navigate("/estoque")}
+          onIrParaVendas={() => navigate("/vendas/lista")}
+          onIrParaClientes={() => navigate("/clientes")}
+        />
+      </div>
+    );
+  }
 
   return (
     <PageScreen icon={<LayoutDashboard className="h-5 w-5" />} title="Dashboard" subtitle="Visão geral do seu negócio">

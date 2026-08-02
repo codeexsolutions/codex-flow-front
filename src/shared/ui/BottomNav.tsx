@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
 import { LayoutDashboard, ShoppingCart, DollarSign, Package, Users, Wallet, BarChart3, MoreHorizontal, Settings, LogOut, UserCircle } from "lucide-react";
 
@@ -21,6 +22,7 @@ const BottomNav = () => {
   const { user, logout } = useAuth();
 
   const [maisAberto, setMaisAberto] = useState(false);
+  const reduzir = useReducedMotion();
 
   const gestor = ehGestor(user);
 
@@ -56,7 +58,10 @@ const BottomNav = () => {
 
   return (
     <>
-      <nav
+      <motion.nav
+        initial={{ y: 64 }}
+        animate={{ y: 0 }}
+        transition={{ type: "spring", stiffness: 320, damping: 32 }}
         className="glass-strong fixed inset-x-0 bottom-0 z-[100] flex items-stretch border-x-0 border-b-0 border-t md:hidden"
         style={{
           borderColor: "rgb(var(--glass-border) / calc(var(--glass-border-alpha) + 0.04))",
@@ -64,35 +69,73 @@ const BottomNav = () => {
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
       >
+        {/* Fio de luz no topo da barra — o mesmo detalhe dos cards do sistema. */}
+        <span aria-hidden className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-accent-soft/50 to-transparent" />
+
         {principais.map((it) => {
           const on = ativo(it.rota);
 
           return (
-            <button
+            <motion.button
               key={it.rota}
               type="button"
               onClick={() => ir(it.rota)}
               aria-current={on ? "page" : undefined}
+              whileTap={reduzir ? undefined : { scale: 0.9 }}
+              transition={{ type: "spring", stiffness: 500, damping: 30 }}
               // 56px de altura: alvo de toque confortável, acima do mínimo de 44.
-              className={`focus-ring flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 transition-colors ${on ? "text-accent-soft" : "text-faint"}`}
+              className={`focus-ring relative flex min-h-[56px] flex-1 flex-col items-center justify-center gap-1 transition-colors ${on ? "text-accent-soft" : "text-faint"}`}
             >
-              <span className={`flex h-7 w-12 items-center justify-center rounded-full transition-colors ${on ? "bg-accent/20" : ""}`}>{it.icon}</span>
-              <span className="text-[10.5px] leading-none">{it.label}</span>
-            </button>
+              <span className="relative flex h-7 w-12 items-center justify-center">
+                {/* `layoutId` faz a pílula DESLIZAR de um item para o outro em
+                    vez de piscar no destino — é o que dá a leitura de
+                    continuidade entre as abas. */}
+                {on && (
+                  <motion.span
+                    layoutId="pilula-nav"
+                    className="absolute inset-0 rounded-full bg-accent/20"
+                    transition={reduzir ? { duration: 0 } : { type: "spring", stiffness: 420, damping: 34 }}
+                  />
+                )}
+
+                <motion.span
+                  className="relative"
+                  animate={reduzir ? {} : { y: on ? -1 : 0, scale: on ? 1.08 : 1 }}
+                  transition={{ type: "spring", stiffness: 460, damping: 26 }}
+                >
+                  {it.icon}
+                </motion.span>
+              </span>
+
+              <span className={`text-[10.5px] leading-none transition-opacity ${on ? "opacity-100" : "opacity-80"}`}>{it.label}</span>
+
+              {/* Traço fino sob o item ativo: fecha a composição sem pesar. */}
+              {on && !reduzir && (
+                <motion.span
+                  layoutId="tracinho-nav"
+                  className="absolute bottom-1 h-[2px] w-6 rounded-full bg-accent-soft"
+                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                />
+              )}
+            </motion.button>
           );
         })}
 
-        <button
+        <motion.button
           type="button"
           onClick={() => setMaisAberto(true)}
-          className={`focus-ring flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 transition-colors ${maisAberto ? "text-accent-soft" : "text-faint"}`}
+          whileTap={reduzir ? undefined : { scale: 0.9 }}
+          transition={{ type: "spring", stiffness: 500, damping: 30 }}
+          className={`focus-ring relative flex min-h-[56px] flex-1 flex-col items-center justify-center gap-1 transition-colors ${maisAberto ? "text-accent-soft" : "text-faint"}`}
         >
-          <span className={`flex h-7 w-12 items-center justify-center rounded-full transition-colors ${maisAberto ? "bg-accent/20" : ""}`}>
-            <MoreHorizontal size={19} />
+          <span className="relative flex h-7 w-12 items-center justify-center">
+            <motion.span className="relative" animate={reduzir ? {} : { rotate: maisAberto ? 90 : 0 }} transition={{ type: "spring", stiffness: 420, damping: 28 }}>
+              <MoreHorizontal size={19} />
+            </motion.span>
           </span>
-          <span className="text-[10.5px] leading-none">Mais</span>
-        </button>
-      </nav>
+          <span className="text-[10.5px] leading-none opacity-80">Mais</span>
+        </motion.button>
+      </motion.nav>
 
       <Sheet open={maisAberto} onClose={() => setMaisAberto(false)} title="Mais" subtitle={user?.nome ? `Conectado como ${user.nome}` : undefined}>
         <div className="flex flex-col gap-1 pb-2">

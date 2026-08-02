@@ -8,6 +8,7 @@ import Main from "@/app/layouts/MainLayout";
 import LoadingScreen from "@/shared/ui/LoadingScreen";
 import NotFoundPage from "@/shared/ui/NotFoundPage";
 import useTheme from "@/shared/theme/useTheme";
+import { useIsMobile } from "@/shared/hooks/useIsMobile";
 
 import LandingPage from "@/features/landing/pages/LandingPage";
 
@@ -45,7 +46,14 @@ import AparenciaTab from "@/features/config/pages/AparenciaPage";
 
 const PUBLIC_PATHS = ["/login", "/cadastro", "/planos", "/page"];
 
-function AppRoutesContent({ isLogged }: { isLogged: boolean }) {
+/**
+ * No celular a tela de carregamento não aparece: ela competia com a animação
+ * de login e virava um piscar de spinner entre o "Bem-vindo" e o sistema.
+ * No lugar entra o fundo liso — a transição cobre o intervalo.
+ */
+const Espera = ({ mobile }: { mobile: boolean }) => (mobile ? <div className="h-[100dvh] w-full bg-canvas" /> : <LoadingScreen />);
+
+function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boolean }) {
   const location = useLocation();
   const { enterprise } = useEnterprise();
   const { user } = useAuth();
@@ -66,7 +74,7 @@ function AppRoutesContent({ isLogged }: { isLogged: boolean }) {
   }
 
   if (isLogged && !enterprise) {
-    return <LoadingScreen />;
+    return <Espera mobile={mobile} />;
   }
 
   if (isLogged && user?.ativo && (path === "/checkout" || path === "/login")) {
@@ -140,6 +148,7 @@ function AppRoutesContent({ isLogged }: { isLogged: boolean }) {
 
 const AppRoutes = () => {
   useTheme();
+  const mobile = useIsMobile();
   const { isLogged, initialize, loading } = useAuth();
 
   useEffect(() => {
@@ -147,11 +156,11 @@ const AppRoutes = () => {
   }, [initialize]);
 
   if (loading) {
-    return <LoadingScreen />;
+    return <Espera mobile={mobile} />;
   }
   return (
     <BrowserRouter>
-      <AppRoutesContent isLogged={isLogged} />
+      <AppRoutesContent isLogged={isLogged} mobile={mobile} />
     </BrowserRouter>
   );
 };

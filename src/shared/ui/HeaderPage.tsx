@@ -27,7 +27,7 @@ const HeaderPage = ({ title, subtitle, icon, tabs }: HeaderPageProps) => {
 
   return (
     <header
-      className="relative z-10 shrink-0 border-b border-fg/[0.08]"
+      className="safe-top relative z-10 shrink-0 border-b border-fg/[0.08]"
       style={{
         backgroundColor: "rgb(var(--canvas) / 0.72)",
         backdropFilter: "blur(var(--blur-md)) saturate(160%)",
