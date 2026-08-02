@@ -1,5 +1,6 @@
-import { toPng } from "html-to-image";
+import { toBlob } from "html-to-image";
 import type { RefObject } from "react";
+import { appInstalado } from "@/shared/pwa/appMode";
 
 const resolveToken = (token: string, fallback: string): string => {
   if (typeof window === "undefined") return fallback;
@@ -90,7 +91,7 @@ export const handleDownload = async (ref: RefObject<HTMLDivElement>, filename = 
   });
 
   try {
-    const dataUrl = await toPng(node, {
+    const blob = await toBlob(node, {
       backgroundColor: resolveToken("--surface", "#15132a"),
       width: node.scrollWidth,
       height: node.scrollHeight,
@@ -102,10 +103,48 @@ export const handleDownload = async (ref: RefObject<HTMLDivElement>, filename = 
       },
     });
 
+    if (!blob) throw new Error("Falha ao gerar a imagem da nota.");
+
+    /**
+     * App instalado (tela de início / standalone) é o único caso em que
+     * `<a download>` está provadamente quebrado: essa janela roda numa
+     * WKWebView (iOS) ou equivalente sem o gerenciador de downloads do
+     * navegador — o clique simplesmente não tem pra onde salvar o arquivo.
+     * No Safari/Chrome normais (aba de navegador), o link com blob URL abaixo
+     * já baixa direto, então só entramos aqui no caso que exige outro caminho.
+     *
+     * A Web Share API entrega o arquivo pro sistema operacional, que mostra o
+     * menu nativo de salvar/compartilhar — funciona dentro do app instalado
+     * tanto no iOS quanto no Android.
+     */
+    if (appInstalado()) {
+      const file = new File([blob], filename, { type: "image/png" });
+
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+          return;
+        } catch (err) {
+          // Usuário cancelou o menu de compartilhamento: não é um erro de
+          // download, então não cai no fallback nem loga nada.
+          if (err instanceof Error && err.name === "AbortError") return;
+          throw err;
+        }
+      }
+    }
+
+    /* Navegador comum (não instalado): blob URL em vez de data URI. Além de
+       mais leve pra notas grandes, evita o limite de tamanho que o Safari
+       impõe a data URIs — o link com blob URL baixa normalmente em qualquer
+       navegador de aba, incluindo Safari iOS/macOS desde a versão 13. */
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.download = filename;
-    link.href = dataUrl;
+    link.href = url;
+    document.body.appendChild(link);
     link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
 
   } catch (err) {
     console.error("Erro ao gerar imagem da nota:", err);
