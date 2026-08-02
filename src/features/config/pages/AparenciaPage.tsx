@@ -1,18 +1,13 @@
 import type { MouseEvent } from "react";
-import { Palette, Moon, Sun, Monitor, Check, Type, Sparkles, Accessibility, Gauge, Layers, Zap } from "lucide-react";
+import { Palette, Check, Type, Sparkles, Accessibility, Gauge, Layers, Zap, Brush } from "lucide-react";
 
 import { SettingsCard } from "@/features/config/components/ConfigUI";
 import { useAlert } from "@/shared/ui/Alert";
 import useThemeStore, { type AccentId, type FontScale, type MotionPref, type ThemeMode, type FxPref } from "@/shared/theme/theme.store";
+import { THEMES, temaPorId, type ThemeInfo } from "@/shared/theme/theme.catalog";
 import { switchThemeWithTransition } from "@/shared/theme/transition";
 import useTheme from "@/shared/theme/useTheme";
 import { FX_LABEL, FX_DESCRIPTION } from "@/shared/theme/detectPerformance";
-
-const THEMES: { id: ThemeMode; label: string; icon: React.ReactNode }[] = [
-  { id: "escuro", label: "Escuro", icon: <Moon size={14} /> },
-  { id: "claro", label: "Claro", icon: <Sun size={14} /> },
-  { id: "sistema", label: "Sistema", icon: <Monitor size={14} /> },
-];
 
 const ACCENTS: { id: AccentId; label: string; color: string }[] = [
   { id: "roxo", label: "Roxo", color: "#7c6ef5" },
@@ -44,35 +39,41 @@ const FX_OPTIONS: { id: FxPref; icon: React.ReactNode }[] = [
   { id: "lite", icon: <Zap size={15} /> },
 ];
 
-/* Cores do preview: fixas de propósito — precisam mostrar o tema oposto ao ativo. */
-const PREVIEW = {
-  claro: { bg: "#f4f3fb", panel: "#ffffff", line: "#dcdae8", soft: "#e7e5f2" },
-  escuro: { bg: "#12111d", panel: "#1c1a2b", line: "#2a2740", soft: "#26233a" },
-};
-
-const ThemePreview = ({ id, accent }: { id: ThemeMode; accent: string }) => {
-  const p = id === "claro" ? PREVIEW.claro : PREVIEW.escuro;
-  const { bg, panel, line, soft } = p;
+/** Miniatura da paleta: as cores vêm do catálogo, não dos tokens ativos. */
+const ThemePreview = ({ tema, accent }: { tema: ThemeInfo; accent: string }) => {
+  const { bg, panel, line, soft } = tema.preview;
 
   return (
-    <div className="relative mb-3 h-20 w-full overflow-hidden rounded-lg border border-fg/[0.08]" style={{ background: bg }}>
-      {id === "sistema" && <div className="absolute inset-0" style={{ background: `linear-gradient(90deg, ${PREVIEW.escuro.bg} 50%, ${PREVIEW.claro.bg} 50%)` }} />}
-      <div className="relative flex h-full gap-1.5 p-1.5">
-        <div className="flex w-1/4 flex-col gap-1 rounded-md p-1" style={{ background: panel }}>
+    <div className="relative mb-2.5 h-16 w-full overflow-hidden rounded-lg border border-fg/[0.08]" style={{ background: bg }}>
+      {/* "Sistema" mostra os dois lados porque é o que ele faz. */}
+      {tema.id === "sistema" && (
+        <div
+          className="absolute inset-0"
+          style={{ background: `linear-gradient(90deg, ${temaPorId("escuro").preview.bg} 50%, ${temaPorId("claro").preview.bg} 50%)` }}
+        />
+      )}
+      <div className="relative flex h-full gap-1 p-1.5">
+        <div className="flex w-1/4 flex-col gap-1 rounded p-1" style={{ background: panel }}>
           <div className="h-1.5 w-full rounded-full" style={{ background: accent }} />
           <div className="h-1 w-3/4 rounded-full" style={{ background: soft }} />
           <div className="h-1 w-2/3 rounded-full" style={{ background: soft }} />
         </div>
-        <div className="flex flex-1 flex-col gap-1 rounded-md p-1.5" style={{ background: panel }}>
+        <div className="flex flex-1 flex-col gap-1 rounded p-1.5" style={{ background: panel }}>
           <div className="h-1.5 w-1/2 rounded-full" style={{ background: line }} />
-          <div className="mt-0.5 h-1 w-full rounded-full" style={{ background: soft }} />
-          <div className="h-1 w-5/6 rounded-full" style={{ background: soft }} />
-          <div className="mt-auto h-2.5 w-1/3 self-end rounded" style={{ background: accent }} />
+          <div className="h-1 w-full rounded-full" style={{ background: soft }} />
+          <div className="mt-auto h-2 w-1/3 self-end rounded" style={{ background: accent }} />
         </div>
       </div>
     </div>
   );
 };
+
+/** Selo de "opção ativa" — sempre no fluxo, nunca posicionado por cima. */
+const Ativo = () => (
+  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent text-white">
+    <Check size={11} strokeWidth={3} />
+  </span>
+);
 
 const AparenciaTab = () => {
   const alert = useAlert();
@@ -96,7 +97,7 @@ const AparenciaTab = () => {
   const trocarTema = (e: MouseEvent<HTMLButtonElement>, id: ThemeMode) => {
     if (id === mode) return;
     switchThemeWithTransition(e, () => setMode(id));
-    notify(`Tema ${THEMES.find((t) => t.id === id)?.label.toLowerCase()} aplicado`);
+    notify(`Tema ${temaPorId(id).label.toLowerCase()} aplicado`);
   };
 
   const trocarAccent = (a: (typeof ACCENTS)[number]) => {
@@ -126,163 +127,143 @@ const AparenciaTab = () => {
   const fxLabel = (id: FxPref) => (id === "auto" ? "Automático" : FX_LABEL[id]);
   const fxDesc = (id: FxPref) => (id === "auto" ? `Detectado: ${FX_LABEL[detectedFx]}` : FX_DESCRIPTION[id]);
 
+  /* Cartão de opção: a diferença entre eles é só o conteúdo, então o estado
+     visual (ativo/inativo) mora num lugar só. */
+  const cardCls = (active: boolean) =>
+    `focus-ring relative flex cursor-pointer flex-col rounded-xl border p-2.5 text-left transition-all ${
+      active ? "border-accent/60 bg-accent/[0.1] ring-1 ring-accent/40" : "border-fg/[0.08] hover:border-fg/[0.16] hover:bg-fg/[0.02]"
+    }`;
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 overflow-y-auto lg:grid-cols-2">
-        {/* Tema */}
-        <SettingsCard icon={<Palette className="h-4 w-4" />} title="Tema" desc="Escolha como prefere ver o sistema. A alteração é aplicada na hora.">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {THEMES.map((t) => {
-              const active = t.id === mode;
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={(e) => trocarTema(e, t.id)}
-                  className={`group cursor-pointer rounded-xl border p-2.5 text-left transition-all ${active ? "border-accent/60 bg-accent/[0.1] ring-1 ring-accent/40" : "border-fg/[0.08] hover:border-fg/[0.16] hover:bg-fg/[0.02]"}`}
-                >
-                  <ThemePreview id={t.id} accent={accent.color} />
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-[13px] text-ink">
-                      {t.icon}
-                      {t.label}
-                    </span>
-                    {active && (
-                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-accent text-white">
-                        <Check size={11} strokeWidth={3} />
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </SettingsCard>
+    // `items-start` evita que um card curto seja esticado até a altura do
+    // vizinho — era isso que deixava a grade com buracos.
+    <div className="grid grid-cols-1 items-start gap-4 pb-2 xl:grid-cols-2">
+      {/* Tema — ocupa a linha inteira: são 7 opções com miniatura */}
+      <SettingsCard
+        icon={<Palette className="h-4 w-4" />}
+        title="Tema"
+        desc="Seis paletas completas. A troca é aplicada na hora."
+        className="xl:col-span-2"
+      >
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7">
+          {THEMES.map((t) => {
+            const active = t.id === mode;
+            return (
+              <button key={t.id} type="button" onClick={(e) => trocarTema(e, t.id)} className={cardCls(active)}>
+                <ThemePreview tema={t} accent={accent.color} />
+                <span className="flex items-center justify-between gap-1.5">
+                  <span className="min-w-0">
+                    <span className="block truncate text-[12.5px] text-ink">{t.label}</span>
+                    <span className="block truncate text-[10.5px] text-faint">{t.desc}</span>
+                  </span>
+                  {active && <Ativo />}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </SettingsCard>
 
-        {/* Cor de destaque */}
-        <SettingsCard icon={<Palette className="h-4 w-4" />} title="Cor de destaque" desc="Usada em botões, links e elementos ativos.">
-          <div className="flex flex-wrap items-center gap-3">
-            {ACCENTS.map((a) => {
-              const active = a.id === accent.id;
-              return (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => trocarAccent(a)}
-                  title={a.label}
-                  aria-label={a.label}
-                  className={`relative h-10 w-10 cursor-pointer rounded-full transition-transform hover:scale-105 ${active ? "ring-2 ring-fg/70 ring-offset-2 ring-offset-canvas" : ""}`}
-                  style={{ background: a.color }}
-                >
-                  {active && <Check size={16} strokeWidth={3} className="absolute inset-0 m-auto text-white drop-shadow" />}
-                </button>
-              );
-            })}
-          </div>
+      {/* Cor de destaque */}
+      <SettingsCard icon={<Brush className="h-4 w-4" />} title="Cor de destaque" desc="Usada em botões, links e elementos ativos. Funciona em qualquer tema.">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {ACCENTS.map((a) => {
+            const active = a.id === accent.id;
+            return (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => trocarAccent(a)}
+                title={a.label}
+                aria-label={a.label}
+                className={`focus-ring relative h-9 w-9 shrink-0 cursor-pointer rounded-full transition-transform hover:scale-105 ${active ? "ring-2 ring-fg/70 ring-offset-2 ring-offset-surface" : ""}`}
+                style={{ background: a.color }}
+              >
+                {active && <Check size={15} strokeWidth={3} className="absolute inset-0 m-auto text-white drop-shadow" />}
+              </button>
+            );
+          })}
+        </div>
 
-          <div className="mt-5 flex items-center gap-3 rounded-xl border border-fg/[0.06] bg-fg/[0.02] p-3">
-            <span className="text-[12px] text-mist">Prévia:</span>
-            <button type="button" className="rounded-lg bg-accent px-3.5 py-1.5 text-[12px] text-white">
-              Botão
-            </button>
-            <span className="text-[12px] text-accent">Link de exemplo</span>
-          </div>
-        </SettingsCard>
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-fg/[0.06] bg-fg/[0.02] p-3">
+          <span className="text-[12px] text-mist">Prévia:</span>
+          <button type="button" className="rounded-lg bg-accent px-3.5 py-1.5 text-[12px] text-white">
+            Botão
+          </button>
+          <span className="text-[12px] text-accent">Link de exemplo</span>
+        </div>
+      </SettingsCard>
 
-        {/* Tamanho do texto */}
-        <SettingsCard icon={<Type className="h-4 w-4" />} title="Tamanho do texto" desc="Ajusta a escala geral da interface. Recomendado seguir o padrão do seu navegador.">
-          <div className="grid grid-cols-3 gap-3">
-            {FONT_SCALES.map((f) => {
-              const active = f.id === fontScale;
-              const size = f.id === "sm" ? "text-[15px]" : f.id === "md" ? "text-[19px]" : "text-[23px]";
-              return (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => trocarFontScale(f.id)}
-                  className={`group flex cursor-pointer flex-col items-center gap-2 rounded-xl border p-3 text-center transition-all ${active ? "border-accent/60 bg-accent/[0.1] ring-1 ring-accent/40" : "border-fg/[0.08] hover:border-fg/[0.16] hover:bg-fg/[0.02]"}`}
-                >
-                  <span className={`flex h-11 w-11 items-center justify-center rounded-lg ${size} ${active ? "bg-accent/20 text-accent-soft" : "bg-fg/[0.05] text-mist"}`}>{f.sample}</span>
-                  <div>
-                    <p className="text-[12.5px] text-ink">{f.label}</p>
-                    <p className="mt-0.5 text-[10.5px] leading-tight text-faint">{f.desc}</p>
-                  </div>
-                  {active && (
-                    <span className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-white">
-                      <Check size={11} strokeWidth={3} />
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </SettingsCard>
+      {/* Tamanho do texto */}
+      <SettingsCard icon={<Type className="h-4 w-4" />} title="Tamanho do texto" desc="Ajusta a escala geral da interface.">
+        <div className="grid grid-cols-3 gap-2.5">
+          {FONT_SCALES.map((f) => {
+            const active = f.id === fontScale;
+            const size = f.id === "sm" ? "text-[15px]" : f.id === "md" ? "text-[19px]" : "text-[23px]";
+            return (
+              <button key={f.id} type="button" onClick={() => trocarFontScale(f.id)} className={`${cardCls(active)} items-center gap-2 text-center`}>
+                {/* O selo fica no canto, mas dentro do card: o botão é `relative`. */}
+                {active && (
+                  <span className="absolute right-2 top-2">
+                    <Ativo />
+                  </span>
+                )}
+                <span className={`flex h-10 w-10 items-center justify-center rounded-lg ${size} ${active ? "bg-accent/20 text-accent-soft" : "bg-fg/[0.05] text-mist"}`}>{f.sample}</span>
+                <span className="min-w-0">
+                  <span className="block text-[12.5px] text-ink">{f.label}</span>
+                  <span className="block text-[10.5px] leading-tight text-faint">{f.desc}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </SettingsCard>
 
-        {/* Animações */}
-        <SettingsCard icon={<Sparkles className="h-4 w-4" />} title="Animações" desc="Deixamos “Automático” seguir a configuração de acessibilidade do seu sistema.">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {MOTIONS.map((m) => {
-              const active = m.id === motion;
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => trocarMotion(m.id)}
-                  className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-left transition-all ${active ? "border-accent/60 bg-accent/[0.1] ring-1 ring-accent/40" : "border-fg/[0.08] hover:border-fg/[0.16] hover:bg-fg/[0.02]"}`}
-                >
-                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${active ? "bg-accent/20 text-accent-soft" : "bg-fg/[0.05] text-mist"}`}>{m.icon}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] text-ink">{m.label}</p>
-                    <p className="truncate text-[11px] text-faint">{m.desc}</p>
-                  </div>
-                  {active && (
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent text-white">
-                      <Check size={11} strokeWidth={3} />
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </SettingsCard>
+      {/* Animações */}
+      <SettingsCard icon={<Sparkles className="h-4 w-4" />} title="Animações" desc="“Automático” segue a configuração de acessibilidade do seu sistema.">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          {MOTIONS.map((m) => {
+            const active = m.id === motion;
+            return (
+              <button key={m.id} type="button" onClick={() => trocarMotion(m.id)} className={`${cardCls(active)} flex-row items-center gap-3`}>
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${active ? "bg-accent/20 text-accent-soft" : "bg-fg/[0.05] text-mist"}`}>{m.icon}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] text-ink">{m.label}</span>
+                  <span className="block truncate text-[11px] text-faint">{m.desc}</span>
+                </span>
+                {active && <Ativo />}
+              </button>
+            );
+          })}
+        </div>
+      </SettingsCard>
 
-        {/* Efeitos visuais */}
-        <SettingsCard icon={<Layers className="h-4 w-4" />} title="Efeitos visuais" desc="O desfoque de vidro é o efeito mais pesado da interface. Se a rolagem estiver travando, escolha um nível mais leve.">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {FX_OPTIONS.map((o) => {
-              const active = o.id === fx;
-              return (
-                <button
-                  key={o.id}
-                  type="button"
-                  onClick={() => trocarFx(o.id)}
-                  className={`relative flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-left transition-all ${active ? "border-accent/60 bg-accent/[0.1] ring-1 ring-accent/40" : "border-fg/[0.08] hover:border-fg/[0.16] hover:bg-fg/[0.02]"}`}
-                >
-                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${active ? "bg-accent/20 text-accent-soft" : "bg-fg/[0.05] text-mist"}`}>{o.icon}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] text-ink">{fxLabel(o.id)}</p>
-                    <p className="truncate text-[11px] text-faint">{fxDesc(o.id)}</p>
-                  </div>
-                  {active && (
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-accent text-white">
-                      <Check size={11} strokeWidth={3} />
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+      {/* Efeitos visuais */}
+      <SettingsCard icon={<Layers className="h-4 w-4" />} title="Efeitos visuais" desc="O desfoque de vidro é o efeito mais pesado. Se a rolagem travar, escolha um nível mais leve.">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          {FX_OPTIONS.map((o) => {
+            const active = o.id === fx;
+            return (
+              <button key={o.id} type="button" onClick={() => trocarFx(o.id)} className={`${cardCls(active)} flex-row items-center gap-3`}>
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${active ? "bg-accent/20 text-accent-soft" : "bg-fg/[0.05] text-mist"}`}>{o.icon}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] text-ink">{fxLabel(o.id)}</span>
+                  <span className="block truncate text-[11px] text-faint">{fxDesc(o.id)}</span>
+                </span>
+                {active && <Ativo />}
+              </button>
+            );
+          })}
+        </div>
 
-          {/* Amostra ao vivo do nível ativo */}
-          <div className="relative mt-5 overflow-hidden rounded-xl border border-fg/[0.06] p-4">
-            <div aria-hidden className="absolute inset-0" style={{ background: "linear-gradient(120deg, rgb(var(--accent) / 0.5), rgb(var(--aurora-2) / 0.45))" }} />
-            <div className="glass-strong relative flex items-center justify-between gap-3 rounded-lg px-3.5 py-3">
-              <span className="text-[12.5px] text-ink">Prévia do vidro</span>
-              <span className="rounded-full bg-accent/20 px-2.5 py-1 text-[11px] text-accent-soft">{FX_LABEL[activeFx]}</span>
-            </div>
+        <div className="relative mt-4 overflow-hidden rounded-xl border border-fg/[0.06] p-4">
+          <div aria-hidden className="absolute inset-0" style={{ background: "linear-gradient(120deg, rgb(var(--accent) / 0.5), rgb(var(--aurora-2) / 0.45))" }} />
+          <div className="glass-strong relative flex items-center justify-between gap-3 rounded-lg px-3.5 py-3">
+            <span className="text-[12.5px] text-ink">Prévia do vidro</span>
+            <span className="rounded-full bg-accent/20 px-2.5 py-1 text-[11px] text-accent-soft">{FX_LABEL[activeFx]}</span>
           </div>
-        </SettingsCard>
-      </div>
+        </div>
+      </SettingsCard>
     </div>
   );
 };

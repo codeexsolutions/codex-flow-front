@@ -92,6 +92,92 @@
   --aurora-alpha: 0.16;
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   PALETAS — cada tema troca só os neutros, o vidro e a aurora.
+   O accent continua vindo de [data-accent], que é aplicado depois: são
+   duas dimensões independentes (6 paletas × 9 destaques).
+   As paletas escuras herdam de `.dark` tudo que não sobrescrevem aqui.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ---------- Meia-noite — azul profundo ---------- */
+.dark[data-theme="meia-noite"] {
+  --canvas: 8 14 30;
+  --surface: 16 24 48;
+  --surface-raised: 23 34 64;
+
+  --ink: 232 238 255;
+  --mist: 152 168 205;
+  --faint: 106 124 162;
+  --muted: 74 90 126;
+
+  --glass-bg: 24 37 72;
+  --glass-alpha: 0.58;
+
+  --aurora-1: 56 118 240;
+  --aurora-2: 92 182 255;
+}
+
+/* ---------- Floresta — verde escuro ---------- */
+.dark[data-theme="floresta"] {
+  --canvas: 10 20 16;
+  --surface: 16 32 26;
+  --surface-raised: 23 45 37;
+
+  --ink: 231 245 237;
+  --mist: 148 180 164;
+  --faint: 106 138 122;
+  --muted: 74 104 91;
+
+  --glass-bg: 23 48 39;
+  --glass-alpha: 0.58;
+
+  --aurora-1: 42 165 118;
+  --aurora-2: 96 200 150;
+}
+
+/* ---------- Ardósia — grafite neutro ---------- */
+.dark[data-theme="ardosia"] {
+  --canvas: 17 19 24;
+  --surface: 26 29 36;
+  --surface-raised: 35 39 48;
+
+  --ink: 236 238 243;
+  --mist: 158 164 178;
+  --faint: 114 121 136;
+  --muted: 82 89 103;
+
+  --glass-bg: 38 42 52;
+  --glass-alpha: 0.6;
+
+  --aurora-1: 118 130 152;
+  --aurora-2: 88 110 142;
+  --aurora-alpha: 0.12;
+}
+
+/* ---------- Sépia — claro e quente ---------- */
+:root[data-theme="sepia"] {
+  --canvas: 245 240 232;
+  --surface: 255 251 245;
+  --surface-raised: 250 245 236;
+
+  --ink: 46 38 30;
+  --mist: 106 92 76;
+  --faint: 146 130 110;
+  --muted: 178 163 144;
+  --fg: 46 38 30;
+
+  --glass-bg: 255 251 245;
+  --glass-alpha: 0.74;
+  --glass-border: 46 38 30;
+
+  /* Sombra quente: preto puro sobre bege lê como sujeira. */
+  --shadow-color: 90 66 36;
+
+  --aurora-1: 192 142 72;
+  --aurora-2: 214 172 112;
+  --aurora-alpha: 0.12;
+}
+
 /* ---------- Accents ---------- */
 :root[data-accent="roxo"] {
   --accent: 109 92 232;

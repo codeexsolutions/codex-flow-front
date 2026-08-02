@@ -22,6 +22,7 @@ import Workflow from "@/features/vendas/pages/PDVPage";
 import SalesPage from "@/features/vendas/pages/SalesPage";
 import SalesOverviewPage from "@/features/vendas/pages/SalesOverviewPage";
 import SalesList from "@/features/vendas/pages/SalesListPage";
+import FuncionariosPage from "@/features/funcionarios/pages/FuncionariosPage";
 
 import CheckoutPage from "@/features/checkout/pages/CheckoutPage";
 import PlanosPage from "@/features/assinatura/pages/PlanosPage";
@@ -104,8 +105,10 @@ function AppRoutesContent({ isLogged }: { isLogged: boolean }) {
             <Route index element={<Navigate to="perfil" replace />} />
             <Route path="perfil" element={<ProfilePage />} />
             <Route path="empresa" element={<EmpresaPage />} />
-            {/* Mesma tela do checkout: faturas, Pix e comprovante vêm da API. */}
-            <Route path="faturas" element={<CheckoutPage />} />
+            {/* Mesma tela do checkout: faturas, Pix e comprovante vêm da API.
+                `embutido` tira o cabeçalho e o padding próprios — Configurações
+                já fornece os dois. */}
+            <Route path="faturas" element={<CheckoutPage embutido />} />
             <Route path="aparencia" element={<AparenciaTab />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
@@ -113,6 +116,7 @@ function AppRoutesContent({ isLogged }: { isLogged: boolean }) {
           <Route path="vendas" element={<SalesPage />}>
             <Route index element={<SalesOverviewPage />} />
             <Route path="lista" element={<SalesList />} />
+            <Route path="funcionarios" element={<FuncionariosPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
 

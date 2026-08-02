@@ -48,8 +48,16 @@ const ResumoCard = ({ icon, label, value, tone }: { icon: ReactNode; label: stri
   );
 };
 
-const COLS_NOTAS = "grid-cols-[1fr_120px_120px_170px]";
-const COLS_CAIXA = "grid-cols-[110px_1fr_130px_120px_60px]";
+/**
+ * A coluna flexível é capada e sobra um vão no fim: com "1fr" solto, os
+ * valores e o status iam parar na borda direita do monitor, longe do nome a
+ * que pertencem. Assim os dados ficam agrupados à esquerda.
+ */
+const COLS_NOTAS = "grid-cols-[minmax(180px,420px)_120px_120px_170px_minmax(0,1fr)]";
+const COLS_CAIXA = "grid-cols-[110px_minmax(180px,420px)_130px_120px_60px_minmax(0,1fr)]";
+
+/** Célula vazia que ocupa o vão flexível do fim da linha. */
+const COLUNA_VAO = { id: "vao", header: "", cell: () => null };
 
 export default function FinanceiroPage() {
   const alert = useAlert();
@@ -155,6 +163,7 @@ export default function FinanceiroPage() {
         </span>
       ),
     },
+    COLUNA_VAO,
   ];
 
   const colCaixa: Coluna<MovimentacaoType>[] = [
@@ -185,6 +194,7 @@ export default function FinanceiroPage() {
         </button>
       ),
     },
+    COLUNA_VAO,
   ];
 
   const abas: { id: Aba; label: string; icon: ReactNode }[] = [

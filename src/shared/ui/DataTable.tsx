@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Plus } from "lucide-react";
 
 /**
@@ -17,9 +17,12 @@ export type Coluna<T> = {
 };
 
 /**
- * Largura mínima da área de linhas. As colunas têm larguras fixas em px; sem um
- * piso a grade era espremida em telas estreitas e todas as células viravam
- * reticências. Com o piso, a área rola na horizontal e o conteúdo fica legível.
+ * Largura mínima da área de linhas — vale só de `sm` para cima.
+ *
+ * As colunas têm larguras fixas em px, então em telas largas o piso evita que
+ * a grade seja espremida até tudo virar reticências. No celular o piso é
+ * desligado e cada linha vira um cartão empilhado (ver `TabelaRow`): rolar uma
+ * tabela de 720px na horizontal com o polegar não é tabela, é castigo.
  */
 const MIN_TABLE_WIDTH = 720;
 
@@ -52,7 +55,9 @@ export const TabelaCard = ({ title, icon, count, countLabel, onAdd, addLabel = "
     </header>
 
     <div className="min-h-0 flex-1 overflow-auto">
-      <div style={{ minWidth }}>{children}</div>
+      <div className="min-w-0 sm:[min-width:var(--tabela-min)]" style={{ "--tabela-min": `${minWidth}px` } as CSSProperties}>
+        {children}
+      </div>
     </div>
 
     {footer && <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-fg/[0.06] px-4 py-2.5 text-[12px] text-faint">{footer}</div>}
@@ -61,10 +66,13 @@ export const TabelaCard = ({ title, icon, count, countLabel, onAdd, addLabel = "
 
 const alignCls = { left: "text-left", right: "text-right", center: "text-center" } as const;
 
-/** Cabeçalho de colunas alinhado a um grid CSS. */
+/**
+ * Cabeçalho de colunas alinhado a um grid CSS.
+ * Some no celular: lá as linhas viram cartões e cada valor leva o próprio rótulo.
+ */
 export function TabelaHead<T>({ colunas, cols }: { colunas: Coluna<T>[]; cols: string }) {
   return (
-    <div className={`sticky top-0 z-10 grid ${cols} gap-2 border-b border-fg/[0.07] bg-surface/80 px-4 py-2 text-[10.5px] uppercase tracking-wider text-faint backdrop-blur`}>
+    <div className={`sticky top-0 z-10 hidden ${cols} gap-2 border-b border-fg/[0.07] bg-surface/80 px-4 py-2 text-[10.5px] uppercase tracking-wider text-faint backdrop-blur sm:grid`}>
       {colunas.map((c) => (
         <span key={c.id} className={alignCls[c.align ?? "left"]}>
           {c.header}
@@ -74,19 +82,45 @@ export function TabelaHead<T>({ colunas, cols }: { colunas: Coluna<T>[]; cols: s
   );
 }
 
-/** Linha clicável. Usa `before:` para a barra de destaque no hover. */
+/**
+ * Linha clicável. Usa `before:` para a barra de destaque no hover.
+ *
+ * Dois layouts a partir das MESMAS colunas — nenhuma tela precisa declarar
+ * versão mobile: de `sm` para cima é a grade; abaixo disso vira um cartão com
+ * a primeira coluna como título e as demais como pares rótulo/valor.
+ */
 export function TabelaRow<T>({ colunas, cols, row, onClick }: { colunas: Coluna<T>[]; cols: string; row: T; onClick?: () => void }) {
   const Tag = onClick ? "button" : "div";
+  // Coluna sem cabeçalho é vão de layout (empurra a grade para a esquerda) e
+  // não tem o que mostrar no cartão do celular.
+  const [principal, ...demais] = colunas;
+  const visiveis = demais.filter((c) => Boolean(c.header));
+
   return (
     <Tag
       {...(onClick ? { type: "button" as const, onClick } : {})}
-      className={`group relative grid w-full ${cols} items-center gap-2 border-b border-fg/[0.04] px-4 py-2.5 text-left text-[12.5px] text-ink transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[2px] before:bg-accent before:opacity-0 before:transition-opacity ${onClick ? "cursor-pointer hover:bg-fg/[0.035] hover:before:opacity-100" : ""}`}
+      className={`group relative block w-full border-b border-fg/[0.04] text-left text-[12.5px] text-ink transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[2px] before:bg-accent before:opacity-0 before:transition-opacity ${onClick ? "cursor-pointer hover:bg-fg/[0.035] hover:before:opacity-100" : ""}`}
     >
-      {colunas.map((c) => (
-        <span key={c.id} className={`min-w-0 truncate ${alignCls[c.align ?? "left"]}`}>
-          {c.cell(row)}
-        </span>
-      ))}
+      {/* Grade — telas médias para cima */}
+      <span className={`hidden ${cols} items-center gap-2 px-4 py-2.5 sm:grid`}>
+        {colunas.map((c) => (
+          <span key={c.id} className={`min-w-0 truncate ${alignCls[c.align ?? "left"]}`}>
+            {c.cell(row)}
+          </span>
+        ))}
+      </span>
+
+      {/* Cartão — celular */}
+      <span className="flex flex-col gap-1.5 px-4 py-3 sm:hidden">
+        {principal && <span className="min-w-0 truncate text-[13px] text-ink">{principal.cell(row)}</span>}
+
+        {visiveis.map((c) => (
+          <span key={c.id} className="flex items-baseline justify-between gap-3">
+            <span className="shrink-0 text-[10.5px] uppercase tracking-wider text-faint">{c.header}</span>
+            <span className="min-w-0 truncate text-right text-[12.5px]">{c.cell(row)}</span>
+          </span>
+        ))}
+      </span>
     </Tag>
   );
 }

@@ -30,7 +30,13 @@ const FILTROS: { value: Filtro; label: string }[] = [
   { value: "esgotado", label: "Esgotado" },
 ];
 
-const COLS = "grid-cols-[1fr_120px_120px_90px_130px]";
+/**
+ * A última coluna é um vão flexível: sem ela o "1fr" do produto engolia toda a
+ * largura e grudava preços e estoque na borda direita do monitor, com um
+ * buraco no meio da linha. Assim as colunas ficam agrupadas à esquerda e a
+ * sobra de tela fica do lado de fora dos dados.
+ */
+const COLS = "grid-cols-[minmax(200px,420px)_120px_120px_90px_130px_minmax(0,1fr)]";
 /** Soma das colunas fixas + folga para a coluna flexível: abaixo disso a tabela rola. */
 const TABLE_MIN_WIDTH = 660;
 
@@ -70,6 +76,7 @@ const SkeletonRows = ({ count }: { count: number }) => (
     <div className="ml-auto h-3 w-16 rounded bg-fg/[0.05]" />
     <div className="ml-auto h-3 w-10 rounded bg-fg/[0.05]" />
     <div className="h-5 w-20 rounded-full bg-fg/[0.05]" />
+    <div />
   </SkeletonTableRows>
 );
 
@@ -278,6 +285,7 @@ const Estoque = () => {
                   <p className="text-right">Venda</p>
                   <p className="text-right">Qtd.</p>
                   <p className="text-right">Estoque</p>
+                  <p aria-hidden />
                 </div>
 
                 {/* Corpo: sem scroll — o que não cabe vai pra próxima página */}
@@ -329,6 +337,7 @@ const Estoque = () => {
                           <span className="flex justify-end">
                             <StockBadge quantidade={product.quantidade} />
                           </span>
+                          <span aria-hidden />
                         </button>
                       ))}
 

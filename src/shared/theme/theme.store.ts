@@ -2,8 +2,10 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import type { FxLevel } from "./detectPerformance";
+import type { ThemeId } from "./theme.catalog";
 
-export type ThemeMode = "escuro" | "claro" | "sistema";
+/** O tema é a paleta inteira; o catálogo em `theme.catalog.ts` é quem manda. */
+export type ThemeMode = ThemeId;
 export type AccentId = "roxo" | "azul" | "verde" | "rosa" | "laranja" | "cinza" | "preto" | "teal" | "vinho" | "dourado";
 export type FontScale = "sm" | "md" | "lg";
 export type MotionPref = "auto" | "reduce";
@@ -37,7 +39,7 @@ const useThemeStore = create<ThemeState>()(
       setMotion: (motion) => set({ motion }),
       setFx: (fx) => set({ fx }),
     }),
-    { name: "codex-flow-theme", version: 2 },
+    { name: "codex-flow-theme", version: 3 },
   ),
 );
 

@@ -38,17 +38,10 @@ type EnterpriseLike = {
 
 type TabId = "identificacao" | "contato" | "endereco";
 
-const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
-  { id: "identificacao", label: "Identificação", icon: <Building2 size={15} /> },
-  { id: "contato", label: "Contato", icon: <MessageCircle size={15} /> },
-  { id: "endereco", label: "Endereço", icon: <MapPin size={15} /> },
-];
-
 const EmpresaPage = () => {
   const { enterprise, updateEnterprise } = useEnterprise();
   const ent = (enterprise ?? {}) as EnterpriseLike;
   const alert = useAlert();
-  const [tab, setTab] = useState<TabId>("identificacao");
 
   /* ─── Save states individuais ─── */
   const [saving, setSaving] = useState<TabId | null>(null);
@@ -194,45 +187,40 @@ const EmpresaPage = () => {
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 overflow-y-auto xl:grid-cols-4">
-        {/* Coluna principal — 3/4 */}
-        <div className="flex min-w-0 flex-col gap-5 xl:col-span-3">
-          {/* Abas de navegação */}
-          <div className="flex items-center gap-1 rounded-lg border border-fg/[0.07] bg-fg/[0.03] p-1 w-fit">
-            {TABS.map((t) => (
-              <button key={t.id} onClick={() => setTab(t.id)} className={`focus-ring flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-[12px] transition-all ${tab === t.id ? "bg-accent text-white shadow-glow" : "text-mist hover:bg-fg/[0.06] hover:text-ink"}`}>
-                {t.icon}
-                {t.label}
-              </button>
-            ))}
-          </div>
+    /*
+     * Grade única, alinhada à esquerda. Antes era uma aba por vez dentro de um
+     * `overflow-y-auto` próprio — que rolava dentro da rolagem de Configurações.
+     * Agora os três blocos ficam visíveis juntos e cada um salva o seu.
+     * `items-start` impede que um card curto seja esticado até a altura do vizinho.
+     */
+    <div className="grid grid-cols-1 items-start gap-4 pb-2 xl:grid-cols-3">
+      <SettingsCard
+        icon={<Building2 className="h-4 w-4" />}
+        title="Identificação"
+        desc="Dados principais da empresa"
+        footer={<SaveBtn tabId="identificacao" onClick={() => doSave("identificacao", salvarIdentificacao)} />}
+        className="xl:col-span-2"
+      >
+        <EmpresaIdentificacao register={register} errors={errors} />
+      </SettingsCard>
 
-          {/* Card ativo conforme a aba selecionada */}
-          {tab === "identificacao" && (
-            <SettingsCard icon={<Building2 className="h-4 w-4" />} title="Identificação" desc="Dados principais da empresa" footer={<SaveBtn tabId="identificacao" onClick={() => doSave("identificacao", salvarIdentificacao)} />}>
-              <EmpresaIdentificacao register={register} errors={errors} />
-            </SettingsCard>
-          )}
+      <aside className="min-w-0 xl:sticky xl:top-0">
+        <CorporateBadge />
+      </aside>
 
-          {tab === "contato" && (
-            <SettingsCard icon={<MessageCircle className="h-4 w-4" />} title="Contato" desc="Telefones e e-mail da empresa" footer={<SaveBtn tabId="contato" onClick={() => doSave("contato", salvarContato)} />}>
-              <EmpresaContato register={register} errors={errors} />
-            </SettingsCard>
-          )}
+      <SettingsCard icon={<MessageCircle className="h-4 w-4" />} title="Contato" desc="Telefones e e-mail da empresa" footer={<SaveBtn tabId="contato" onClick={() => doSave("contato", salvarContato)} />}>
+        <EmpresaContato register={register} errors={errors} />
+      </SettingsCard>
 
-          {tab === "endereco" && (
-            <SettingsCard icon={<MapPin className="h-4 w-4" />} title="Endereço" desc="CEP e localização da empresa" footer={<SaveBtn tabId="endereco" onClick={() => doSave("endereco", salvarEndereco)} />}>
-              <EmpresaEndereco register={register} control={control} errors={errors} onBuscarCep={buscarCep} />
-            </SettingsCard>
-          )}
-        </div>
-
-        {/* Badge lateral — 1/4 */}
-        <aside className="min-w-0 xl:col-span-1 xl:sticky xl:top-0 xl:self-start">
-          <CorporateBadge />
-        </aside>
-      </div>
+      <SettingsCard
+        icon={<MapPin className="h-4 w-4" />}
+        title="Endereço"
+        desc="CEP e localização da empresa"
+        footer={<SaveBtn tabId="endereco" onClick={() => doSave("endereco", salvarEndereco)} />}
+        className="xl:col-span-2"
+      >
+        <EmpresaEndereco register={register} control={control} errors={errors} onBuscarCep={buscarCep} />
+      </SettingsCard>
     </div>
   );
 };

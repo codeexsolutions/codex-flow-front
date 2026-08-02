@@ -6,6 +6,8 @@ export type TokenPayload = {
   email: string;
   cargo: string;
   permissao: string;
+  /** Dono da conta. Tokens antigos não têm o campo — daí o opcional. */
+  root?: boolean;
   codigoEmpresa: string;
   ativo: boolean;
   iat: number;

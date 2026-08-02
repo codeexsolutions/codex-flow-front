@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 import useThemeStore, { type ThemeMode, type MotionPref, type FxPref } from "@/shared/theme/theme.store";
 import { detectFxLevel, type FxLevel } from "@/shared/theme/detectPerformance";
+import { temaPorId } from "@/shared/theme/theme.catalog";
 
 const applyMode = (mode: ThemeMode) => {
   const root = document.documentElement;
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const isDark = mode === "escuro" || (mode === "sistema" && prefersDark);
+
+  // "sistema" não é paleta: resolve para escuro/claro conforme o aparelho.
+  const tema = mode === "sistema" ? (prefersDark ? "escuro" : "claro") : mode;
+  const isDark = temaPorId(tema).dark;
+
+  root.dataset.theme = tema;
   root.classList.toggle("dark", isDark);
   // Faz os controles nativos (scrollbar, inputs) acompanharem o tema.
   root.style.colorScheme = isDark ? "dark" : "light";

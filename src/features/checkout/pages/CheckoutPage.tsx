@@ -85,7 +85,13 @@ function Aviso({ icon, titulo, texto, acao }: { icon: React.ReactNode; titulo: s
 /* ================================================================== */
 /* Página */
 /* ================================================================== */
-const CheckoutPage = () => {
+/**
+ * `embutido` = a tela está dentro de Configurações → Faturas, que já tem
+ * cabeçalho, padding e área de rolagem próprios. Sem isso a página repetia o
+ * cabeçalho, dobrava o padding e ainda centralizava o conteúdo num container
+ * que já estava centralizado — era a "formatação fora do lugar".
+ */
+const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
   const navigate = useNavigate();
   const alert = useAlert();
   const { logout } = useAuth();
@@ -140,7 +146,9 @@ const CheckoutPage = () => {
   const pix = assinatura?.pix;
   const suporte = assinatura?.suporte;
 
-  const podeTrocarPlano = assinatura ? assinatura.status !== "ATIVA" : false;
+  // Trocar de plano vale sempre: com a assinatura ativa, o backend cobra só a
+  // diferença numa fatura intermediária em vez do valor cheio.
+  const podeTrocarPlano = Boolean(assinatura?.plano);
 
   /* ------------------------- Ações ------------------------- */
 
@@ -221,9 +229,19 @@ const CheckoutPage = () => {
     }
 
     try {
-      setAssinatura(await AssinaturaService.trocarPlano(codigo));
+      const atualizada = await AssinaturaService.trocarPlano(codigo);
+      const anterior = plano?.precoCentavos ?? 0;
+      const novo = atualizada.plano?.precoCentavos ?? 0;
+
+      setAssinatura(atualizada);
       setTrocandoPlano(false);
-      alert.success("Plano atualizado!", "Sua fatura em aberto já está com o novo valor.");
+
+      alert.success(
+        "Plano atualizado!",
+        novo > anterior && assinatura?.status === "ATIVA"
+          ? `Geramos uma fatura de ${formatCurrencyFromCents(novo - anterior)} com a diferença.`
+          : "Sua fatura em aberto já está com o novo valor.",
+      );
     } catch (e) {
       const err = e as { response?: { data?: { message?: string } }; message?: string };
       alert.error("Não foi possível trocar o plano", err?.response?.data?.message ?? err?.message ?? "Tente novamente.");
@@ -275,8 +293,8 @@ const CheckoutPage = () => {
 
   return (
     <div className="relative w-full text-ink">
-      {/* Cabeçalho */}
-      <header className="sticky top-0 z-20 border-b border-fg/[0.06] bg-canvas/80 backdrop-blur-xl">
+      {/* Cabeçalho — só quando a tela é a página inteira */}
+      <header className={`sticky top-0 z-20 border-b border-fg/[0.06] bg-canvas/80 backdrop-blur-xl ${embutido ? "hidden" : ""}`}>
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-3.5 lg:px-8">
           {contaLiberada && (
             <button onClick={() => navigate(-1)} className="focus-ring flex h-9 w-9 items-center justify-center rounded-xl border border-fg/[0.07] text-mist transition-colors hover:bg-fg/[0.04]" aria-label="Voltar">
@@ -303,7 +321,9 @@ const CheckoutPage = () => {
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-5xl flex-col gap-6 px-5 py-8 lg:px-8">
+      {/* Embutido: alinhado à esquerda, sem padding próprio — quem cuida disso
+          é a página de Configurações. Sozinho: centralizado na viewport. */}
+      <div className={embutido ? "flex w-full flex-col gap-5" : "mx-auto flex max-w-5xl flex-col gap-6 px-5 py-8 lg:px-8"}>
         {/* ---------- Aviso contextual (só um, quando faz sentido) ---------- */}
         {emConfirmacao.length > 0 ? (
           <Aviso
@@ -549,7 +569,17 @@ const CheckoutPage = () => {
       </Modal>
 
       {/* ==================== MODAL TROCA DE PLANO ==================== */}
-      <Modal open={trocandoPlano} onClose={() => setTrocandoPlano(false)} title="Trocar de plano" subtitle="A fatura em aberto passa a valer o novo preço." size="sm">
+      <Modal
+        open={trocandoPlano}
+        onClose={() => setTrocandoPlano(false)}
+        title="Trocar de plano"
+        subtitle={
+          assinatura?.status === "ATIVA"
+            ? "No upgrade geramos uma fatura só com a diferença. No downgrade não há cobrança: o preço menor vale no próximo ciclo."
+            : "A fatura em aberto passa a valer o preço do novo plano."
+        }
+        size="sm"
+      >
         {planos.length === 0 ? (
           <div className="flex items-center justify-center gap-2 py-8 text-sm text-mist">
             <Loader2 className="h-4 w-4 animate-spin text-accent" /> Carregando planos...

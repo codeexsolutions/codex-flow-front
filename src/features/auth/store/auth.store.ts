@@ -39,6 +39,7 @@ const getUserFromToken = (token: string) => {
     email: payload.email,
     cargo: payload.cargo,
     permissao: payload.permissao,
+    root: Boolean(payload.root),
     ativo: payload.ativo,
     codigoEmpresa: payload.codigoEmpresa,
   };

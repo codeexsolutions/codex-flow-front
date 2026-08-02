@@ -12,8 +12,8 @@ const labelBase = "block text-[10px] uppercase tracking-[0.7px] text-faint mb-1"
 
 /* ---------------------------------- Card ---------------------------------- */
 
-export const SettingsCard = memo(({ icon, title, desc, children, footer }: { icon: ReactNode; title: string; desc?: string; children: ReactNode; footer?: ReactNode }) => (
-  <section className="flex flex-col overflow-hidden rounded-2xl border border-fg/[0.07] bg-surface">
+export const SettingsCard = memo(({ icon, title, desc, children, footer, className = "" }: { icon: ReactNode; title: string; desc?: string; children: ReactNode; footer?: ReactNode; className?: string }) => (
+  <section className={`flex flex-col overflow-hidden rounded-2xl border border-fg/[0.07] bg-surface ${className}`}>
     <header className="flex items-center gap-2.5 border-b border-fg/[0.06] px-5 py-3.5">
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/[0.15]">
         <span className="text-accent-soft">{icon}</span>
