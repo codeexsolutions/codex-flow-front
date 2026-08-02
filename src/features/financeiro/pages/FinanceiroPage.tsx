@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Wallet, TrendingUp, TrendingDown, CalendarClock, CheckCircle2, Trash2, AlertTriangle, RotateCw, Receipt, ArrowLeftRight } from "lucide-react";
 
-import HeaderPage from "@/shared/ui/HeaderPage";
-import { PageBody } from "@/shared/ui/PageShell";
+import { PageScreen } from "@/shared/ui/PageShell";
 import { TabelaCard, TabelaHead, TabelaRow, TabelaVazia, type Coluna } from "@/shared/ui/DataTable";
 import { Modal } from "@/shared/ui/Modal";
 import { Form, FormSection, FormGrid, FormActions, TextField, SelectBox } from "@/shared/ui/form/FormKit";
@@ -219,10 +218,7 @@ export default function FinanceiroPage() {
   );
 
   return (
-    <div className="aurora relative flex h-full w-full flex-col overflow-hidden text-ink">
-      <HeaderPage icon={<Wallet className="h-5 w-5" />} title="Financeiro" subtitle="Notas de clientes e fluxo de caixa da empresa" />
-
-      <PageBody>
+    <PageScreen icon={<Wallet className="h-5 w-5" />} title="Financeiro" subtitle="Notas de clientes e fluxo de caixa da empresa">
         {error && (
           <div className="flex shrink-0 items-center justify-between gap-2.5 rounded-lg border border-danger/40 bg-danger/15 px-4 py-2.5 text-[13px] text-danger">
             <span className="flex items-center gap-2.5">
@@ -329,7 +325,6 @@ export default function FinanceiroPage() {
             <FormActions onCancel={() => setNotaParaPagar(null)} saving={salvando} submitText="Confirmar" />
           </Form>
         </Modal>
-      </PageBody>
-    </div>
+      </PageScreen>
   );
 }

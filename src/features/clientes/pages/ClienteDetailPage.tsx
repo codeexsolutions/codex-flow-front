@@ -3,8 +3,7 @@ import type { ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Pencil, FileText, MessageCircle, Mail, CalendarDays, Loader2, AlertTriangle, PhoneCall, Receipt, Wallet, ShoppingBag, TrendingUp, Users } from "lucide-react";
 
-import HeaderPage from "@/shared/ui/HeaderPage";
-import { PageBody, PageToolbar } from "@/shared/ui/PageShell";
+import { PageScreen, PageToolbar } from "@/shared/ui/PageShell";
 import { Modal } from "@/shared/ui/Modal";
 import Invoice from "@/features/vendas/components/Invoice";
 
@@ -253,10 +252,7 @@ const ClienteDetalhe = () => {
   /* ------------------------------- Render ------------------------------- */
 
   return (
-    <div className="aurora relative flex h-full w-full flex-col overflow-hidden text-ink">
-      <HeaderPage title={client?.nome ?? "Cliente"} subtitle={client?.cpfCnpj ? formatDocument(client.cpfCnpj) : "—"} icon={headerIcon} />
-
-      <PageBody>
+    <PageScreen title={client?.nome ?? "Cliente"} subtitle={client?.cpfCnpj ? formatDocument(client.cpfCnpj) : "—"} icon={headerIcon}>
         <PageToolbar>{headerActions}</PageToolbar>
         {loading ? (
           <div className="flex h-full items-center justify-center">
@@ -444,7 +440,7 @@ const ClienteDetalhe = () => {
             </aside>
           </div>
         )}
-      </PageBody>
+      
 
       {/* Modal de edição */}
       {client && <ClienteEditForm open={showEdit} client={client} saving={saving} onClose={() => setShowEdit(false)} onSubmit={handleUpdate} />}
@@ -453,7 +449,7 @@ const ClienteDetalhe = () => {
       <Modal open={!!pedidoAberto} onClose={fecharPedido} title="Pedido" subtitle={pedidoAberto?.nome} size="full">
         {pedidoAberto && <Invoice id={pedidoAberto.id} clienteId={pedidoAberto.clienteId} nome={pedidoAberto.nome} />}
       </Modal>
-    </div>
+    </PageScreen>
   );
 };
 

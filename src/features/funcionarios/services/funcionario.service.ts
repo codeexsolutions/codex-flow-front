@@ -10,7 +10,7 @@ export type Funcionario = {
   cargo: string;
   permissao: PermissaoFuncionario;
   status: StatusFuncionario;
-  /** Dono da conta: não pode ser rebaixado nem desativado. */
+  /** Usuário master: não pode ser rebaixado nem desativado. */
   root: boolean;
 };
 

@@ -5,6 +5,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import useAuth from "@/features/auth/store/auth.store";
 import useEnterprise from "@/features/empresa/store/enterprise.store";
+import { ehGestor } from "@/features/vendas/components/TabsVendas";
+import SinoNotificacoes from "@/features/notificacoes/components/SinoNotificacoes";
 import { getInitials } from "@/shared/utils/format";
 
 const Sidebar = () => {
@@ -18,6 +20,9 @@ const Sidebar = () => {
   const userInitials = getInitials(user?.nome, "U");
   const companyInitial = (enterprise?.nomeFantasia || "E").trim().charAt(0).toUpperCase();
   const companyImage = enterprise?.urlLogo || enterprise?.urlImagem || "";
+
+  /** Dono ou administrador promovido: vê o sistema inteiro. */
+  const gestor = ehGestor(user);
 
   const isActive = (route: string) => (route === "" ? pathname === "/" : pathname === `/${route}` || pathname.startsWith(`/${route}/`));
 
@@ -119,20 +124,26 @@ const Sidebar = () => {
         </div>
 
         <nav className="relative flex-1 overflow-y-auto px-3 py-3">
+          {/* Vendedor enxerga só o que ele pode abrir. Mostrar item que leva a
+              403 é pior do que não mostrar. */}
           {cat("Operação")}
-          {item("", <LayoutDashboard size={17} />, "Dashboard")}
+          {gestor && item("", <LayoutDashboard size={17} />, "Dashboard")}
           {item("pdv", <ShoppingCart size={17} />, "PDV")}
+          {!gestor && item("vendas", <DollarSign size={17} />, "Minhas vendas")}
 
-          {cat("Gerenciamento")}
-          {item("estoque", <Package size={17} />, "Estoque")}
-          {item("clientes", <Users size={17} />, "Clientes")}
-          {item("correios", <Truck size={17} />, "Correios", true) }
-          {item("correios", <Truck size={17} />, "Funcionarios", true) }
+          {gestor && (
+            <>
+              {cat("Gerenciamento")}
+              {item("estoque", <Package size={17} />, "Estoque")}
+              {item("clientes", <Users size={17} />, "Clientes")}
+              {item("correios", <Truck size={17} />, "Correios", true)}
 
-          {cat("Financeiro")}
-          {item("vendas", <DollarSign size={17} />, "Vendas")}
-          {item("financeiro", <Wallet size={17} />, "Financeiro")}
-          {item("relatorios", <BarChart3 size={17} />, "Relatórios")}
+              {cat("Financeiro")}
+              {item("vendas", <DollarSign size={17} />, "Vendas")}
+              {item("financeiro", <Wallet size={17} />, "Financeiro")}
+              {item("relatorios", <BarChart3 size={17} />, "Relatórios")}
+            </>
+          )}
         </nav>
 
         {/* Usuário */}
@@ -148,6 +159,9 @@ const Sidebar = () => {
               <p className="truncate text-[13px] text-ink">{user?.nome || "Usuário"}</p>
               <p className="truncate text-[11px] text-faint">{user?.cargo || "Conectado"}</p>
             </div>
+
+            {/* Mural da equipe — só gestor recebe (a API responde 403 ao vendedor). */}
+            {gestor && <SinoNotificacoes />}
 
             <button
               type="button"

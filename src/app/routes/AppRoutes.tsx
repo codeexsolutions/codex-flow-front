@@ -23,6 +23,7 @@ import SalesPage from "@/features/vendas/pages/SalesPage";
 import SalesOverviewPage from "@/features/vendas/pages/SalesOverviewPage";
 import SalesList from "@/features/vendas/pages/SalesListPage";
 import FuncionariosPage from "@/features/funcionarios/pages/FuncionariosPage";
+import { ehGestor } from "@/features/vendas/components/TabsVendas";
 
 import CheckoutPage from "@/features/checkout/pages/CheckoutPage";
 import PlanosPage from "@/features/assinatura/pages/PlanosPage";
@@ -70,6 +71,14 @@ function AppRoutesContent({ isLogged }: { isLogged: boolean }) {
 
   if (isLogged && user?.ativo && (path === "/checkout" || path === "/login")) {
     return <Navigate to="/" replace />;
+  }
+
+  // Vendedor só tem PDV e as próprias vendas. Esconder do menu não basta:
+  // digitar a rota na mão não pode abrir a tela.
+  if (isLogged && user?.ativo && !ehGestor(user)) {
+    const liberado = path === "/pdv" || path === "/vendas" || path.startsWith("/vendas/lista") || path.startsWith("/configuracoes/perfil") || path === "/configuracoes/aparencia";
+
+    if (!liberado) return <Navigate to="/pdv" replace />;
   }
 
   return (

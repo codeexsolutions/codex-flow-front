@@ -13,6 +13,7 @@ import { formatDocument } from "@/shared/utils/format";
 import { MONTHS } from "@/shared/utils/date";
 
 import useAuth from "@/features/auth/store/auth.store";
+import { useLiberacaoEmpresa } from "@/shared/realtime/useLiberacaoEmpresa";
 import AssinaturaService from "@/features/assinatura/services/assinatura.service";
 import {
   CICLO_LABEL, FaturaMeta, ehPagavel, type Fatura, type MinhaAssinatura, type Plano, type StatusFatura,
@@ -254,6 +255,22 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
   };
 
   /**
+   * Pagamento confirmado pelo dono: o socket avisa, a sessão já foi renovada
+   * com o token novo e aqui só resta comemorar e levar o cliente para dentro.
+   */
+  const aoLiberar = useCallback(async () => {
+    await alert.success(
+      "Empresa verificada! 🎉",
+      "Confirmamos seu pagamento e liberamos o acesso completo ao Codex Flow. Bom trabalho!",
+      { confirmText: "Entrar no sistema" },
+    );
+
+    navigate("/", { replace: true });
+  }, [alert, navigate]);
+
+  useLiberacaoEmpresa(aoLiberar);
+
+  /**
    * QR em preto no branco: é o que os apps de banco leem com folga. Colorir o
    * código para combinar com o tema derruba o contraste que a leitura exige.
    */
@@ -307,11 +324,7 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
             <p className="truncate text-[11px] text-faint">{empresa?.nomeFantasia}</p>
           </div>
 
-          <button onClick={recarregar} className="focus-ring flex h-9 items-center gap-1.5 rounded-xl border border-fg/[0.07] px-3 text-xs text-mist transition hover:bg-fg/[0.04]">
-            <RefreshCw size={13} />
-            <span className="hidden sm:inline">Atualizar</span>
-          </button>
-
+          {/* Sem botão de atualizar: a liberação chega pelo socket. */}
           {!contaLiberada && (
             <button onClick={logout} className="focus-ring flex h-9 items-center gap-1.5 rounded-xl border border-fg/[0.07] px-3 text-xs text-mist transition hover:bg-fg/[0.04]">
               <LogOut size={13} />

@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import HeaderPage, { type HeaderTab } from "@/shared/ui/HeaderPage";
+
 /**
  * Espaçamentos padrão das telas.
  *
@@ -20,6 +22,58 @@ export const PAGE_GAP = "gap-3";
  * idêntico ao de antes; em telas baixas o que sobra fica acessível.
  */
 export const PageBody = ({ children, className = "" }: { children: ReactNode; className?: string }) => <main className={`relative flex min-h-0 flex-1 flex-col overflow-y-auto ${PAGE_GAP} ${PAGE_PAD} ${className}`}>{children}</main>;
+
+/**
+ * Casca canônica de uma tela do sistema: fundo, brilho, cabeçalho e corpo.
+ *
+ * Toda tela era montada à mão com essa mesma estrutura — dez cópias, três
+ * espaçamentos diferentes e, em duas delas, um roxo cravado em hexadecimal que
+ * não acompanhava a troca de tema. Agora existe um lugar só: mudou aqui, mudou
+ * em todas.
+ *
+ * Use `<PageScreen>` sempre que a tela for um destino de rota. Conteúdo de aba
+ * (o que entra num `<Outlet>`) NÃO leva casca — quem tem é a tela pai.
+ */
+export const PageScreen = ({
+  title,
+  subtitle,
+  icon,
+  tabs,
+  children,
+  bodyClassName = "",
+  headerClassName,
+}: {
+  title: string;
+  subtitle?: string;
+  icon?: ReactNode;
+  tabs?: HeaderTab[];
+  children: ReactNode;
+  bodyClassName?: string;
+  /** Envolve o cabeçalho — usado por Relatórios para escondê-lo na impressão. */
+  headerClassName?: string;
+}) => (
+  <div className="aurora relative flex h-full w-full flex-col overflow-hidden text-ink">
+    {/* Brilho do topo — segue o accent do tema, e some no modo leve. */}
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-x-0 top-0 h-72"
+      style={{
+        opacity: "var(--fx-aurora, 1)",
+        background: "radial-gradient(60% 100% at 50% 0%, rgb(var(--accent) / 0.16), transparent 70%)",
+      }}
+    />
+
+    {headerClassName ? (
+      <div className={headerClassName}>
+        <HeaderPage title={title} subtitle={subtitle} icon={icon} tabs={tabs} />
+      </div>
+    ) : (
+      <HeaderPage title={title} subtitle={subtitle} icon={icon} tabs={tabs} />
+    )}
+
+    <PageBody className={bodyClassName}>{children}</PageBody>
+  </div>
+);
 
 /**
  * Barra de ações da tela. É aqui que ficam"Novo cliente","Exportar" etc. —

@@ -5,8 +5,7 @@ import ProductService from "@/features/estoque/services/product.service";
 import { ProdutoForm } from "@/features/estoque/components/ProdutoForm";
 import { ProductFormData } from "@/features/estoque/schema/product.schema";
 import { Modal } from "@/shared/ui/Modal";
-import HeaderPage from "@/shared/ui/HeaderPage";
-import { PageBody } from "@/shared/ui/PageShell";
+import { PageScreen } from "@/shared/ui/PageShell";
 import { useAlert } from "@/shared/ui/Alert";
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import { formatNumber, toPercent } from "@/shared/utils/format";
@@ -217,11 +216,7 @@ const Estoque = () => {
   const hasFilters = Boolean(search) || filtro !== "todos";
 
   return (
-    <div className="aurora relative flex h-full w-full flex-col overflow-hidden text-ink">
-      <HeaderPage icon={<Tags className="h-5 w-5" />} title="Estoque" subtitle={`${formatNumber(stats.total)} ${stats.total === 1 ? "produto cadastrado" : "produtos cadastrados"}`} />
-
-      {/* Conteúdo — ocupa o resto exato da viewport */}
-      <PageBody>
+    <PageScreen icon={<Tags className="h-5 w-5" />} title="Estoque" subtitle={`${formatNumber(stats.total)} ${stats.total === 1 ? "produto cadastrado" : "produtos cadastrados"}`}>
         {error && (
           <div className="flex shrink-0 items-center justify-between gap-2.5 rounded-xl border border-danger/40 bg-danger/15 px-4 py-3 text-[13px] text-danger">
             <span className="flex items-center gap-2.5">
@@ -470,7 +465,7 @@ const Estoque = () => {
             </div>
           </aside>
         </section>
-      </PageBody>
+      
 
       {/* Modais */}
       <Modal open={modal === "registrar"} onClose={fechar} title="Novo produto" subtitle="Preencha os dados do produto a cadastrar">
@@ -493,7 +488,7 @@ const Estoque = () => {
           onSubmit={handleUpdateProduct}
         />
       </Modal>
-    </div>
+    </PageScreen>
   );
 };
 

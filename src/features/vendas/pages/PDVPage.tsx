@@ -6,8 +6,7 @@ import { useNavigate } from "react-router-dom";
 
 import Invoice from "@/features/vendas/components/Invoice";
 import { Modal } from "@/shared/ui/Modal";
-import HeaderPage from "@/shared/ui/HeaderPage";
-import { PageBody, PageToolbar, PrimaryAction, GhostAction } from "@/shared/ui/PageShell";
+import { PageScreen, PageToolbar, PrimaryAction, GhostAction } from "@/shared/ui/PageShell";
 
 import useVendaStore from "@/features/vendas/store/venda.store";
 import useClienteStore from "@/features/clientes/store/cliente.store";
@@ -151,11 +150,7 @@ const PontoDeVenda = () => {
   };
 
   return (
-    <div className="aurora relative flex h-full w-full flex-col overflow-hidden text-ink">
-      <HeaderPage icon={<ShoppingCart className="h-5 w-5" />} title="Ponto de Venda" subtitle="Inicie vendas e acompanhe o dia" />
-
-      {/* Conteúdo */}
-      <PageBody>
+    <PageScreen icon={<ShoppingCart className="h-5 w-5" />} title="Ponto de Venda" subtitle="Inicie vendas e acompanhe o dia">
         {/* Ações da tela — dentro do outlet, não no cabeçalho */}
         <PageToolbar
           left={
@@ -278,7 +273,7 @@ const PontoDeVenda = () => {
             </p>
           </div>
         </div>
-      </PageBody>
+      
 
       {/* Modal — nova venda */}
       <Modal open={novaVendaOpen} onClose={() => setNovaVendaOpen(false)} title="Iniciar venda" subtitle="Escolha o cliente para abrir a nota" size="md">
@@ -361,7 +356,7 @@ const PontoDeVenda = () => {
           </div>
         </div>
       </Modal>
-    </div>
+    </PageScreen>
   );
 };
 

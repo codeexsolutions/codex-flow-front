@@ -64,7 +64,7 @@ export const SaveRow = ({
       disabled={saving || disabled}
       className={
         variant === "primary"
-          ? "flex cursor-pointer items-center gap-2 rounded-xl bg-gradient-to-br from-accent to-accent px-4 py-2.5 text-[13px] text-white shadow-[0_8px_24px_-8px_rgba(124,110,245,0.7)] transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+          ? "flex cursor-pointer items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-[13px] text-white shadow-[0_8px_24px_-8px_rgb(var(--accent))] transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
           : "flex cursor-pointer items-center gap-2 rounded-xl border border-fg/[0.1] bg-fg/[0.06] px-4 py-2.5 text-[13px] text-accent-soft transition-all hover:bg-fg/[0.12] disabled:cursor-not-allowed disabled:opacity-50"
       }
     >

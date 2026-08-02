@@ -15,8 +15,7 @@ import { ClienteStatusBadge as StatusBadge } from "@/shared/ui/StatusBadge";
 import { SkeletonTableRows, SkeletonIdentityCell } from "@/shared/ui/skeleton";
 import { useAutoPageSize, ROW_HEIGHT } from "@/shared/hooks/useAutoPageSize";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
-import HeaderPage from "@/shared/ui/HeaderPage";
-import { PageBody } from "@/shared/ui/PageShell";
+import { PageScreen } from "@/shared/ui/PageShell";
 
 type Filtro = "todos" | "ativo" | "inativo";
 const FILTROS: { value: Filtro; label: string }[] = [
@@ -138,10 +137,7 @@ const Clientes = () => {
   const hasFilters = Boolean(search) || filtro !== "todos";
 
   return (
-    <div className="aurora relative flex h-full w-full flex-col overflow-hidden text-ink">
-      <HeaderPage title="Clientes" subtitle="Cadastre, organize e acompanhe sua base de clientes" icon={<Users />} />
-
-      <PageBody>
+    <PageScreen title="Clientes" subtitle="Cadastre, organize e acompanhe sua base de clientes" icon={<Users />}>
         {error && (
           <div className="flex shrink-0 items-center justify-between gap-2.5 rounded-xl border border-danger/40 bg-danger/15 px-4 py-3 text-[13px] text-danger">
             <span className="flex items-center gap-2.5">
@@ -325,10 +321,10 @@ const Clientes = () => {
             </div>
           </aside>
         </section>
-      </PageBody>
+      
 
       {showCreate && <ClienteForm saving={saving} onClose={() => setShowCreate(false)} onSubmit={handleCreate} />}
-    </div>
+    </PageScreen>
   );
 };
 

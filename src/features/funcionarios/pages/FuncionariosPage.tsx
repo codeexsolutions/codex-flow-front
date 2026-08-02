@@ -16,7 +16,7 @@ function AcessoBadge({ f }: { f: Funcionario }) {
   if (f.root) {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[11px] text-accent-soft ring-1 ring-accent/25">
-        <Crown size={11} /> Dono
+        <Crown size={11} /> Master
       </span>
     );
   }
@@ -196,7 +196,7 @@ const FuncionariosPage = () => {
           >
             <KeyRound size={13} />
           </button>
-          {/* O dono não se desativa: sobraria empresa sem administrador. */}
+          {/* O usuário master não se desativa: sobraria empresa sem administrador. */}
           {!f.root && (
             <button
               type="button"
@@ -238,7 +238,9 @@ const FuncionariosPage = () => {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
+    /* Conteúdo de aba: sem casca própria — espaçamento e rolagem vêm do
+       `PageScreen` da tela de Vendas, como nas abas vizinhas. */
+    <div className="flex h-full min-h-0 flex-col gap-3">
       {/* Vagas do plano — é a regra que limita o cadastro */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-fg/[0.07] bg-fg/[0.02] px-4 py-3">
         <span className="flex items-center gap-2.5">

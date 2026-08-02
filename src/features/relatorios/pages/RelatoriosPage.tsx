@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FileText, Printer, CalendarRange, FileSpreadsheet } from "lucide-react";
 import * as XLSX from "xlsx";
 
-import HeaderPage from "@/shared/ui/HeaderPage";
-import { PageBody, PageToolbar, PrimaryAction } from "@/shared/ui/PageShell";
+import { PageScreen, PageToolbar, PrimaryAction } from "@/shared/ui/PageShell";
 import { SelectBox } from "@/shared/ui/form/FormKit";
 
 import useVendaStore from "@/features/vendas/store/venda.store";
@@ -220,12 +219,12 @@ const RelatoriosPage = () => {
   const tituloRelatorio = TIPOS.find((t) => t.id === tipo)?.label ?? "Relatório";
 
   return (
-    <div className="aurora relative flex h-full w-full flex-col overflow-hidden text-ink">
-      <div className="no-print contents">
-        <HeaderPage icon={<FileText className="h-5 w-5" />} title="Relatórios" subtitle="Escolha o período, confira a prévia e imprima em A4" />
-      </div>
-
-      <PageBody>
+    <PageScreen
+      icon={<FileText className="h-5 w-5" />}
+      title="Relatórios"
+      subtitle="Escolha o período, confira a prévia e imprima em A4"
+      headerClassName="no-print contents"
+    >
         <PageToolbar
           className="no-print"
           left={
@@ -334,8 +333,7 @@ const RelatoriosPage = () => {
             <FolhaFooter emitidoEm={formatDateTime(new Date())} />
           </FolhaA4>
         </div>
-      </PageBody>
-    </div>
+    </PageScreen>
   );
 };
 

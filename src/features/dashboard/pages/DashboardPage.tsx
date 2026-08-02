@@ -4,8 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { LayoutDashboard, DollarSign, Wallet, AlertCircle, Users, Package, ArrowRight, TrendingUp, ShoppingCart, AlertTriangle } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
-import HeaderPage from "@/shared/ui/HeaderPage";
-import { PageBody } from "@/shared/ui/PageShell";
+import { PageScreen } from "@/shared/ui/PageShell";
 import { useChartColors } from "@/shared/theme/useChartColors";
 
 import useVendaStore from "@/features/vendas/store/venda.store";
@@ -106,10 +105,7 @@ const DashboardPage = () => {
   }, [vendas, produtos]);
 
   return (
-    <div className="aurora relative flex h-full w-full flex-col overflow-hidden text-ink">
-      <HeaderPage icon={<LayoutDashboard className="h-5 w-5" />} title="Dashboard" subtitle="Visão geral do seu negócio" />
-
-      <PageBody>
+    <PageScreen icon={<LayoutDashboard className="h-5 w-5" />} title="Dashboard" subtitle="Visão geral do seu negócio">
         {/* KPIs */}
         <div className="stagger grid shrink-0 grid-cols-2 gap-3 xl:grid-cols-4">
           <Kpi icon={<DollarSign size={16} />} label="Faturado no mês" value={formatCurrency(dados.faturadoMes)} hint={`${dados.vendasNoMes} ${dados.vendasNoMes === 1 ? "venda" : "vendas"}`} tone="accent" />
@@ -191,8 +187,7 @@ const DashboardPage = () => {
             )}
           </Painel>
         </div>
-      </PageBody>
-    </div>
+      </PageScreen>
   );
 };
 

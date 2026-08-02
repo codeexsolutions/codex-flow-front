@@ -21,7 +21,7 @@ const FUNCIONARIOS = {
   icon: <Users size={15} />,
 };
 
-/** Gestor = dono da conta ou quem ele promoveu a administrador. */
+/** Gestor = usuário master ou quem ele promoveu a administrador. */
 export const ehGestor = (user: UserType | null): boolean => Boolean(user?.root) || user?.permissao === "ADMIN";
 
 /**

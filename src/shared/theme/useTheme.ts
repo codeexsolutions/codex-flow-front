@@ -15,6 +15,13 @@ const applyMode = (mode: ThemeMode) => {
   root.classList.toggle("dark", isDark);
   // Faz os controles nativos (scrollbar, inputs) acompanharem o tema.
   root.style.colorScheme = isDark ? "dark" : "light";
+
+  // A barra do navegador (e a status bar do app instalado) segue a paleta:
+  // um valor fixo no HTML deixava a moldura roxa mesmo no tema Sépia.
+  const meta = document.querySelector('meta[name="theme-color"]');
+  const canvas = getComputedStyle(root).getPropertyValue("--canvas").trim();
+
+  if (meta && canvas) meta.setAttribute("content", `rgb(${canvas})`);
 };
 
 const applyMotion = (pref: MotionPref) => {

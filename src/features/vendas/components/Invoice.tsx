@@ -23,6 +23,9 @@ import { CreditCard, Download, PackageSearch, Plus, Receipt, Save, Trash2, Walle
 import { Skeleton, SkeletonInvoiceCard, SkeletonInvoiceHeader, SkeletonInvoiceRow, SkeletonProductList, SkeletonSummary } from "@/shared/ui/skeleton";
 
 import { getPixSettings, savePixSettings, isPixConfigured, generatePixPayload, type PixKeyType } from "@/shared/utils/pix";
+import useAuth from "@/features/auth/store/auth.store";
+import useClientes from "@/features/clientes/store/cliente.store";
+import { maskPhone } from "@/shared/validation/masks";
 
 const gerarUID = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -61,6 +64,24 @@ type PagamentoType = {
 const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
   const alert = useAlert();
   const notaRef = useRef<HTMLDivElement>(null);
+
+  /* ─── Quem vende e para quem ─── */
+  const { user } = useAuth();
+  const clientes = useClientes((s) => s.clientes);
+
+  /** O vendedor da nota é quem está logado emitindo-a. */
+  const vendedor = user?.nome || user?.email || "—";
+
+  /**
+   * O pedido só traz o nome do cliente; o telefone mora no cadastro. Pega do
+   * que já está carregado em memória — sem disparar requisição para a nota.
+   */
+  const telefoneCliente = (() => {
+    const alvo = clientes.find((c) => c.id === clienteId);
+    const contato = alvo?.contato;
+    const numero = contato?.celular || contato?.whatsapp || contato?.telefone || "";
+    return numero ? maskPhone(String(numero)) : "";
+  })();
 
   /* ─── Loading states ─── */
   const [loadingProdutos, setLoadingProdutos] = useState(true);
@@ -558,17 +579,39 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
               )}
             </div>
 
-            {/* Cliente */}
-            <div className="px-5 pt-5">
-              <label className="mb-1.5 text-[11px] uppercase tracking-[0.08em] text-faint">Cliente</label>
-              {loadingPedido ? (
-                <Skeleton className="h-11 rounded-xl" />
-              ) : (
+            {/* Cliente e vendedor */}
+            <div className="grid gap-3 px-5 pt-5 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-[11px] uppercase tracking-[0.08em] text-faint">Cliente</label>
+                {loadingPedido ? (
+                  <Skeleton className="h-11 rounded-xl" />
+                ) : (
+                  <div className="flex h-11 items-center gap-2 rounded-xl border border-fg/[0.06] bg-fg/[0.04] px-3 text-sm text-ink">
+                    <span>👤</span>
+                    <span className="truncate">{pedido?.nomeCliente || nome || "Nome do cliente"}</span>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-[11px] uppercase tracking-[0.08em] text-faint">Telefone</label>
+                {loadingPedido ? (
+                  <Skeleton className="h-11 rounded-xl" />
+                ) : (
+                  <div className="flex h-11 items-center gap-2 rounded-xl border border-fg/[0.06] bg-fg/[0.04] px-3 text-sm text-ink">
+                    <span>📞</span>
+                    <span className="truncate">{telefoneCliente || "Não informado"}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="mb-1.5 block text-[11px] uppercase tracking-[0.08em] text-faint">Vendedor responsável</label>
                 <div className="flex h-11 items-center gap-2 rounded-xl border border-fg/[0.06] bg-fg/[0.04] px-3 text-sm text-ink">
-                  <span>👤</span>
-                  <span className="truncate">{pedido?.nomeCliente || nome || "Nome do cliente"}</span>
+                  <span>🧑‍💼</span>
+                  <span className="truncate">{vendedor}</span>
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Tabela de itens */}
