@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import useAuth from "@/features/auth/store/auth.store";
 
 import AuthForm from "@/features/auth/components/AuthForm";
 import AuthFormInputs from "@/features/auth/schema/auth.schema";
 import { onlyDigits } from "@/shared/utils/format";
+import TransicaoBoasVindas from "@/features/auth/components/TransicaoBoasVindas";
 
 const LANDING_ROUTE = "/page";
 
@@ -15,6 +17,10 @@ const AuthPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [loginError, setLoginError] = useState(false);
 
+  /* A transição só termina quando a animação avisa — daí a promessa guardada. */
+  const [nomeBoasVindas, setNomeBoasVindas] = useState<string | null>(null);
+  const concluirAnimacao = useRef<(() => void) | null>(null);
+
   const onSubmit = async (data: AuthFormInputs) => {
     if (isLoading) return;
 
@@ -22,13 +28,22 @@ const AuthPage = () => {
     setIsLoading(true);
 
     try {
-      await login({
-        email: data.email,
-        senha: data.senha,
-        cpfCnpjEmpresa: onlyDigits(data.cpfCnpjEmpresa),
-      });
+      await login(
+        {
+          email: data.email,
+          senha: data.senha,
+          cpfCnpjEmpresa: onlyDigits(data.cpfCnpjEmpresa),
+        },
+        // Toca a animação e segura o login aqui até ela acabar.
+        (nome) =>
+          new Promise<void>((resolver) => {
+            concluirAnimacao.current = resolver;
+            setNomeBoasVindas(nome);
+          }),
+      );
     } catch {
       setLoginError(true);
+      setNomeBoasVindas(null);
     } finally {
       setIsLoading(false);
     }
@@ -56,8 +71,16 @@ const AuthPage = () => {
           </div>
         </div>
 
-        {/* Card */}
-        <div className="glass-strong glass-sheen elev-3 relative rounded-2xl p-4 sm:p-6">
+        {/* Card — ao entrar, ele é "consumido": encolhe, desfoca e some. */}
+        <motion.div
+          className="glass-strong glass-sheen elev-3 relative rounded-2xl p-4 sm:p-6"
+          animate={
+            nomeBoasVindas
+              ? { opacity: 0, scale: 0.94, filter: "blur(10px)", y: -12 }
+              : { opacity: 1, scale: 1, filter: "blur(0px)", y: 0 }
+          }
+          transition={{ duration: 0.55, ease: [0.4, 0, 0.2, 1] }}
+        >
           <span className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-accent-soft to-transparent opacity-70" />
 
           <h1 className="mb-0.5 text-base text-ink sm:text-lg">Entrar</h1>
@@ -71,7 +94,7 @@ const AuthPage = () => {
               Cadastre sua empresa
             </button>
           </p>
-        </div>
+        </motion.div>
 
         <p className="mt-2 text-center text-[10px] text-muted sm:mt-3">
           © {new Date().getFullYear()} CodeEx Flow ·{" "}
@@ -80,6 +103,18 @@ const AuthPage = () => {
           </button>
         </p>
       </div>
+
+      <AnimatePresence>
+        {nomeBoasVindas !== null && (
+          <TransicaoBoasVindas
+            nome={nomeBoasVindas}
+            aoTerminar={() => {
+              concluirAnimacao.current?.();
+              concluirAnimacao.current = null;
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

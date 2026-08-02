@@ -63,8 +63,10 @@ const Sidebar = () => {
 
   return (
     <>
+      {/* `relative` é obrigatório: o brilho do topo é `absolute` e, sem um
+          ancestral posicionado, ele se prende à viewport e cobre a tela toda. */}
       <aside
-        className="glass-strong hidden w-72 flex-shrink-0 flex-col overflow-hidden border-y-0 border-l-0 border-r md:flex"
+        className="glass-strong relative hidden w-72 flex-shrink-0 flex-col overflow-hidden border-y-0 border-l-0 border-r md:flex"
         style={{ borderColor: "rgb(var(--glass-border) / calc(var(--glass-border-alpha) + 0.03))" }}
       >
         {/* Brilho ambiente no topo */}

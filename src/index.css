@@ -178,6 +178,39 @@
   --aurora-alpha: 0.12;
 }
 
+/* ---------- Ônix — preto absoluto ---------- */
+/*
+ * Preto real (#000) para telas OLED: pixel apagado gasta menos bateria e o
+ * contraste fica perfeito. O truque para não virar "buraco" é o resto da
+ * escala não ser cinza puro — as superfícies têm um toque quase imperceptível
+ * do accent, o que dá profundidade sem sujar o preto.
+ */
+.dark[data-theme="onix"] {
+  --canvas: 0 0 0;
+  --surface: 10 10 11;
+  --surface-raised: 22 22 24;
+
+  --ink: 245 245 247;
+  --mist: 160 160 168;
+  --faint: 112 112 120;
+  --muted: 78 78 86;
+  --fg: 255 255 255;
+
+  /* Vidro quase opaco: sobre preto, vidro translúcido demais some. */
+  --glass-bg: 18 18 20;
+  --glass-alpha: 0.72;
+  --glass-border: 255 255 255;
+  --glass-border-alpha: 0.07;
+
+  /* Sombra não existe sobre preto — o que separa os planos é a borda. */
+  --shadow-1: 0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-2: 0 0 0 1px rgb(255 255 255 / 0.06), 0 8px 28px -12px rgb(0 0 0 / 0.9);
+  --shadow-3: 0 0 0 1px rgb(255 255 255 / 0.08), 0 20px 50px -16px rgb(0 0 0 / 1);
+
+  /* Aurora bem contida: brilho forte sobre preto vira mancha. */
+  --aurora-alpha: 0.1;
+}
+
 /* ---------- Accents ---------- */
 :root[data-accent="roxo"] {
   --accent: 109 92 232;

@@ -1,6 +1,7 @@
+import { useEffect, useState } from "react";
 import { QrCode, Copy } from "lucide-react";
 import { useAlert } from "@/shared/ui/Alert";
-import { getQrCodeUrl } from "@/shared/utils/pix";
+import { getQrCodeDataUrl } from "@/shared/utils/pix";
 
 type PixSectionProps = {
   pixPayload: string;
@@ -8,7 +9,19 @@ type PixSectionProps = {
 
 const PixSection = ({ pixPayload }: PixSectionProps) => {
   const alert = useAlert();
-  const qrCodeUrl = pixPayload ? getQrCodeUrl(pixPayload) : "";
+  // Data URI local: a nota precisa levar o QR embutido para o download
+  // funcionar (ver `getQrCodeDataUrl`).
+  const [qrCodeUrl, setQrCodeUrl] = useState("");
+
+  useEffect(() => {
+    let vivo = true;
+
+    getQrCodeDataUrl(pixPayload).then((url) => vivo && setQrCodeUrl(url));
+
+    return () => {
+      vivo = false;
+    };
+  }, [pixPayload]);
 
   if (!pixPayload) return null;
 

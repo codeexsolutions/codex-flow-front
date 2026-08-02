@@ -7,6 +7,10 @@ import { useNavigate } from "react-router-dom";
 import Invoice from "@/features/vendas/components/Invoice";
 import { Modal } from "@/shared/ui/Modal";
 import { PageScreen, PageToolbar, PrimaryAction, GhostAction } from "@/shared/ui/PageShell";
+import Sheet from "@/shared/ui/Sheet";
+import PDVMobile, { type VendaResumo } from "@/features/vendas/components/PDVMobile";
+import { useIsMobile } from "@/shared/hooks/useIsMobile";
+import useAuth from "@/features/auth/store/auth.store";
 
 import useVendaStore from "@/features/vendas/store/venda.store";
 import useClienteStore from "@/features/clientes/store/cliente.store";
@@ -84,6 +88,8 @@ const SearchBox = ({ value, onChange, placeholder, className = "" }: { value: st
 
 const PontoDeVenda = () => {
   const navigate = useNavigate();
+  const mobile = useIsMobile();
+  const { user } = useAuth();
 
   const vendas = useVendaStore((s) => s.vendas);
   const fetchVendas = useVendaStore((s) => s.fetchVendas);
@@ -148,6 +154,108 @@ const PontoDeVenda = () => {
     setNotaAberta(null);
     carregarVendas();
   };
+
+  /* No celular a tela é outra — ver `PDVMobile`. A lógica acima é a mesma;
+     muda só a apresentação e os modais, que viram folhas. */
+  const resumoMobile: VendaResumo[] = vendasFiltradas.map((v) => {
+    const total = totalDoPedido(v);
+    return {
+      pedidoId: v.pedido.pedidoId,
+      clienteId: v.clienteId,
+      nomeCliente: v.nomeCliente,
+      data: v.pedido.dataPedido,
+      total,
+      pago: Number(v.pedido.valorPago ?? 0),
+      status: statusPagamentoVenda(v, total),
+    };
+  });
+
+  if (mobile) {
+    return (
+      <div className="relative h-full w-full overflow-y-auto text-ink">
+        <PDVMobile
+          nomeUsuario={user?.nome}
+          vendas={resumoMobile}
+          faturamento={faturamento}
+          recebido={recebido}
+          pendente={pendente}
+          somenteHoje={somenteHoje}
+          onPeriodo={setSomenteHoje}
+          busca={busca}
+          onBusca={setBusca}
+          onAbrirNota={(v) => abrirNota({ id: v.pedidoId, clienteId: v.clienteId, nome: v.nomeCliente })}
+          onNovaVenda={() => setNovaVendaOpen(true)}
+          onRelatorio={() => setRelatorioOpen(true)}
+        />
+
+        {/* Escolher cliente — folha, não modal centralizado. */}
+        <Sheet open={novaVendaOpen} onClose={() => setNovaVendaOpen(false)} title="Iniciar venda" subtitle="Escolha o cliente" altura="cheia">
+          <div className="flex flex-col gap-3 pt-1">
+            <div className="flex items-center gap-2.5 rounded-2xl border border-fg/[0.08] bg-fg/[0.03] px-4 focus-within:border-accent/50">
+              <Search className="h-4 w-4 shrink-0 text-muted" />
+              <input value={nomeCliente} onChange={(e) => setNomeCliente(e.target.value)} placeholder="Buscar cliente" className="w-full flex-1 bg-transparent py-3 text-[16px] text-ink outline-none placeholder:text-faint" />
+            </div>
+
+            {listaClientes.length > 0 ? (
+              listaClientes.map((c, i) => (
+                <button
+                  key={c.id ?? i}
+                  type="button"
+                  onClick={() => c.id && abrirNota({ clienteId: String(c.id), nome: c.nome })}
+                  className="focus-ring flex min-h-[60px] items-center gap-3 border-b border-fg/[0.05] text-left active:bg-fg/[0.04]"
+                >
+                  <Avatar name={c.nome} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14.5px] text-ink">{c.nome}</span>
+                    {c.cpfCnpj && <span className="block truncate text-[12px] text-faint">{formatDocument(c.cpfCnpj)}</span>}
+                  </span>
+                  <ChevronRight size={16} className="shrink-0 text-muted" />
+                </button>
+              ))
+            ) : (
+              <div className="flex flex-col items-center gap-3 py-12 text-center">
+                <p className="text-[14px] text-ink">{nomeCliente.trim() ? "Nenhum cliente encontrado" : "Nenhum cliente cadastrado"}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNovaVendaOpen(false);
+                    navigate("/clientes");
+                  }}
+                  className="focus-ring min-h-[44px] rounded-2xl bg-accent px-5 text-[14px] text-white"
+                >
+                  Ir para Clientes
+                </button>
+              </div>
+            )}
+          </div>
+        </Sheet>
+
+        {/* A nota ocupa a tela inteira: é onde a venda acontece. */}
+        <Sheet open={!!notaAberta} onClose={fecharNota} title={notaAberta?.id ? "Venda" : "Nova venda"} subtitle={notaAberta?.nome} altura="cheia">
+          {notaAberta && <Invoice id={notaAberta.id} clienteId={notaAberta.clienteId} nome={notaAberta.nome} onSaved={fecharNota} />}
+        </Sheet>
+
+        <Sheet open={relatorioOpen} onClose={() => setRelatorioOpen(false)} title={somenteHoje ? "Relatório do dia" : "Relatório geral"}>
+          <div className="flex flex-col gap-2 pb-2 pt-1">
+            {[
+              ["Faturamento", formatCurrency(faturamento)],
+              ["Recebido", formatCurrency(recebido)],
+              ["A receber", formatCurrency(pendente)],
+              ["Vendas", String(vendasVisiveis.length)],
+              ["Ticket médio", formatCurrency(ticketMedio)],
+              ["Vendas pagas", String(vendasVisiveis.filter((v) => !estaAberta(v)).length)],
+              ["Vendas abertas", String(vendasVisiveis.filter(estaAberta).length)],
+            ].map(([rotulo, valor]) => (
+              <div key={rotulo} className="flex min-h-[48px] items-center justify-between border-b border-fg/[0.05] text-[14px]">
+                <span className="text-mist">{rotulo}</span>
+                <span className="tabular-nums text-ink">{valor}</span>
+              </div>
+            ))}
+          </div>
+        </Sheet>
+      </div>
+    );
+  }
 
   return (
     <PageScreen icon={<ShoppingCart className="h-5 w-5" />} title="Ponto de Venda" subtitle="Inicie vendas e acompanhe o dia">

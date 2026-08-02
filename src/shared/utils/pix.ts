@@ -1,3 +1,4 @@
+import QRCode from "qrcode";
 export type PixKeyType = "phone" | "email" | "cpf" | "cnpj" | "random";
 
 export type PixPayload = {
@@ -157,8 +158,30 @@ export function generatePixPayload(data: PixPayload): string {
   return payload;
 }
 
-/* ─── Gera URL do QR Code via API ─── */
+/* ─── QR Code gerado localmente ─── */
 
-export function getQrCodeUrl(pixPayload: string, color = "000000", bgcolor = "FFFFFF"): string {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=800x800&color=${color}&bgcolor=${bgcolor}&data=${encodeURIComponent(pixPayload)}`;
+/**
+ * Gera o QR como data URI, no próprio navegador.
+ *
+ * Antes vinha de `api.qrserver.com`. Duas consequências ruins: sem internet a
+ * nota saía sem QR, e — pior — a imagem de outro domínio "contamina" o canvas,
+ * o que fazia o download da nota falhar. Foi por isso que alguém acabou
+ * escondendo TODAS as imagens antes de gerar o PNG, e a nota passou a ser
+ * salva sem QR e sem logo.
+ *
+ * Sendo data URI, ela é do próprio documento: entra no download normalmente.
+ */
+export async function getQrCodeDataUrl(pixPayload: string, escuro = "#000000", claro = "#FFFFFF"): Promise<string> {
+  if (!pixPayload) return "";
+
+  try {
+    return await QRCode.toDataURL(pixPayload, {
+      width: 512,
+      margin: 1,
+      errorCorrectionLevel: "M",
+      color: { dark: escuro, light: claro },
+    });
+  } catch {
+    return "";
+  }
 }

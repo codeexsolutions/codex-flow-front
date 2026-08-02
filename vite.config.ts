@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => {
 
         manifest: {
           name: "CodeEx Flow",
-          short_name: "CodeEx",
+          short_name: "CodeEx Flow",
           description: "Sistema de gestão para o seu negócio: PDV, estoque, clientes e financeiro.",
           lang: "pt-BR",
           theme_color: "#0e0d1a",

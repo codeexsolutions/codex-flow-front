@@ -81,7 +81,7 @@ const useAuth = create<AuthStore>((set, get) => ({
     });
   },
 
-  async login(data: AuthFormInputs) {
+  async login(data: AuthFormInputs, aoAutenticar) {
     try {
       const response = await AuthService.login(data);
 
@@ -90,6 +90,9 @@ const useAuth = create<AuthStore>((set, get) => ({
       if (!auth?.accessToken) {
         throw new Error("Resposta inválida da API.");
       }
+
+      // Deixa a tela reagir antes de a sessão valer (ver `aoAutenticar`).
+      if (aoAutenticar) await aoAutenticar(decodeToken(auth.accessToken).nome ?? "");
 
       // Salva o token e cria o usuário
       get().setAuth(auth.accessToken, auth.refreshToken);
@@ -101,7 +104,8 @@ const useAuth = create<AuthStore>((set, get) => ({
         await useEnterprise.getState().fetchEnterprise(toCodigoEmpresaBase(user.codigoEmpresa));
       }
 
-      await alert.success("Login realizado", `Bem-vindo, ${user?.nome}!`);
+      // Sem alerta quando a tela já deu as boas-vindas com a animação.
+      if (!aoAutenticar) await alert.success("Login realizado", `Bem-vindo, ${user?.nome}!`);
     } catch (error) {
       const err = error as { response?: { data?: { message?: string } }; message?: string };
 

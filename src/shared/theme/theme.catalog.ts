@@ -11,7 +11,7 @@
  * o que muda naquela paleta.
  */
 
-export type ThemeId = "escuro" | "claro" | "meia-noite" | "floresta" | "sepia" | "ardosia" | "sistema";
+export type ThemeId = "escuro" | "claro" | "meia-noite" | "floresta" | "sepia" | "ardosia" | "onix" | "sistema";
 
 export type ThemeInfo = {
     id: ThemeId;
@@ -65,6 +65,13 @@ export const THEMES: ThemeInfo[] = [
         desc: "Grafite neutro",
         dark: true,
         preview: { bg: "#111318", panel: "#1a1d24", line: "#333845", soft: "#252932" },
+    },
+    {
+        id: "onix",
+        label: "Ônix",
+        desc: "Preto absoluto",
+        dark: true,
+        preview: { bg: "#000000", panel: "#0a0a0b", line: "#242427", soft: "#161618" },
     },
     {
         id: "sistema",

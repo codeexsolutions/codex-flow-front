@@ -69,6 +69,13 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
   const { user } = useAuth();
   const clientes = useClientes((s) => s.clientes);
 
+  /**
+   * A chave Pix é da EMPRESA e define para onde o dinheiro do cliente vai.
+   * Por isso só o usuário master configura: um vendedor conseguiria apontar
+   * o recebimento para a própria conta.
+   */
+  const ehMaster = Boolean(user?.root);
+
   /** O vendedor da nota é quem está logado emitindo-a. */
   const vendedor = user?.nome || user?.email || "—";
 
@@ -158,6 +165,11 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
       alert.warning("Preencha todos os campos", "Chave PIX, nome e cidade são obrigatórios.");
       return;
     }
+    if (!ehMaster) {
+      alert.error("Sem permissão", "Só o usuário master pode configurar a chave Pix da empresa.");
+      return;
+    }
+
     savePixSettings({ key: pixKey, keyType: pixKeyType, ownerName: pixOwner, city: pixCity });
     setModalPixConfig(false);
     alert.success("Chave PIX salva!", "A configuração foi salva no navegador.");
@@ -542,7 +554,12 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
             )}
           </div>
           <div className="flex items-center gap-1.5">
-            <button title={pixConfig ? "PIX configurado" : "Configurar PIX"} onClick={() => setModalPixConfig(true)} className={`${btnToolbar} ${pixConfig ? "bg-success/[0.1] text-success ring-success/20" : "bg-accent/[0.1] text-accent-soft ring-accent/20"}`}>
+            <button
+              title={ehMaster ? (pixConfig ? "PIX configurado" : "Configurar PIX") : "Só o usuário master configura a chave Pix"}
+              onClick={() => ehMaster && setModalPixConfig(true)}
+              disabled={!ehMaster}
+              className={`${btnToolbar} ${pixConfig ? "bg-success/[0.1] text-success ring-success/20" : "bg-accent/[0.1] text-accent-soft ring-accent/20"} ${ehMaster ? "" : "cursor-not-allowed opacity-40"}`}
+            >
               {pixConfig ? <Check size={19} /> : <QrCode size={19} />}
             </button>
             <button title="Adicionar produto" onClick={() => setModalProdutos(true)} className={`${btnToolbar} bg-success/[0.1] text-success ring-success/20 hover:bg-success hover:text-success`}>

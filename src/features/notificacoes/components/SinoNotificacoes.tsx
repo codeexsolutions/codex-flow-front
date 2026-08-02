@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { io, type Socket } from "socket.io-client";
-import { Bell, Package, ShoppingCart, UserPlus, Wallet, Users, Trash2, CheckCheck, BadgeCheck } from "lucide-react";
+import { Bell, BellRing, BellOff, Package, ShoppingCart, UserPlus, Wallet, Users, Trash2, CheckCheck, BadgeCheck } from "lucide-react";
 
 import NotificacaoService, { type Mural, type Notificacao, type TipoNotificacao } from "@/features/notificacoes/services/notificacao.service";
 import { formatDateTime } from "@/shared/utils/date";
+import { notificarNoAparelho, notificacoesLigadas, pedirPermissao, definirPreferencia, permissaoAtual, suportaNotificacao } from "@/shared/pwa/notificacaoDispositivo";
 
 /** Ícone e cor por tipo de evento — o rótulo sempre acompanha, nunca só a cor. */
 const LOOK: Record<TipoNotificacao, { icon: React.ReactNode; cls: string }> = {
@@ -36,7 +38,10 @@ const SinoNotificacoes = () => {
 
   const [mural, setMural] = useState<Mural>({ notificacoes: [], naoLidas: 0 });
   const [aberto, setAberto] = useState(false);
+  const [ancora, setAncora] = useState<DOMRect | null>(null);
+  const [noAparelho, setNoAparelho] = useState(() => notificacoesLigadas() && permissaoAtual() === "granted");
   const painelRef = useRef<HTMLDivElement>(null);
+  const botaoRef = useRef<HTMLButtonElement>(null);
 
   const carregar = useCallback(async () => {
     try {
@@ -69,6 +74,9 @@ const SinoNotificacoes = () => {
           notificacoes: [nova, ...atual.notificacoes].slice(0, 40),
           naoLidas: atual.naoLidas + 1,
         }));
+
+        // Faixa do sistema — só sai com o app fora de foco (ver o módulo).
+        void notificarNoAparelho(nova.titulo, nova.descricao, { rota: nova.rota });
       });
     } catch {
       /* Sem socket o mural ainda funciona: recarrega ao reabrir a tela. */
@@ -84,7 +92,9 @@ const SinoNotificacoes = () => {
     if (!aberto) return;
 
     const fora = (e: MouseEvent) => {
-      if (painelRef.current && !painelRef.current.contains(e.target as Node)) setAberto(false);
+      const alvo = e.target as Node;
+      if (painelRef.current?.contains(alvo) || botaoRef.current?.contains(alvo)) return;
+      setAberto(false);
     };
 
     document.addEventListener("mousedown", fora);
@@ -109,11 +119,38 @@ const SinoNotificacoes = () => {
     setMural((atual) => ({ notificacoes: atual.notificacoes.map((n) => ({ ...n, lida: true })), naoLidas: 0 }));
   };
 
+  const alternarAparelho = async () => {
+    if (noAparelho) {
+      definirPreferencia(false);
+      setNoAparelho(false);
+      return;
+    }
+
+    const liberado = await pedirPermissao();
+
+    if (!liberado) {
+      // Negado no nível do sistema: não adianta ligar a preferência.
+      setNoAparelho(false);
+      return;
+    }
+
+    definirPreferencia(true);
+    setNoAparelho(true);
+  };
+
+  const alternar = () => {
+    // O painel vive num portal porque a sidebar é `overflow-hidden` e recortava
+    // o balão pela metade. Fora dela, a posição precisa vir do botão.
+    setAncora(botaoRef.current?.getBoundingClientRect() ?? null);
+    setAberto((v) => !v);
+  };
+
   return (
-    <div className="relative" ref={painelRef}>
+    <>
       <button
+        ref={botaoRef}
         type="button"
-        onClick={() => setAberto((v) => !v)}
+        onClick={alternar}
         aria-label={mural.naoLidas > 0 ? `Notificações: ${mural.naoLidas} não lidas` : "Notificações"}
         className={`focus-ring relative flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-200 hover:bg-fg/[0.08] ${aberto ? "text-accent-soft" : "text-faint hover:text-accent-soft"}`}
       >
@@ -125,8 +162,12 @@ const SinoNotificacoes = () => {
         )}
       </button>
 
-      {aberto && (
-        <div className="glass-strong elev-3 absolute bottom-full left-0 z-50 mb-2 w-[320px] overflow-hidden rounded-2xl border border-fg/[0.08]">
+      {aberto && ancora && createPortal(
+        <div
+          ref={painelRef}
+          className="glass-strong elev-3 fixed z-[260] w-[320px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-fg/[0.08]"
+          style={{ left: Math.max(12, ancora.left), bottom: Math.max(12, window.innerHeight - ancora.top + 8) }}
+        >
           <div className="flex items-center justify-between gap-2 border-b border-fg/[0.07] px-4 py-2.5">
             <p className="text-[12.5px] text-ink">Atividade da equipe</p>
             {mural.naoLidas > 0 && (
@@ -135,6 +176,22 @@ const SinoNotificacoes = () => {
               </button>
             )}
           </div>
+
+          {suportaNotificacao() && (
+            <button
+              type="button"
+              onClick={alternarAparelho}
+              className="flex w-full items-center justify-between gap-2 border-b border-fg/[0.05] px-4 py-2 text-left text-[11.5px] text-mist transition-colors hover:bg-fg/[0.03]"
+            >
+              <span className="flex items-center gap-1.5">
+                {noAparelho ? <BellRing size={12} className="text-accent-soft" /> : <BellOff size={12} />}
+                Avisar neste aparelho
+              </span>
+              <span className={`h-4 w-7 shrink-0 rounded-full p-0.5 transition-colors ${noAparelho ? "bg-accent" : "bg-fg/15"}`}>
+                <span className={`block h-3 w-3 rounded-full bg-white transition-transform ${noAparelho ? "translate-x-3" : ""}`} />
+              </span>
+            </button>
+          )}
 
           <div className="max-h-[min(60vh,420px)] overflow-y-auto">
             {mural.notificacoes.length === 0 ? (
@@ -167,9 +224,10 @@ const SinoNotificacoes = () => {
               })
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   );
 };
 
