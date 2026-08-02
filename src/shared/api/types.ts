@@ -1,4 +1,3 @@
-/** Envelope padrão das respostas da API: `{ data: [...] }`. */
 export type ApiEnvelope<T> = {
   data?: T[];
 };

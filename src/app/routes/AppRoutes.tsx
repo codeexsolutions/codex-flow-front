@@ -24,6 +24,7 @@ import SalesOverviewPage from "@/features/vendas/pages/SalesOverviewPage";
 import SalesList from "@/features/vendas/pages/SalesListPage";
 
 import CheckoutPage from "@/features/checkout/pages/CheckoutPage";
+import PlanosPage from "@/features/assinatura/pages/PlanosPage";
 
 import CorreiosPage from "@/features/correios/pages/CorreiosPage";
 import PrecosPrazosPage from "@/features/correios/pages/PrecosPrazosPage";
@@ -39,9 +40,8 @@ import ConfiguracoesPage from "@/features/config/pages/ConfigPage";
 import EmpresaPage from "@/features/config/pages/EmpresaPage";
 import ProfilePage from "@/features/config/pages/ProfilePage";
 import AparenciaTab from "@/features/config/pages/AparenciaPage";
-import FaturasPage from "@/features/config/pages/FaturasPage";
 
-const PUBLIC_PATHS = ["/login", "/cadastro", "/page"];
+const PUBLIC_PATHS = ["/login", "/cadastro", "/planos", "/page"];
 
 function AppRoutesContent({ isLogged }: { isLogged: boolean }) {
   const location = useLocation();
@@ -75,6 +75,7 @@ function AppRoutesContent({ isLogged }: { isLogged: boolean }) {
     <Routes>
       <Route path="/login" element={<AuthPage />} />
       <Route path="/cadastro" element={<CadastroEmpresaPage />} />
+      <Route path="/planos" element={<PlanosPage />} />
       <Route path="/page" element={<LandingPage />} />
 
       {isLogged && (
@@ -103,7 +104,8 @@ function AppRoutesContent({ isLogged }: { isLogged: boolean }) {
             <Route index element={<Navigate to="perfil" replace />} />
             <Route path="perfil" element={<ProfilePage />} />
             <Route path="empresa" element={<EmpresaPage />} />
-            <Route path="faturas" element={<FaturasPage />} />
+            {/* Mesma tela do checkout: faturas, Pix e comprovante vêm da API. */}
+            <Route path="faturas" element={<CheckoutPage />} />
             <Route path="aparencia" element={<AparenciaTab />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>

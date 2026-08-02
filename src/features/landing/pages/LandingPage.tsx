@@ -146,7 +146,7 @@ const LandingPage = () => {
           <button onClick={() => navigate("/login")} className="focus-ring cursor-pointer rounded-lg px-3.5 py-2 text-[13px] text-mist transition-colors hover:text-ink">
             Entrar
           </button>
-          <button onClick={() => navigate("/cadastro")} className="focus-ring cursor-pointer rounded-lg bg-gradient-to-br from-accent-soft to-accent px-4 py-2 text-[13px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98]">
+          <button onClick={() => navigate("/planos")} className="focus-ring cursor-pointer rounded-lg bg-gradient-to-br from-accent-soft to-accent px-4 py-2 text-[13px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98]">
             Criar conta
           </button>
         </div>
@@ -178,7 +178,7 @@ const LandingPage = () => {
 
             <Reveal delay={240}>
               <div className="mt-7 flex flex-wrap items-center gap-3">
-                <button onClick={() => navigate("/cadastro")} className="focus-ring group inline-flex cursor-pointer items-center gap-2 rounded-lg bg-gradient-to-br from-accent-soft to-accent px-5 py-3 text-[14px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98]">
+                <button onClick={() => navigate("/planos")} className="focus-ring group inline-flex cursor-pointer items-center gap-2 rounded-lg bg-gradient-to-br from-accent-soft to-accent px-5 py-3 text-[14px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98]">
                   Cadastrar minha empresa
                   <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
                 </button>
@@ -263,7 +263,7 @@ const LandingPage = () => {
             <p className="relative mx-auto mt-3 max-w-lg text-[14px] leading-relaxed text-mist">Crie a conta da sua empresa e comece a usar hoje mesmo. Sem instalação, direto no navegador.</p>
 
             <div className="relative mt-7 flex flex-wrap items-center justify-center gap-3">
-              <button onClick={() => navigate("/cadastro")} className="focus-ring group inline-flex cursor-pointer items-center gap-2 rounded-lg bg-gradient-to-br from-accent-soft to-accent px-6 py-3 text-[14px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98]">
+              <button onClick={() => navigate("/planos")} className="focus-ring group inline-flex cursor-pointer items-center gap-2 rounded-lg bg-gradient-to-br from-accent-soft to-accent px-6 py-3 text-[14px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98]">
                 Criar conta
                 <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
               </button>

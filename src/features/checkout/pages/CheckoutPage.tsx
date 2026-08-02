@@ -1,87 +1,83 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ChevronLeft,
-  Building2,
-  Receipt,
-  Loader2,
-  FileText,
-  User,
-  Hash,
-  MapPin,
-  Phone,
-  Smartphone,
-  MessageCircle,
-  Mail,
-  QrCode,
-  CreditCard,
-  Barcode,
-  Check,
-  Copy,
-  Sparkles,
-  ArrowRight,
-  PartyPopper,
-  ChevronDown,
-  ChevronUp,
-  CircleCheck,
-  Clock,
-  AlertTriangle,
+  ChevronLeft, Building2, Receipt, Loader2, QrCode, Check, Copy, Sparkles, ArrowRight,
+  CircleCheck, Clock, AlertTriangle, MessageCircle, Mail, RefreshCw, LogOut, CalendarDays,
+  Wallet, ShieldCheck,
 } from "lucide-react";
+
 import { Modal } from "@/shared/ui/Modal";
 import { useAlert } from "@/shared/ui/Alert";
-import { formatCurrency } from "@/shared/utils/currency";
+import { formatCurrencyFromCents } from "@/shared/utils/currency";
 import { formatDocument } from "@/shared/utils/format";
+import { MONTHS } from "@/shared/utils/date";
 
 import useAuth from "@/features/auth/store/auth.store";
-import useEnterprise from "@/features/empresa/store/enterprise.store";
-import type EnterpriseType from "@/shared/domain/empresa";
-import type { FaturaType, FaturaStatus } from "@/shared/domain/fatura";
-import { FaturaMeta, ehPagavel } from "@/shared/domain/fatura";
-
-const PLANO = { nome: "Pro", preco: 149, ciclo: "Mensal" };
-
-const PIX_CODE = "00020126580014BR.GOV.BCB.PIX0136codexflow@exemplo.com5204000053039865802BR5913CodEx Solutions6009Fortaleza62070503***6304ABCD";
+import AssinaturaService from "@/features/assinatura/services/assinatura.service";
+import {
+  CICLO_LABEL, FaturaMeta, ehPagavel, type Fatura, type MinhaAssinatura, type Plano, type StatusFatura,
+} from "@/features/assinatura/types/assinatura.types";
 
 type Filtro = "TODAS" | "A_PAGAR" | "PAGA";
 
+/** Vencimento chega como ISO puro; na tela vale a data, não o fuso. */
+const dataBr = (iso?: string | null) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
+};
+
+/** Competência vem como "AAAA-MM" — na tela ninguém lê isso. */
+const competenciaBr = (competencia: string) => {
+  const [ano, mes] = competencia.split("-");
+  return MONTHS[Number(mes) - 1] ? `${MONTHS[Number(mes) - 1]}/${ano}` : competencia;
+};
+
 /* ================================================================== */
-/* UI auxiliar */
+/* Peças da tela */
 /* ================================================================== */
-function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value?: React.ReactNode }) {
+
+/**
+ * Stat tile: rótulo discreto, valor em destaque, apoio opcional.
+ * Todos os tiles têm o mesmo peso — quem carrega a leitura é o número.
+ *
+ * O fundo é opaco de propósito: as divisórias do KPI row são os vãos de 1px do
+ * grid, e um fundo translúcido deixaria a linha atravessar o tile.
+ */
+function StatTile({ label, value, hint, icon }: { label: string; value: React.ReactNode; hint?: string; icon: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-2.5">
-      <span className="flex shrink-0 items-center gap-2 text-[13px] text-mist">
-        <span className="text-faint">{icon}</span>
+    <div className="bg-canvas px-4 py-3.5">
+      <p className="flex items-center gap-1.5 text-[11px] text-faint">
+        <span className="text-muted">{icon}</span>
         {label}
-      </span>
-      <span className="min-w-0 truncate text-right text-[13px] text-ink">{value || "—"}</span>
+      </p>
+      <p className="mt-1.5 truncate text-[19px] leading-tight text-ink">{value}</p>
+      {hint && <p className="mt-0.5 truncate text-[11px] text-mist">{hint}</p>}
     </div>
   );
 }
 
-function FaturaStatusBadge({ status }: { status: FaturaStatus }) {
+/** Status sempre com ponto + texto: nunca só a cor. */
+function StatusBadge({ status }: { status: StatusFatura }) {
   const m = FaturaMeta[status];
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] ring-1 ${m.bg} ${m.text} ${m.ring}`}>
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] ring-1 ${m.bg} ${m.text} ${m.ring}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${m.dot}`} />
       {m.label}
     </span>
   );
 }
 
-function SectionCard({ title, icon, action, children, className = "" }: { title?: string; icon?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode; className?: string }) {
+/** Aviso de uma linha — substitui os banners em degradê que poluíam o topo. */
+function Aviso({ icon, titulo, texto, acao }: { icon: React.ReactNode; titulo: string; texto: string; acao?: React.ReactNode }) {
   return (
-    <div className={`overflow-hidden card glass-sheen rounded-2xl/80 ${className}`}>
-      {(title || action) && (
-        <div className="flex items-center justify-between gap-3 border-b border-fg/[0.07] px-5 py-3.5">
-          <p className="flex items-center gap-2 text-sm text-ink">
-            {icon}
-            {title}
-          </p>
-          {action}
-        </div>
-      )}
-      {children}
+    <div className="flex flex-col gap-3 rounded-2xl border border-accent/20 bg-accent/[0.06] px-5 py-4 sm:flex-row sm:items-center">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent-soft">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] text-ink">{titulo}</p>
+        <p className="mt-0.5 text-[12px] leading-relaxed text-mist">{texto}</p>
+      </div>
+      {acao}
     </div>
   );
 }
@@ -92,56 +88,67 @@ function SectionCard({ title, icon, action, children, className = "" }: { title?
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const alert = useAlert();
-  const { enterprise, loading } = useEnterprise() as { enterprise: EnterpriseType | null; loading?: boolean };
-  const { user } = useAuth();
+  const { logout } = useAuth();
 
-  // TODO: trocar por dados vindos do serviço de faturas
-  const [faturas] = useState<FaturaType[]>([
-    { id: "f4", competencia: "Ago/2026", vencimento: "10/08/2026", valor: 149, status: "PENDENTE" },
-    { id: "f3", competencia: "Jul/2026", vencimento: "10/07/2026", valor: 149, status: "VENCIDA" },
-    { id: "f2", competencia: "Jun/2026", vencimento: "10/06/2026", valor: 149, status: "PAGA" },
-    { id: "f1", competencia: "Mai/2026", vencimento: "10/05/2026", valor: 149, status: "PAGA" },
-  ]);
+  const [assinatura, setAssinatura] = useState<MinhaAssinatura | null>(null);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState("");
 
   const [filtro, setFiltro] = useState<Filtro>("TODAS");
-  const [faturaSelecionada, setFaturaSelecionada] = useState<FaturaType | null>(null);
+  const [faturaSelecionada, setFaturaSelecionada] = useState<Fatura | null>(null);
   const [copiado, setCopiado] = useState(false);
-  const [processando, setProcessando] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
-  const [mostrarPagas, setMostrarPagas] = useState(false);
+  const [trocandoPlano, setTrocandoPlano] = useState(false);
+  const [planos, setPlanos] = useState<Plano[]>([]);
 
-  // Filtros
-  const faturasPendentes = useMemo(() => faturas.filter(ehPagavel), [faturas]);
+  const carregar = useCallback(async () => {
+    try {
+      setAssinatura(await AssinaturaService.minha());
+      setErro("");
+    } catch (e) {
+      const err = e as { response?: { data?: { message?: string } }; message?: string };
+      setErro(err?.response?.data?.message ?? err?.message ?? "Não foi possível carregar sua assinatura.");
+    } finally {
+      setCarregando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
+  const faturas = assinatura?.faturas ?? [];
+
+  const faturasAbertas = useMemo(() => faturas.filter((f) => f.status !== "PAGA" && f.status !== "CANCELADA"), [faturas]);
   const faturasPagas = useMemo(() => faturas.filter((f) => f.status === "PAGA"), [faturas]);
 
   const faturasFiltradas = useMemo(() => {
-    if (filtro === "A_PAGAR") return faturasPendentes;
+    if (filtro === "A_PAGAR") return faturasAbertas;
     if (filtro === "PAGA") return faturasPagas;
     return faturas;
-  }, [faturas, filtro, faturasPendentes, faturasPagas]);
+  }, [faturas, filtro, faturasAbertas, faturasPagas]);
 
-  const totalAPagar = useMemo(() => faturasPendentes.reduce((acc, f) => acc + f.valor, 0), [faturasPendentes]);
-  const totalPago = useMemo(() => faturasPagas.reduce((acc, f) => acc + f.valor, 0), [faturasPagas]);
-  const qtdAPagar = faturasPendentes.length;
+  const totalAPagar = useMemo(() => faturasAbertas.reduce((acc, f) => acc + f.valorCentavos, 0), [faturasAbertas]);
+  const totalPago = useMemo(() => faturasPagas.reduce((acc, f) => acc + f.valorCentavos, 0), [faturasPagas]);
 
-  const proximaFatura = useMemo(() => {
-    const vencidas = faturasPendentes.filter((f) => f.status === "VENCIDA");
-    return vencidas[0] ?? faturasPendentes[0] ?? null;
-  }, [faturasPendentes]);
+  const proximaFatura = assinatura?.faturaEmAberto ?? null;
+  const emConfirmacao = faturasAbertas.filter((f) => f.status === "AGUARDANDO_CONFIRMACAO");
 
-  const end = enterprise?.endereco;
-  const cont = enterprise?.contato;
+  const empresa = assinatura?.empresa;
+  const plano = assinatura?.plano;
+  const pix = assinatura?.pix;
+  const suporte = assinatura?.suporte;
 
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=512x512&color=7C6EF5&bgcolor=15132A&data=${encodeURIComponent(PIX_CODE)}`;
+  const podeTrocarPlano = assinatura ? assinatura.status !== "ATIVA" : false;
 
-  const abrirPagamento = (f: FaturaType) => {
+  /* ------------------------- Ações ------------------------- */
+
+  const abrirPagamento = (f: Fatura) => {
     if (!ehPagavel(f)) return;
-    setProcessando(f.id);
-    setTimeout(() => {
-      setProcessando(null);
-      setQrLoading(true);
-      setFaturaSelecionada(f);
-    }, 400);
+    setQrLoading(true);
+    setCopiado(false);
+    setFaturaSelecionada(f);
   };
 
   const fecharModal = () => {
@@ -150,8 +157,9 @@ const CheckoutPage = () => {
   };
 
   const copiarPix = async () => {
+    if (!pix?.copiaECola) return;
     try {
-      await navigator.clipboard.writeText(PIX_CODE);
+      await navigator.clipboard.writeText(pix.copiaECola);
       setCopiado(true);
       alert.success("Código copiado!", "Cole no aplicativo do seu banco.");
       setTimeout(() => setCopiado(false), 2500);
@@ -160,344 +168,421 @@ const CheckoutPage = () => {
     }
   };
 
+  /**
+   * Abre o WhatsApp com a mensagem pronta e marca a fatura como aguardando
+   * confirmação — é assim que ela entra na fila do painel do dono.
+   *
+   * A janela abre ANTES do await de propósito: navegador bloqueia popup que
+   * não venha direto do clique.
+   */
+  const avisarPagamento = async (f: Fatura) => {
+    if (enviando) return;
+
+    if (suporte?.linkWhatsapp) {
+      window.open(suporte.linkWhatsapp, "_blank", "noopener,noreferrer");
+    }
+
+    setEnviando(true);
+
+    try {
+      setAssinatura(await AssinaturaService.enviarComprovante(f.id));
+      fecharModal();
+
+      await alert.success(
+        "Recebemos seu aviso!",
+        suporte?.linkWhatsapp
+          ? "Envie o comprovante na conversa do WhatsApp que abrimos. Assim que confirmarmos, seu acesso é liberado."
+          : `Envie o comprovante para ${suporte?.email || "o suporte"}. Assim que confirmarmos, seu acesso é liberado.`,
+      );
+    } catch (e) {
+      const err = e as { response?: { data?: { message?: string } }; message?: string };
+      alert.error("Não foi possível registrar", err?.response?.data?.message ?? err?.message ?? "Tente novamente.");
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const abrirTrocaDePlano = async () => {
+    setTrocandoPlano(true);
+
+    if (planos.length === 0) {
+      try {
+        setPlanos(await AssinaturaService.listarPlanos());
+      } catch {
+        alert.error("Falha ao carregar planos", "Tente novamente em instantes.");
+      }
+    }
+  };
+
+  const trocarPlano = async (codigo: string) => {
+    if (codigo === plano?.codigo) {
+      setTrocandoPlano(false);
+      return;
+    }
+
+    try {
+      setAssinatura(await AssinaturaService.trocarPlano(codigo));
+      setTrocandoPlano(false);
+      alert.success("Plano atualizado!", "Sua fatura em aberto já está com o novo valor.");
+    } catch (e) {
+      const err = e as { response?: { data?: { message?: string } }; message?: string };
+      alert.error("Não foi possível trocar o plano", err?.response?.data?.message ?? err?.message ?? "Tente novamente.");
+    }
+  };
+
+  const recarregar = () => {
+    setCarregando(true);
+    carregar();
+  };
+
+  /**
+   * QR em preto no branco: é o que os apps de banco leem com folga. Colorir o
+   * código para combinar com o tema derruba o contraste que a leitura exige.
+   */
+  const qrCodeUrl = pix?.copiaECola
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=440x440&margin=12&data=${encodeURIComponent(pix.copiaECola)}`
+    : "";
+
+  /* ------------------------- Estados de carga ------------------------- */
+
+  if (carregando) {
+    return (
+      <div className="flex min-h-[60dvh] w-full items-center justify-center gap-2 text-sm text-mist">
+        <Loader2 className="h-5 w-5 animate-spin text-accent" />
+        Carregando sua assinatura...
+      </div>
+    );
+  }
+
+  if (erro || !assinatura) {
+    return (
+      <div className="flex min-h-[60dvh] w-full flex-col items-center justify-center gap-4 px-6 text-center">
+        <AlertTriangle className="h-8 w-8 text-danger" />
+        <p className="max-w-md text-sm text-mist">{erro || "Assinatura não encontrada."}</p>
+        <div className="flex gap-2">
+          <button onClick={recarregar} className="focus-ring flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm text-white transition hover:brightness-110">
+            <RefreshCw size={14} /> Tentar de novo
+          </button>
+          <button onClick={logout} className="focus-ring flex items-center gap-2 rounded-xl border border-fg/[0.08] px-4 py-2 text-sm text-mist transition hover:bg-fg/[0.04]">
+            <LogOut size={14} /> Sair
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const contaLiberada = Boolean(empresa?.ativo);
+
   return (
     <div className="relative w-full text-ink">
-      {/* brilho decorativo */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-[radial-gradient(60%_100%_at_50%_0%,rgba(124,110,245,0.15),transparent_70%)]" />
-
       {/* Cabeçalho */}
-      <header className="sticky top-0 z-20 border-b border-fg/[0.07] bg-canvas/70 backdrop-blur-xl">
-        <div className="flex items-center gap-3 px-5 py-3.5 lg:px-8">
-          <button onClick={() => navigate(-1)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-fg/[0.08] bg-fg/[0.04] text-mist transition-colors hover:bg-fg/[0.08]">
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-accent/25 bg-gradient-to-br from-accent/25 to-accent-soft/10">
-            <Receipt className="h-5 w-5 text-accent-soft" />
-          </div>
-          <div>
-            <h1 className="text-lg tracking-tight text-ink">Faturamento</h1>
-            <p className="text-xs text-faint">Assinatura e pagamentos</p>
-          </div>
-        </div>
-      </header>
-
-      {/* Conteúdo */}
-      <div className="relative z-10 mx-auto max-w-6xl px-5 py-8 lg:px-8">
-        <div className="flex flex-col gap-6">
-          {/* Banner de boas-vindas para contas inativas */}
-          {user && !user.ativo && (
-            <div className="overflow-hidden rounded-2xl border border-accent/30 bg-gradient-to-r from-accent/[0.15] via-accent/[0.08] to-transparent p-5">
-              <div className="flex items-start gap-4">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent/25 text-accent-soft">
-                  <PartyPopper className="h-6 w-6" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-[15px] text-ink">Bem-vindo ao Codex Flow! 🎉</h2>
-                  <p className="mt-1 text-sm leading-relaxed text-mist">
-                    Sua conta foi criada com sucesso! Faça o <strong className="text-accent-soft">primeiro pagamento</strong> abaixo para ativar sua conta
-                    e liberar todas as funcionalidades do sistema.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ===== Hero duplo: total pendente + total pago ===== */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {/* Pendente */}
-            <div className="relative overflow-hidden rounded-3xl border border-warning/25 bg-gradient-to-br from-warning/[0.16] via-warning/[0.05] to-transparent p-6 lg:p-7">
-              <div className="pointer-events-none absolute -right-12 -top-12 h-36 w-36 rounded-full bg-warning/15 blur-3xl" />
-              <div className="relative">
-                <p className="flex items-center gap-2 text-xs uppercase tracking-wider text-warning">
-                  <Clock size={14} /> Total em aberto
-                </p>
-                <p className="mt-1.5 text-4xl tracking-tight text-ink">{formatCurrency(totalAPagar)}</p>
-                <p className="mt-1.5 text-sm text-mist">
-                  {qtdAPagar > 0 ? `${qtdAPagar} ${qtdAPagar === 1 ? "fatura pendente" : "faturas pendentes"}` : "Nenhuma fatura pendente 🎉"}
-                </p>
-              </div>
-            </div>
-
-            {/* Pago */}
-            <div className="relative overflow-hidden rounded-3xl border border-success/25 bg-gradient-to-br from-success/[0.16] via-success/[0.05] to-transparent p-6 lg:p-7">
-              <div className="pointer-events-none absolute -right-12 -top-12 h-36 w-36 rounded-full bg-success/15 blur-3xl" />
-              <div className="relative">
-                <p className="flex items-center gap-2 text-xs uppercase tracking-wider text-success">
-                  <CircleCheck size={14} /> Total pago
-                </p>
-                <p className="mt-1.5 text-4xl tracking-tight text-ink">{formatCurrency(totalPago)}</p>
-                <p className="mt-1.5 text-sm text-mist">
-                  {faturasPagas.length} {faturasPagas.length === 1 ? "fatura paga" : "faturas pagas"}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Botão de pagamento rápido */}
-          {proximaFatura && (
-            <button
-              onClick={() => abrirPagamento(proximaFatura)}
-              disabled={processando === proximaFatura.id}
-              className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-to-br from-accent to-accent-strong py-4 text-sm text-white shadow-lg shadow-accent/25 transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-70"
-            >
-              <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-              {processando === proximaFatura.id ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <>
-                  <QrCode size={18} /> Pagar {proximaFatura.status === "VENCIDA" ? "fatura vencida" : "próxima fatura"} — {formatCurrency(proximaFatura.valor)}
-                  <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
-                </>
-              )}
+      <header className="sticky top-0 z-20 border-b border-fg/[0.06] bg-canvas/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-5xl items-center gap-3 px-5 py-3.5 lg:px-8">
+          {contaLiberada && (
+            <button onClick={() => navigate(-1)} className="focus-ring flex h-9 w-9 items-center justify-center rounded-xl border border-fg/[0.07] text-mist transition-colors hover:bg-fg/[0.04]" aria-label="Voltar">
+              <ChevronLeft className="h-4 w-4" />
             </button>
           )}
 
-          {/* ===== Grade: faturas + empresa ===== */}
-          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-            {/* Coluna principal */}
-            <div className="flex flex-col gap-6">
-              {/* Filtros */}
-              <div className="flex items-center gap-2">
-                <div className="flex gap-1 rounded-lg bg-fg/[0.04] p-1">
-                  {(
-                    [
-                      ["TODAS", "Todas"],
-                      ["A_PAGAR", "A pagar"],
-                      ["PAGA", "Pagas"],
-                    ] as [Filtro, string][]
-                  ).map(([id, label]) => (
-                    <button key={id} onClick={() => setFiltro(id)} className={`rounded-md px-3 py-1.5 text-[11px] transition-colors ${filtro === id ? "bg-accent text-white" : "text-mist hover:text-ink"}`}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <span className="text-[11px] text-faint">
-                  {faturasFiltradas.length} {faturasFiltradas.length === 1 ? "fatura" : "faturas"}
-                </span>
-              </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-[15px] tracking-tight text-ink">Assinatura e faturas</h1>
+            <p className="truncate text-[11px] text-faint">{empresa?.nomeFantasia}</p>
+          </div>
 
-              {/* Lista de faturas */}
-              <div className="flex flex-col gap-2">
-                {/* Pendentes em destaque */}
-                {filtro !== "PAGA" && faturasPendentes.length > 0 && (
-                  <SectionCard
-                    title={filtro === "A_PAGAR" ? undefined : "A pagar"}
-                    icon={filtro === "A_PAGAR" ? undefined : <AlertTriangle size={14} className="text-warning" />}
-                  >
-                    <div className="divide-y divide-fg/[0.05]">
-                      {faturasPendentes.map((f) => {
-                        const carregando = processando === f.id;
-                        return (
-                          <div key={f.id} className="flex items-center justify-between gap-3 px-5 py-4 transition-colors hover:bg-fg/[0.02]">
-                            <div className="flex min-w-0 items-center gap-3">
-                              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${f.status === "VENCIDA" ? "border-danger/30 bg-danger/15 text-danger" : "border-warning/30 bg-warning/15 text-warning"}`}>
-                                <Receipt size={16} />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="truncate text-sm text-ink">{f.competencia}</p>
-                                <p className="text-[11px] text-faint">Vencimento {f.vencimento}</p>
-                              </div>
-                            </div>
+          <button onClick={recarregar} className="focus-ring flex h-9 items-center gap-1.5 rounded-xl border border-fg/[0.07] px-3 text-xs text-mist transition hover:bg-fg/[0.04]">
+            <RefreshCw size={13} />
+            <span className="hidden sm:inline">Atualizar</span>
+          </button>
 
-                            <div className="flex items-center gap-3">
-                              <div className="text-right">
-                                <p className="text-sm text-ink">{formatCurrency(f.valor)}</p>
-                                <FaturaStatusBadge status={f.status} />
-                              </div>
-                              <button onClick={() => abrirPagamento(f)} disabled={carregando} className="flex h-9 items-center gap-1.5 rounded-xl bg-accent px-3 text-xs text-white transition-all hover:bg-accent active:scale-95 disabled:opacity-70">
-                                {carregando ? <Loader2 size={14} className="animate-spin" /> : <><QrCode size={14} /> Pagar</>}
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </SectionCard>
-                )}
+          {!contaLiberada && (
+            <button onClick={logout} className="focus-ring flex h-9 items-center gap-1.5 rounded-xl border border-fg/[0.07] px-3 text-xs text-mist transition hover:bg-fg/[0.04]">
+              <LogOut size={13} />
+              <span className="hidden sm:inline">Sair</span>
+            </button>
+          )}
+        </div>
+      </header>
 
-                {/* Pagas (colapsável) */}
-                {filtro !== "A_PAGAR" && faturasPagas.length > 0 && (
-                  <SectionCard
-                    title="Pagas"
-                    icon={<CircleCheck size={14} className="text-success" />}
-                    action={
-                      <button
-                        onClick={() => setMostrarPagas(!mostrarPagas)}
-                        className="flex items-center gap-1 text-[11px] text-mist transition-colors hover:text-ink"
-                      >
-                        {mostrarPagas ? "Ocultar" : `${faturasPagas.length} pagas`}
-                        {mostrarPagas ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                      </button>
-                    }
-                  >
-                    {mostrarPagas && (
-                      <div className="divide-y divide-fg/[0.05]">
-                        {faturasPagas.map((f) => (
-                          <div key={f.id} className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-fg/[0.02]">
-                            <div className="flex min-w-0 items-center gap-3">
-                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-success/30 bg-success/15 text-success">
-                                <Receipt size={16} />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="truncate text-sm text-ink">{f.competencia}</p>
-                                <p className="text-[11px] text-faint">Vencimento {f.vencimento}</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm text-ink">{formatCurrency(f.valor)}</p>
-                              <FaturaStatusBadge status={f.status} />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {!mostrarPagas && (
-                      <div className="px-5 py-3 text-center text-[11px] text-faint">
-                        {faturasPagas.length} {faturasPagas.length === 1 ? "fatura paga" : "faturas pagas"} — clique para exibir
-                      </div>
-                    )}
-                  </SectionCard>
-                )}
+      <div className="mx-auto flex max-w-5xl flex-col gap-6 px-5 py-8 lg:px-8">
+        {/* ---------- Aviso contextual (só um, quando faz sentido) ---------- */}
+        {emConfirmacao.length > 0 ? (
+          <Aviso
+            icon={<Clock className="h-4 w-4" />}
+            titulo="Recebemos seu aviso de pagamento"
+            texto={`Estamos conferindo ${emConfirmacao.length === 1 ? "a fatura" : "as faturas"} e liberamos seu acesso assim que confirmarmos — normalmente em algumas horas.`}
+            acao={
+              suporte?.linkWhatsapp ? (
+                <a
+                  href={suporte.linkWhatsapp}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="focus-ring inline-flex shrink-0 items-center gap-2 rounded-xl border border-fg/[0.08] px-3 py-2 text-[12px] text-mist transition hover:bg-fg/[0.04] hover:text-ink"
+                >
+                  <MessageCircle size={14} /> Enviar comprovante
+                </a>
+              ) : undefined
+            }
+          />
+        ) : (
+          !contaLiberada && (
+            <Aviso
+              icon={<ShieldCheck className="h-4 w-4" />}
+              titulo="Falta só o primeiro pagamento"
+              texto="Pague a fatura abaixo via Pix e nos envie o comprovante. Assim que confirmarmos, todo o sistema é liberado."
+            />
+          )
+        )}
 
-                {faturasFiltradas.length === 0 && (
-                  <div className="rounded-2xl border border-dashed border-fg/[0.12] px-6 py-14 text-center text-sm text-faint">Nenhuma fatura neste filtro.</div>
-                )}
-              </div>
-
-              <SectionCard title="Formas de pagamento" icon={<CreditCard size={15} className="text-accent-soft" />}>
-                <div className="flex flex-col gap-2 p-4">
-                  <div className="flex items-center justify-between rounded-xl border border-accent/30 bg-accent/[0.08] px-4 py-3">
-                    <span className="flex items-center gap-2.5 text-sm text-ink">
-                      <QrCode size={16} className="text-accent-soft" /> Pix
-                    </span>
-                    <span className="rounded-full bg-success/25 px-2.5 py-0.5 text-[11px] text-success ring-1 ring-success/25">Disponível</span>
-                  </div>
-                  {[
-                    { icon: <CreditCard size={16} />, label: "Cartão de crédito" },
-                    { icon: <Barcode size={16} />, label: "Boleto" },
-                  ].map((m) => (
-                    <div key={m.label} className="flex items-center justify-between rounded-xl border border-fg/[0.06] bg-fg/[0.02] px-4 py-3 opacity-60">
-                      <span className="flex items-center gap-2.5 text-sm text-mist">
-                        {m.icon} {m.label}
-                      </span>
-                      <span className="rounded-full bg-fg/[0.06] px-2.5 py-0.5 text-[11px] text-mist">Em breve</span>
-                    </div>
-                  ))}
-                </div>
-              </SectionCard>
+        {/* ---------- Hero: o número que importa + ação ---------- */}
+        <section className="card glass-sheen overflow-hidden">
+          <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-end sm:justify-between lg:p-7">
+            <div className="min-w-0">
+              <p className="text-[11px] uppercase tracking-[1.2px] text-faint">Total em aberto</p>
+              <p className="mt-1 text-[44px] leading-none tracking-tight text-ink sm:text-5xl">{formatCurrencyFromCents(totalAPagar)}</p>
+              <p className="mt-2 text-[13px] text-mist">
+                {faturasAbertas.length === 0
+                  ? "Nenhuma fatura pendente."
+                  : `${faturasAbertas.length} ${faturasAbertas.length === 1 ? "fatura" : "faturas"} · vence ${dataBr(proximaFatura?.vencimento)}`}
+              </p>
             </div>
 
-            {/* Coluna aside: empresa */}
-            <div className="flex flex-col gap-6 lg:sticky lg:top-24">
-              <SectionCard>
-                <div className="p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/25 to-accent-soft/10">
-                      {enterprise?.urlLogo || enterprise?.urlImagem ? <img src={enterprise.urlLogo || enterprise.urlImagem} alt={enterprise.nomeFantasia} className="h-full w-full object-cover" /> : <Building2 className="h-6 w-6 text-accent-soft" />}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-base text-ink">{enterprise?.nomeFantasia || (loading ? "Carregando…" : "—")}</p>
-                      <div className="mt-1 flex items-center gap-2">
-                        {enterprise?.ativo ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-success/25 px-2 py-0.5 text-[10px] text-success ring-1 ring-success/25">
-                            <span className="h-1.5 w-1.5 rounded-full bg-success" /> Conta ativa
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-danger/20 px-2 py-0.5 text-[10px] text-danger ring-1 ring-danger/25">
-                            <span className="h-1.5 w-1.5 rounded-full bg-danger" /> Inativa
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+            {proximaFatura && ehPagavel(proximaFatura) && (
+              <button
+                onClick={() => abrirPagamento(proximaFatura)}
+                className="focus-ring group inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm text-white shadow-[0_10px_30px_-12px_rgb(var(--accent))] transition-all hover:brightness-110 active:scale-[0.99]"
+              >
+                <QrCode size={16} />
+                Pagar com Pix
+                <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+              </button>
+            )}
+          </div>
 
-                  <div className="mt-4 flex flex-col divide-y divide-fg/[0.05]">
-                    <InfoRow icon={<Hash size={14} />} label="Código" value={enterprise?.codigoEmpresa} />
-                    <InfoRow icon={<FileText size={14} />} label="CNPJ" value={enterprise?.cpfCnpj ? formatDocument(enterprise.cpfCnpj) : undefined} />
-                    <InfoRow icon={<User size={14} />} label="Representante" value={enterprise?.nomeRepresentante} />
-                    {enterprise?.inscMunicipal && <InfoRow icon={<FileText size={14} />} label="Insc. Municipal" value={enterprise.inscMunicipal} />}
-                  </div>
-                </div>
-              </SectionCard>
+          {/* KPI row — mesma altura, mesmo peso, sem degradês concorrentes */}
+          <div className="grid grid-cols-2 gap-px bg-fg/[0.06] pt-px lg:grid-cols-4">
+            <StatTile
+              icon={<Sparkles size={12} />}
+              label="Plano"
+              value={plano?.nome ?? "—"}
+              hint={plano ? `${formatCurrencyFromCents(plano.precoCentavos)}${CICLO_LABEL[plano.ciclo]}` : "Sem plano definido"}
+            />
+            <StatTile
+              icon={<CalendarDays size={12} />}
+              label="Próximo vencimento"
+              value={dataBr(proximaFatura?.vencimento ?? assinatura.proximoVencimento)}
+              hint={proximaFatura ? FaturaMeta[proximaFatura.status].label : "Em dia"}
+            />
+            <StatTile
+              icon={<Wallet size={12} />}
+              label="Total pago"
+              value={formatCurrencyFromCents(totalPago)}
+              hint={`${faturasPagas.length} ${faturasPagas.length === 1 ? "fatura" : "faturas"}`}
+            />
+            <StatTile
+              icon={contaLiberada ? <CircleCheck size={12} /> : <Clock size={12} />}
+              label="Conta"
+              value={contaLiberada ? "Liberada" : "Aguardando"}
+              hint={contaLiberada ? "Acesso completo" : "Liberamos após o pagamento"}
+            />
+          </div>
+        </section>
 
-              {end && (
-                <SectionCard title="Endereço" icon={<MapPin size={15} className="text-accent-soft" />}>
-                  <div className="px-5 py-3">
-                    <p className="text-sm leading-relaxed text-mist">
-                      {end.logradouro}, {end.numero}
-                      {end.complemento ? ` — ${end.complemento}` : ""}
-                      <br />
-                      {end.bairro} · {end.cidade}/{end.uf}
-                      <br />
-                      <span className="text-mist">CEP {end.cep}</span>
-                    </p>
-                  </div>
-                </SectionCard>
-              )}
+        {/* ---------- Faturas: uma lista só ---------- */}
+        <section className="card glass-sheen overflow-hidden">
+          <div className="flex items-center justify-between gap-3 border-b border-fg/[0.06] px-5 py-3.5">
+            <p className="flex items-center gap-2 text-sm text-ink">
+              <Receipt size={15} className="text-muted" />
+              Faturas
+            </p>
 
-              {cont && (cont.telefone || cont.celular || cont.whatsapp || cont.email) && (
-                <SectionCard title="Contato" icon={<Phone size={15} className="text-accent-soft" />}>
-                  <div className="flex flex-col divide-y divide-fg/[0.05] px-5">
-                    {cont.telefone != null && <InfoRow icon={<Phone size={14} />} label="Telefone" value={String(cont.telefone)} />}
-                    {cont.celular && <InfoRow icon={<Smartphone size={14} />} label="Celular" value={cont.celular} />}
-                    {cont.whatsapp && <InfoRow icon={<MessageCircle size={14} />} label="WhatsApp" value={cont.whatsapp} />}
-                    {cont.email && <InfoRow icon={<Mail size={14} />} label="E-mail" value={cont.email} />}
-                  </div>
-                </SectionCard>
-              )}
-
-              <SectionCard>
-                <div className="flex items-center justify-between gap-3 p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/25 to-accent-soft/10">
-                      <Sparkles className="h-5 w-5 text-accent-soft" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-ink">Plano {PLANO.nome}</p>
-                      <p className="text-xs text-faint">{PLANO.ciclo}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg text-ink">{formatCurrency(PLANO.preco)}</p>
-                    <p className="text-[11px] text-faint">/mês</p>
-                  </div>
-                </div>
-              </SectionCard>
+            <div className="flex gap-1 rounded-lg bg-fg/[0.04] p-0.5">
+              {(
+                [
+                  ["TODAS", "Todas"],
+                  ["A_PAGAR", "A pagar"],
+                  ["PAGA", "Pagas"],
+                ] as [Filtro, string][]
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setFiltro(id)}
+                  className={`focus-ring rounded-md px-2.5 py-1 text-[11px] transition-colors ${filtro === id ? "bg-accent text-white" : "text-mist hover:text-ink"}`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
-        </div>
+
+          {faturasFiltradas.length === 0 ? (
+            <p className="px-5 py-14 text-center text-[13px] text-faint">Nenhuma fatura neste filtro.</p>
+          ) : (
+            <ul className="divide-y divide-fg/[0.05]">
+              {faturasFiltradas.map((f) => (
+                <li key={f.id} className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-fg/[0.02]">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] text-ink">{f.descricao || `Assinatura ${competenciaBr(f.competencia)}`}</p>
+                    <p className="mt-0.5 text-[11px] text-faint">
+                      {f.status === "PAGA" ? `Pago em ${dataBr(f.pagoEm)}` : `Vence em ${dataBr(f.vencimento)}`}
+                    </p>
+                  </div>
+
+                  <StatusBadge status={f.status} />
+
+                  <p className="w-28 shrink-0 text-right text-[13px] tabular-nums text-ink">{formatCurrencyFromCents(f.valorCentavos)}</p>
+
+                  <div className="w-[76px] shrink-0 text-right">
+                    {ehPagavel(f) && (
+                      <button onClick={() => abrirPagamento(f)} className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/[0.08] px-2.5 text-[12px] text-accent-soft transition hover:bg-accent/[0.16]">
+                        <QrCode size={13} /> Pagar
+                      </button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* ---------- Rodapé: empresa, plano e suporte em uma faixa ---------- */}
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="card glass-sheen p-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-fg/[0.07] bg-fg/[0.03]">
+                {empresa?.urlLogo ? <img src={empresa.urlLogo} alt="" className="h-full w-full object-cover" /> : <Building2 className="h-5 w-5 text-muted" />}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-[13px] text-ink">{empresa?.nomeFantasia}</p>
+                <p className="truncate text-[11px] text-faint">
+                  {empresa?.cpfCnpj ? formatDocument(empresa.cpfCnpj) : "—"} · {empresa?.codigoEmpresa}
+                </p>
+              </div>
+            </div>
+
+            {podeTrocarPlano && (
+              <button onClick={abrirTrocaDePlano} className="focus-ring mt-4 w-full rounded-xl border border-fg/[0.07] py-2 text-[12px] text-mist transition hover:bg-fg/[0.04] hover:text-ink">
+                Trocar de plano antes de pagar
+              </button>
+            )}
+          </div>
+
+          <div className="card glass-sheen flex flex-col gap-2 p-5">
+            <p className="text-[11px] uppercase tracking-[1.2px] text-faint">Precisa de ajuda?</p>
+
+            {suporte?.linkWhatsapp && (
+              <a href={suporte.linkWhatsapp} target="_blank" rel="noopener noreferrer" className="focus-ring flex items-center gap-2.5 rounded-xl border border-fg/[0.06] px-3.5 py-2.5 text-[13px] text-mist transition hover:bg-fg/[0.04] hover:text-ink">
+                <MessageCircle size={15} className="text-muted" /> WhatsApp {suporte.whatsapp}
+              </a>
+            )}
+
+            {suporte?.email && (
+              <a href={`mailto:${suporte.email}`} className="focus-ring flex items-center gap-2.5 rounded-xl border border-fg/[0.06] px-3.5 py-2.5 text-[13px] text-mist transition hover:bg-fg/[0.04] hover:text-ink">
+                <Mail size={15} className="text-muted" /> {suporte.email}
+              </a>
+            )}
+
+            {!suporte?.linkWhatsapp && !suporte?.email && <p className="text-[13px] text-faint">Nenhum canal de suporte configurado.</p>}
+          </div>
+        </section>
       </div>
 
       {/* ==================== MODAL PIX ==================== */}
-      <Modal open={!!faturaSelecionada} onClose={fecharModal} title="Pagamento via Pix" subtitle={faturaSelecionada ? `${faturaSelecionada.competencia} · ${formatCurrency(faturaSelecionada.valor)}` : undefined} accent="rgb(var(--accent))" size="sm">
+      <Modal
+        open={!!faturaSelecionada}
+        onClose={fecharModal}
+        title="Pagamento via Pix"
+        subtitle={faturaSelecionada ? `${competenciaBr(faturaSelecionada.competencia)} · ${formatCurrencyFromCents(faturaSelecionada.valorCentavos)}` : undefined}
+        size="sm"
+      >
         <div className="flex flex-col items-center">
-          <div className="relative mb-5 rounded-3xl bg-white p-4 shadow-2xl">
-            <img src={qrCodeUrl} alt="QR Code Pix" className="h-56 w-56 rounded-2xl" onLoad={() => setQrLoading(false)} onError={() => setQrLoading(false)} />
-            {qrLoading && (
-              <div className="absolute inset-0 flex items-center justify-center rounded-3xl bg-black/50">
-                <Loader2 className="h-8 w-8 animate-spin text-white" />
+          {pix?.copiaECola ? (
+            <>
+              {/* Cartão branco e QR preto: contraste é requisito de leitura. */}
+              <div className="relative mb-4 rounded-2xl bg-white p-3 shadow-e2">
+                <img src={qrCodeUrl} alt="QR Code do Pix" className="h-52 w-52 rounded-lg" onLoad={() => setQrLoading(false)} onError={() => setQrLoading(false)} />
+                {qrLoading && (
+                  <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-white">
+                    <Loader2 className="h-7 w-7 animate-spin text-accent" />
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          <p className="mb-4 text-center text-sm text-mist">Escaneie o QR Code ou copie o código abaixo</p>
+              <p className="text-[13px] text-mist">Escaneie o QR Code ou copie o código</p>
+              <p className="mt-1 text-center text-[11px] text-faint">
+                {pix.beneficiario} · {pix.chave}
+              </p>
 
-          <div className="w-full select-all break-all rounded-2xl border border-fg/[0.08] bg-canvas p-4 font-mono text-xs text-mist">{PIX_CODE}</div>
+              <button onClick={copiarPix} className="focus-ring mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 text-sm text-white transition-all hover:brightness-110">
+                {copiado ? (
+                  <>
+                    <Check size={16} /> Código copiado
+                  </>
+                ) : (
+                  <>
+                    <Copy size={16} /> Copiar código Pix
+                  </>
+                )}
+              </button>
 
-          <button onClick={copiarPix} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-3.5 text-white transition-colors hover:bg-accent">
-            {copiado ? (
-              <>
-                <Check size={18} /> Copiado com sucesso!
-              </>
-            ) : (
-              <>
-                <Copy size={18} /> Copiar código Pix
-              </>
-            )}
-          </button>
+              <details className="mt-3 w-full">
+                <summary className="cursor-pointer list-none text-center text-[11px] text-faint transition-colors hover:text-mist">Ver o código completo</summary>
+                <p className="mt-2 max-h-24 select-all overflow-y-auto break-all rounded-xl border border-fg/[0.07] bg-canvas p-3 font-mono text-[11px] leading-relaxed text-mist">{pix.copiaECola}</p>
+              </details>
+            </>
+          ) : (
+            <p className="py-6 text-center text-[13px] text-mist">A chave Pix ainda não foi configurada. Fale com o suporte para receber os dados de pagamento.</p>
+          )}
 
-          <p className="mt-4 text-center text-xs text-faint">Após o pagamento, nossa equipe confirma e libera seu acesso — normalmente em algumas horas.</p>
+          {faturaSelecionada && (
+            <button
+              onClick={() => avisarPagamento(faturaSelecionada)}
+              disabled={enviando}
+              className="focus-ring mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-success/30 bg-success/[0.1] py-3 text-sm text-success transition-all hover:bg-success/[0.18] disabled:opacity-60"
+            >
+              {enviando ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={16} />}
+              {suporte?.linkWhatsapp ? "Já paguei — enviar comprovante" : "Já paguei — avisar o suporte"}
+            </button>
+          )}
+
+          <p className="mt-3 text-center text-[11px] leading-relaxed text-faint">Confirmamos o pagamento e liberamos seu acesso — normalmente em algumas horas.</p>
         </div>
+      </Modal>
+
+      {/* ==================== MODAL TROCA DE PLANO ==================== */}
+      <Modal open={trocandoPlano} onClose={() => setTrocandoPlano(false)} title="Trocar de plano" subtitle="A fatura em aberto passa a valer o novo preço." size="sm">
+        {planos.length === 0 ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-mist">
+            <Loader2 className="h-4 w-4 animate-spin text-accent" /> Carregando planos...
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {planos.map((p) => {
+              const atual = p.codigo === plano?.codigo;
+
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => trocarPlano(p.codigo)}
+                  className={`focus-ring flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition ${
+                    atual ? "border-accent/40 bg-accent/[0.08]" : "border-fg/[0.07] hover:border-accent/30 hover:bg-fg/[0.03]"
+                  }`}
+                >
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-2 text-[13px] text-ink">
+                      {p.nome}
+                      {atual && <span className="rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] text-accent-soft">Atual</span>}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[11px] text-mist">{p.descricao}</span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-[13px] tabular-nums text-ink">{formatCurrencyFromCents(p.precoCentavos)}</span>
+                    <span className="block text-[10px] text-faint">{CICLO_LABEL[p.ciclo]}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </Modal>
     </div>
   );
