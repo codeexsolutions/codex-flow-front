@@ -104,7 +104,7 @@ const PwaPrompts = () => {
       {precisaAtualizar && (
         <Faixa
           icon={<RefreshCw size={16} />}
-          texto="Uma nova versão do Codex Flow está pronta."
+          texto="Uma nova versão do CodeEx Flow está pronta."
           onFechar={() => setPrecisaAtualizar(false)}
           acao={
             <button type="button" onClick={() => updateServiceWorker(true)} className="focus-ring shrink-0 rounded-xl bg-accent px-3 py-1.5 text-[12px] text-white transition hover:brightness-110">
@@ -117,7 +117,7 @@ const PwaPrompts = () => {
       {instalavel && (
         <Faixa
           icon={<Download size={16} />}
-          texto="Instale o Codex Flow e abra direto da tela de início."
+          texto="Instale o CodeEx Flow e abra direto da tela de início."
           onFechar={dispensarInstalacao}
           acao={
             <button type="button" onClick={instalar} className="focus-ring shrink-0 rounded-xl bg-accent px-3 py-1.5 text-[12px] text-white transition hover:brightness-110">

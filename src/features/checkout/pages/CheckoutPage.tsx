@@ -261,7 +261,7 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
   const aoLiberar = useCallback(async () => {
     await alert.success(
       "Empresa verificada! 🎉",
-      "Confirmamos seu pagamento e liberamos o acesso completo ao Codex Flow. Bom trabalho!",
+      "Confirmamos seu pagamento e liberamos o acesso completo ao CodeEx Flow. Bom trabalho!",
       { confirmText: "Entrar no sistema" },
     );
 

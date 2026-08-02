@@ -123,7 +123,7 @@ const PlanosPage = () => {
         </button>
 
         <div className="flex flex-col items-center text-center">
-          <img src="/logo.png" alt="Codex Flow" width={48} height={48} className="h-12 w-12 rounded-xl shadow-e2" />
+          <img src="/logo.png" alt="CodeEx Flow" width={48} height={48} className="h-12 w-12 rounded-xl shadow-e2" />
           <h1 className="mt-5 text-2xl tracking-tight text-ink sm:text-[28px]">Escolha o plano da sua empresa</h1>
           <p className="mt-2.5 max-w-lg text-[13px] leading-relaxed text-mist">
             Escolha o plano, cadastre a empresa e já entre no sistema. O acesso é liberado assim que confirmarmos o

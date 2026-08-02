@@ -337,6 +337,32 @@
   -webkit-backdrop-filter: none;
 }
 
+/* ---------- Modo aplicativo instalado ---------- */
+/*
+ * `touch-action: manipulation` mata o zoom de duplo-toque, que o viewport
+ * sozinho não impede. `overscroll-behavior: none` tira o efeito de puxar a
+ * página (o "elástico") que denuncia que aquilo é um site dentro de um app.
+ * Só valem quando instalado — no navegador tudo continua padrão.
+ */
+:root[data-modo="app"] {
+  touch-action: manipulation;
+  overscroll-behavior: none;
+}
+
+:root[data-modo="app"] body {
+  overscroll-behavior: none;
+  /* Texto selecionável só onde faz sentido; segurar o dedo num botão de app
+     não deve abrir a alça de seleção. */
+  -webkit-touch-callout: none;
+}
+
+:root[data-modo="app"] input,
+:root[data-modo="app"] textarea,
+:root[data-modo="app"] [contenteditable] {
+  -webkit-touch-callout: default;
+  user-select: text;
+}
+
 /* ---------- Escala tipográfica ---------- */
 html {
   font-size: 16px;
@@ -666,4 +692,24 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 ::view-transition-new(root) {
   z-index: 2;
+}
+
+/* ---------- Folha (bottom sheet) ---------- */
+@keyframes cf-sheet {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [style*="cf-sheet"] { animation: none !important; }
+}
+
+/*
+ * A barra inferior é fixa e cobriria o fim do conteúdo. O respiro entra no
+ * corpo rolável das telas, e só no celular — no desktop a barra nem existe.
+ */
+@media (max-width: 767px) {
+  main .overflow-y-auto {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
 }

@@ -1,6 +1,5 @@
-import { useState } from "react";
 import type { ReactNode } from "react";
-import { Package, Users, DollarSign, Settings, LogOut, ShoppingCart, BarChart3, Menu, X, LayoutDashboard, Wallet, Truck } from "lucide-react";
+import { Package, Users, DollarSign, Settings, LogOut, ShoppingCart, BarChart3, LayoutDashboard, Wallet, Truck } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import useAuth from "@/features/auth/store/auth.store";
@@ -15,8 +14,6 @@ const Sidebar = () => {
   const { user, logout } = useAuth();
   const { enterprise } = useEnterprise();
 
-  const [open, setOpen] = useState(false);
-
   const userInitials = getInitials(user?.nome, "U");
   const companyInitial = (enterprise?.nomeFantasia || "E").trim().charAt(0).toUpperCase();
   const companyImage = enterprise?.urlLogo || enterprise?.urlImagem || "";
@@ -26,10 +23,7 @@ const Sidebar = () => {
 
   const isActive = (route: string) => (route === "" ? pathname === "/" : pathname === `/${route}` || pathname.startsWith(`/${route}/`));
 
-  const goto = (route: string) => {
-    setOpen(false);
-    navigate(route);
-  };
+  const goto = (route: string) => navigate(route);
 
   const handleLogout = () => {
     Promise.resolve(logout()).catch(() => {});
@@ -69,18 +63,8 @@ const Sidebar = () => {
 
   return (
     <>
-      {/* Botão flutuante (mobile) */}
-      {!open && (
-        <button type="button" onClick={() => setOpen(true)} aria-label="Abrir menu" className="glass-strong elev-3 focus-ring fixed bottom-5 left-5 z-[10] flex h-12 w-12 items-center justify-center rounded-2xl text-accent-soft transition-transform active:scale-95 md:hidden">
-          <Menu size={20} />
-        </button>
-      )}
-
-      {/* Backdrop (mobile) */}
-      {open && <div onClick={() => setOpen(false)} className="fixed inset-0 z-40 bg-canvas/60 md:hidden" style={{ backdropFilter: "blur(var(--blur-sm))", WebkitBackdropFilter: "blur(var(--blur-sm))" }} />}
-
       <aside
-        className={`glass-strong fixed inset-y-0 left-0 z-50 flex w-72 flex-shrink-0 flex-col overflow-hidden border-y-0 border-l-0 border-r transition-transform duration-300 md:static md:z-auto md:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full md:translate-x-0"}`}
+        className="glass-strong hidden w-72 flex-shrink-0 flex-col overflow-hidden border-y-0 border-l-0 border-r md:flex"
         style={{ borderColor: "rgb(var(--glass-border) / calc(var(--glass-border-alpha) + 0.03))" }}
       >
         {/* Brilho ambiente no topo */}
@@ -118,9 +102,6 @@ const Sidebar = () => {
             <p className="truncate text-[11.5px] text-faint">Painel de gestão</p>
           </div>
 
-          <button type="button" onClick={() => setOpen(false)} aria-label="Fechar menu" className="focus-ring flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-faint transition-colors hover:bg-fg/[0.06] hover:text-accent-soft md:hidden">
-            <X size={16} />
-          </button>
         </div>
 
         <nav className="relative flex-1 overflow-y-auto px-3 py-3">
@@ -178,7 +159,7 @@ const Sidebar = () => {
         <div className="relative flex items-center justify-between gap-2 border-t border-fg/[0.07] px-4 py-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <img src="/logo.png" width={22} height={22} alt="" className="rounded" />
-            <p className="truncate text-[13px] text-mist">Codex Flow</p>
+            <p className="truncate text-[13px] text-mist">CodeEx Flow</p>
           </div>
 
           <button type="button" onClick={handleLogout} className="focus-ring flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] text-mist transition-colors hover:bg-danger/10 hover:text-danger">

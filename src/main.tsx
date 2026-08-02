@@ -5,6 +5,11 @@ import "./index.css";
 import AppRoutes from "@/app/routes/AppRoutes";
 import { AlertProvider } from "@/shared/ui/Alert";
 import PwaPrompts from "@/shared/pwa/PwaPrompts";
+import { aplicarModoApp, observarModoApp } from "@/shared/pwa/appMode";
+
+// Antes de pintar: define se o zoom fica livre (navegador) ou travado (app).
+aplicarModoApp();
+observarModoApp();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

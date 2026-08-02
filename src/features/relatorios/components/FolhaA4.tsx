@@ -100,7 +100,7 @@ export const FolhaFooter = ({ emitidoEm }: { emitidoEm: string }) => (
   <footer className="mt-6 border-t border-[#ccc] pt-2 text-[7.5pt] text-[#666]">
     <div className="flex justify-between">
       <span>Emitido em {emitidoEm}</span>
-      <span>Codex Flow</span>
+      <span>CodeEx Flow</span>
     </div>
   </footer>
 );

@@ -139,7 +139,7 @@ const LandingPage = () => {
       <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-5">
         <div className="flex items-center gap-2.5">
           <img src="/logo.png" alt="" width={34} height={34} className="rounded-lg" />
-          <span className="text-[15px] tracking-tight">Codex Flow</span>
+          <span className="text-[15px] tracking-tight">CodeEx Flow</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -173,7 +173,7 @@ const LandingPage = () => {
             </Reveal>
 
             <Reveal delay={160}>
-              <p className="mt-4 max-w-lg text-[15px] leading-relaxed text-mist">Venda, controle o estoque, acompanhe clientes e feche o caixa sem trocar de ferramenta. O Codex Flow conecta tudo e mostra o resultado em tempo real.</p>
+              <p className="mt-4 max-w-lg text-[15px] leading-relaxed text-mist">Venda, controle o estoque, acompanhe clientes e feche o caixa sem trocar de ferramenta. O CodeEx Flow conecta tudo e mostra o resultado em tempo real.</p>
             </Reveal>
 
             <Reveal delay={240}>
@@ -285,7 +285,7 @@ const LandingPage = () => {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-6 text-[12px] text-faint">
           <div className="flex items-center gap-2">
             <img src="/logo.png" alt="" width={20} height={20} className="rounded" />
-            <span>© {new Date().getFullYear()} Codex Flow</span>
+            <span>© {new Date().getFullYear()} CodeEx Flow</span>
           </div>
           <span>Desenvolvido por CodEx Solutions</span>
         </div>

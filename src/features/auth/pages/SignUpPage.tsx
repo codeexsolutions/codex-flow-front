@@ -352,14 +352,14 @@ const CadastroEmpresaPage = () => {
             type="button"
             onClick={() => navigate(LANDING_ROUTE)}
             className="group relative inline-flex items-center justify-center rounded-xl transition-transform duration-300 hover:scale-[1.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-            aria-label="Ir para a página inicial do Codex Flow"
+            aria-label="Ir para a página inicial do CodeEx Flow"
           >
             <span className="cf-halo pointer-events-none absolute left-1/2 top-1/2 h-[80px] w-[80px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent opacity-50 blur-[36px]" />
-            <img src="/logo.png" alt="Codex Flow" width={48} height={48} className="relative h-10 w-10 rounded-xl shadow-[0_10px_30px_-8px_rgba(108,92,231,0.6)] sm:h-12 sm:w-12" />
+            <img src="/logo.png" alt="CodeEx Flow" width={48} height={48} className="relative h-10 w-10 rounded-xl shadow-[0_10px_30px_-8px_rgba(108,92,231,0.6)] sm:h-12 sm:w-12" />
           </button>
 
           <div className="flex flex-col leading-tight">
-            <span className="text-base tracking-tight text-ink sm:text-lg">Codex Flow</span>
+            <span className="text-base tracking-tight text-ink sm:text-lg">CodeEx Flow</span>
             <span className="text-[10px] uppercase tracking-[2px] text-faint">Cadastro de empresa</span>
           </div>
         </div>
@@ -817,9 +817,9 @@ const CadastroEmpresaPage = () => {
         </div>
 
         <p className="mt-2 text-center text-[10px] text-muted sm:mt-3">
-          © {new Date().getFullYear()} Codex Flow ·{" "}
+          © {new Date().getFullYear()} CodeEx Flow ·{" "}
           <button type="button" onClick={() => navigate(LANDING_ROUTE)} className="text-accent transition-colors hover:text-accent-soft">
-            Conheça o Codex Flow
+            Conheça o CodeEx Flow
           </button>
         </p>
       </div>

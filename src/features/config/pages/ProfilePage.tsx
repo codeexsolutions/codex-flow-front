@@ -144,7 +144,7 @@ const ProfilePage = () => {
             </div>
           </SettingsCard>
 
-          <SettingsCard icon={<CalendarDays className="h-4 w-4" />} title="Conta" desc="Informações da sua conta no Codex Flow">
+          <SettingsCard icon={<CalendarDays className="h-4 w-4" />} title="Conta" desc="Informações da sua conta no CodeEx Flow">
             <div className="flex items-center gap-3 rounded-xl border border-success/20 bg-success/[0.08] px-4 py-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-success/25">
                 <Shield size={15} className="text-success" />

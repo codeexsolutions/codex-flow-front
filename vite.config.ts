@@ -29,8 +29,8 @@ export default defineConfig(({ mode }) => {
         includeAssets: ["apple-touch-icon.png", "favicon-32.png", "offline.html"],
 
         manifest: {
-          name: "CodEx Flow",
-          short_name: "CodEx",
+          name: "CodeEx Flow",
+          short_name: "CodeEx",
           description: "Sistema de gestão para o seu negócio: PDV, estoque, clientes e financeiro.",
           lang: "pt-BR",
           theme_color: "#0e0d1a",

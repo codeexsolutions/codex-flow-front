@@ -46,12 +46,12 @@ const AuthPage = () => {
       <div className="relative z-10 w-full max-w-sm sm:max-w-md flex flex-col max-h-full">
         {/* Marca */}
         <div className="cf-rise flex items-center justify-center gap-3 mb-3 sm:mb-4">
-          <button type="button" onClick={() => navigate(LANDING_ROUTE)} className="group relative inline-flex items-center justify-center transition-transform duration-300 hover:scale-[1.04]" aria-label="Ir para a página inicial do Codex Flow">
+          <button type="button" onClick={() => navigate(LANDING_ROUTE)} className="group relative inline-flex items-center justify-center transition-transform duration-300 hover:scale-[1.04]" aria-label="Ir para a página inicial do CodeEx Flow">
             <span className="pointer-events-none absolute left-1/2 top-1/2 h-[80px] w-[80px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent blur-[36px]" style={{ opacity: "calc(0.5 * var(--fx-glow, 1))" }} />
-            <img src="/logo.png" alt="Codex Flow" width={48} height={48} className="relative h-10 w-10 rounded-xl shadow-glow sm:h-12 sm:w-12" />
+            <img src="/logo.png" alt="CodeEx Flow" width={48} height={48} className="relative h-10 w-10 rounded-xl shadow-glow sm:h-12 sm:w-12" />
           </button>
           <div className="flex flex-col leading-tight">
-            <span className="text-base tracking-tight text-ink sm:text-lg">Codex Flow</span>
+            <span className="text-base tracking-tight text-ink sm:text-lg">CodeEx Flow</span>
             <span className="text-[10px] uppercase tracking-[2px] text-faint">Painel da empresa</span>
           </div>
         </div>
@@ -74,9 +74,9 @@ const AuthPage = () => {
         </div>
 
         <p className="mt-2 text-center text-[10px] text-muted sm:mt-3">
-          © {new Date().getFullYear()} Codex Flow ·{" "}
+          © {new Date().getFullYear()} CodeEx Flow ·{" "}
           <button type="button" onClick={() => navigate(LANDING_ROUTE)} className="text-accent transition-colors hover:text-accent-soft">
-            Conheça o Codex Flow
+            Conheça o CodeEx Flow
           </button>
         </p>
       </div>
