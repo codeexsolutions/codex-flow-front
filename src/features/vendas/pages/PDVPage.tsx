@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { ShoppingCart, Plus, Receipt, BarChart3, UserCheck, DollarSign, Wallet, AlertCircle, Hash, TrendingUp, CalendarDays, ChevronRight, Search } from "lucide-react";
+import { ShoppingCart, Plus, Receipt, BarChart3, UserCheck, DollarSign, Wallet, AlertCircle, Hash, TrendingUp, CalendarDays, ChevronRight, Search, UserPlus, PackagePlus, FileText } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
 
 import Invoice from "@/features/vendas/components/Invoice";
-import { Modal } from "@/shared/ui/Modal";
 import { PageScreen, PageToolbar, PrimaryAction, GhostAction } from "@/shared/ui/PageShell";
 import Sheet from "@/shared/ui/Sheet";
 import PDVMobile, { type VendaResumo } from "@/features/vendas/components/PDVMobile";
@@ -14,14 +13,25 @@ import useAuth from "@/features/auth/store/auth.store";
 
 import useVendaStore from "@/features/vendas/store/venda.store";
 import useClienteStore from "@/features/clientes/store/cliente.store";
+import useSincronizacao from "@/shared/realtime/useSincronizacao";
+import ClienteForm from "@/features/clientes/components/ClienteForm";
+import { ProdutoForm } from "@/features/estoque/components/ProdutoForm";
+import ProductService from "@/features/estoque/services/product.service";
+import type { ProductFormData } from "@/features/estoque/schema/product.schema";
+import type { ClienteFormData } from "@/features/clientes/schema/cliente.schema";
+import { Modal } from "@/shared/ui/Modal";
+import { useAlert } from "@/shared/ui/Alert";
+import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import { formatCurrency } from "@/shared/utils/currency";
 
 import { estaAberto as estaAberta, totalDoPedido } from "@/shared/domain/pedido";
-import { formatTime as horaVenda, formatDate as dataVenda, isSameDay as ehHoje } from "@/shared/utils/date";
+import { formatTime as horaVenda, formatDate as dataVenda, isSameDay as ehHoje, isSameMonth as ehDesteMes } from "@/shared/utils/date";
 import { getInitials as iniciais, formatDocument } from "@/shared/utils/format";
+import { TabsPdv } from "@/features/vendas/components/TabsPdv";
 
 // Só o essencial: quem é o cliente e (se existir) qual pedido.
-type NotaAberta = { id?: string; clienteId: string; nome?: string };
+/* `clienteId` opcional: orçamento é montado para nome livre, sem cadastro. */
+type NotaAberta = { id?: string; clienteId?: string; nome?: string };
 
 /* --------------------------- Componentes locais --------------------------- */
 
@@ -86,6 +96,19 @@ const SearchBox = ({ value, onChange, placeholder, className = "" }: { value: st
 
 /* --------------------------------- Página --------------------------------- */
 
+/** "Hoje", "Ontem" ou a data — quem opera pensa assim, não em 02/08/2026. */
+const rotuloDoDia = (br: string): string => {
+  const hoje = dataVenda(new Date());
+
+  const ontem = new Date();
+  ontem.setDate(ontem.getDate() - 1);
+
+  if (br === hoje) return "Hoje";
+  if (br === dataVenda(ontem)) return "Ontem";
+
+  return br;
+};
+
 const PontoDeVenda = () => {
   const navigate = useNavigate();
   const mobile = useIsMobile();
@@ -103,7 +126,71 @@ const PontoDeVenda = () => {
   const [somenteHoje, setSomenteHoje] = useState(true);
   const [notaAberta, setNotaAberta] = useState<NotaAberta | null>(null);
 
+  /* Cadastros no próprio PDV: parar a venda para ir até Clientes ou Estoque e
+     voltar é o que faz o operador desistir e vender "no caderno". */
+  const [novoClienteOpen, setNovoClienteOpen] = useState(false);
+  const [novoProdutoOpen, setNovoProdutoOpen] = useState(false);
+
+  /* Orçamento aceita nome livre: a proposta costuma ser para quem ainda não é
+     cliente. Exigir cadastro antes de cotar inverte a ordem da conversa. */
+  const [orcamentoOpen, setOrcamentoOpen] = useState(false);
+  const [nomeOrcamento, setNomeOrcamento] = useState("");
+  const [salvandoCadastro, setSalvandoCadastro] = useState(false);
+
+  const alert = useAlert();
+  const criarCliente = useClienteStore((s) => s.criarCliente);
+
   const hoje = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
+
+  /** Abre a nota em modo proposta, com o nome digitado — sem cadastrar ninguém. */
+  const abrirOrcamento = () => {
+    const nomeLimpo = nomeOrcamento.trim();
+
+    if (!nomeLimpo) {
+      alert.warning("Informe o nome", "O orçamento precisa saber para quem é.");
+      return;
+    }
+
+    setOrcamentoOpen(false);
+    setNomeOrcamento("");
+    // Sem `clienteId`: é proposta, não venda de cliente cadastrado.
+    abrirNota({ nome: nomeLimpo });
+  };
+
+  /** Cadastra e já abre a venda para o cliente novo — é o motivo de ter cadastrado. */
+  const handleNovoCliente = async (dados: ClienteFormData) => {
+    setSalvandoCadastro(true);
+
+    try {
+      await criarCliente(dados as never);
+      await fetchClientes(true);
+
+      setNovoClienteOpen(false);
+      alert.success("Cliente cadastrado!", "Agora é só lançar os produtos.");
+
+      const criado = useClienteStore.getState().clientes.find((c) => c.nome === dados.nome);
+      if (criado?.id) abrirNota({ clienteId: String(criado.id), nome: criado.nome });
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível cadastrar o cliente."));
+    } finally {
+      setSalvandoCadastro(false);
+    }
+  };
+
+  const handleNovoProduto = async (dados: ProductFormData) => {
+    setSalvandoCadastro(true);
+
+    try {
+      await ProductService.create(dados);
+
+      setNovoProdutoOpen(false);
+      alert.success("Produto cadastrado!", "Ele já pode ser lançado na nota.");
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível cadastrar o produto."));
+    } finally {
+      setSalvandoCadastro(false);
+    }
+  };
 
   // async/await como no commit `altera pra async`, mas preservando o tratamento
   // de erro: resposta vazia zera a lista em vez de manter dados antigos.
@@ -116,8 +203,18 @@ const PontoDeVenda = () => {
     fetchClientes();
   }, [fetchVendas, fetchClientes]);
 
+  /* O PDV é a tela mais compartilhada da loja: dois balcões abertos ao mesmo
+     tempo é o normal, não a exceção. */
+  useSincronizacao(["pedidos", "clientes", "produtos"], () => {
+    fetchVendas(true);
+    fetchClientes(true);
+  });
+
   const vendasVisiveis = useMemo(() => {
-    const base = somenteHoje ? vendas.filter((v) => ehHoje(v.pedido.dataPedido)) : vendas;
+    /* "Todas" trazia o histórico inteiro da loja: em janeiro ainda cabe, no
+       segundo ano vira uma lista de milhares que ninguém rola. O PDV é uma tela
+       de operação — o que importa é hoje, e o mês corrente como contexto. */
+    const base = somenteHoje ? vendas.filter((v) => ehHoje(v.pedido.dataPedido)) : vendas.filter((v) => ehDesteMes(v.pedido.dataPedido));
     return [...base].sort((a, b) => +new Date(b.pedido.dataPedido) - +new Date(a.pedido.dataPedido));
   }, [vendas, somenteHoje]);
 
@@ -126,6 +223,36 @@ const PontoDeVenda = () => {
     if (!termo) return vendasVisiveis;
     return vendasVisiveis.filter((v) => v.nomeCliente?.toLowerCase().includes(termo));
   }, [vendasVisiveis, busca]);
+
+  /**
+   * Vendas agrupadas por dia, do mais recente para o mais antigo.
+   *
+   * Uma lista corrida de um mês inteiro não tem onde o olho descansar: a venda
+   * das 14h de ontem encosta na das 9h de hoje e as duas parecem a mesma coisa.
+   * Com o dia como cabeçalho — e o total daquele dia ao lado — a lista vira um
+   * extrato, que é como o dono já pensa o movimento da loja.
+   */
+  const gruposPorDia = useMemo(() => {
+    const mapa = new Map<string, { data: string; vendas: typeof vendasFiltradas; total: number }>();
+
+    for (const venda of vendasFiltradas) {
+      const chave = dataVenda(venda.pedido.dataPedido);
+      const grupo = mapa.get(chave) ?? { data: chave, vendas: [], total: 0 };
+
+      grupo.vendas.push(venda);
+      grupo.total += totalDoPedido(venda);
+      mapa.set(chave, grupo);
+    }
+
+    /* Ordena pela data real, não pelo texto: "02/08" e "10/07" comparados como
+       string colocariam julho na frente de agosto. */
+    const paraOrdem = (br: string) => {
+      const [d, m, a] = br.split("/");
+      return `${a}${m}${d}`;
+    };
+
+    return Array.from(mapa.values()).sort((x, y) => paraOrdem(y.data).localeCompare(paraOrdem(x.data)));
+  }, [vendasFiltradas]);
 
   const faturamento = vendasVisiveis.reduce((acc, v) => acc + totalDoPedido(v), 0);
   const recebido = vendasVisiveis.reduce((acc, v) => acc + Number(v.pedido.valorPago ?? 0), 0);
@@ -258,7 +385,7 @@ const PontoDeVenda = () => {
   }
 
   return (
-    <PageScreen icon={<ShoppingCart className="h-5 w-5" />} title="Ponto de Venda" subtitle="Inicie vendas e acompanhe o dia">
+    <PageScreen icon={<ShoppingCart className="h-5 w-5" />} title="Ponto de Venda" subtitle="Registre vendas e monte orçamentos" tabs={TabsPdv}>
         {/* Ações da tela — dentro do outlet, não no cabeçalho */}
         <PageToolbar
           left={
@@ -268,9 +395,26 @@ const PontoDeVenda = () => {
             </span>
           }
         >
+          <GhostAction icon={<UserPlus size={15} />} onClick={() => setNovoClienteOpen(true)}>
+            Novo cliente
+          </GhostAction>
+          <GhostAction icon={<PackagePlus size={15} />} onClick={() => setNovoProdutoOpen(true)}>
+            Novo produto
+          </GhostAction>
           <GhostAction icon={<BarChart3 size={15} />} onClick={() => setRelatorioOpen(true)}>
             Relatório do dia
           </GhostAction>
+          {/* Cor diferente de propósito: orçamento não é venda, e dois botões
+              iguais lado a lado fariam o operador clicar no errado com pressa. */}
+          <button
+            type="button"
+            onClick={() => setOrcamentoOpen(true)}
+            className="focus-ring flex h-9 cursor-pointer items-center gap-1.5 rounded-xl border border-warning/40 bg-warning/[0.12] px-3.5 text-[12.5px] text-warning transition-colors hover:bg-warning/20"
+          >
+            <FileText className="h-4 w-4" />
+            Novo orçamento
+          </button>
+
           <PrimaryAction icon={<Plus className="h-4 w-4" />} onClick={() => setNovaVendaOpen(true)}>
             Nova venda
           </PrimaryAction>
@@ -293,7 +437,7 @@ const PontoDeVenda = () => {
                 <Receipt className="h-4 w-4 text-accent-soft" />
               </div>
               <div>
-                <h2 className="text-[13px] text-ink">{somenteHoje ? "Vendas de hoje" : "Todas as vendas"}</h2>
+                <h2 className="text-[13px] text-ink">{somenteHoje ? "Vendas de hoje" : "Vendas do mês"}</h2>
                 <p className="text-[11px] text-faint">
                   {vendasVisiveis.length} {vendasVisiveis.length === 1 ? "venda" : "vendas"}
                 </p>
@@ -305,7 +449,7 @@ const PontoDeVenda = () => {
               <div className="glass-subtle flex items-center gap-1 rounded-xl p-1">
                 {[
                   { v: true, label: "Hoje" },
-                  { v: false, label: "Todas" },
+                  { v: false, label: "Este mês" },
                 ].map((opt) => (
                   <button key={opt.label} onClick={() => setSomenteHoje(opt.v)} aria-pressed={somenteHoje === opt.v} className={`cursor-pointer rounded-lg px-3 py-1.5 text-[12px] transition-colors ${somenteHoje === opt.v ? "bg-accent text-white shadow-glow" : "text-mist hover:text-ink"}`}>
                     {opt.label}
@@ -318,38 +462,58 @@ const PontoDeVenda = () => {
           {/* Corpo — lista rolável */}
           <div className="min-h-0 flex-1 overflow-y-auto">
             {vendasFiltradas.length > 0 ? (
-              vendasFiltradas.map((venda) => {
-                const total = totalDoPedido(venda);
-                const statusPag = statusPagamentoVenda(venda, total);
-                const pagoVenda = Number(venda.pedido.valorPago ?? 0);
-                return (
-                  <button
-                    key={venda.pedido.pedidoId}
-                    onClick={() => abrirNota({ id: venda.pedido.pedidoId, clienteId: venda.clienteId, nome: venda.nomeCliente })}
-                    className="group relative flex w-full items-center gap-3 border-b border-fg/[0.04] px-5 py-3.5 text-left transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-r before:bg-accent before:opacity-0 before:transition-opacity hover:bg-fg/[0.03] hover:before:opacity-100"
-                  >
-                    <Avatar name={venda.nomeCliente} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] text-ink">{venda.nomeCliente}</p>
-                      <p className="text-[11px] text-faint">
-                        {horaVenda(venda.pedido.dataPedido)}
-                        {!somenteHoje && ` · ${dataVenda(venda.pedido.dataPedido)}`}
-                        {statusPag === "PARCIAL" && ` · pago ${formatCurrency(pagoVenda)} de ${formatCurrency(total)}`}
-                      </p>
-                    </div>
-
-                    <span className="hidden sm:block">
-                      <StatusBadge status={statusPag} />
+              gruposPorDia.map((grupo) => (
+                <section key={grupo.data}>
+                  {/* Cabeçalho do dia: gruda no topo enquanto o dia rola, então
+                      nunca se perde de vista a qual data a linha pertence. */}
+                  <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-fg/[0.06] bg-surface/95 px-5 py-2 backdrop-blur-sm">
+                    <span className="flex items-center gap-2 text-[11.5px] text-mist">
+                      <CalendarDays size={13} className="text-accent-soft" />
+                      <span>{rotuloDoDia(grupo.data)}</span>
+                      <span className="text-faint">
+                        · {grupo.vendas.length} {grupo.vendas.length === 1 ? "venda" : "vendas"}
+                      </span>
                     </span>
 
-                    <div className="text-right">
-                      <p className="text-[13px] tabular-nums text-ink">{formatCurrency(total)}</p>
-                      <p className={`text-[11px] tabular-nums ${statusPag === "PAGA" ? "text-success" : statusPag === "PARCIAL" ? "text-accent-soft" : "text-warning"}`}>{statusPag === "PAGA" ? "paga" : statusPag === "PARCIAL" ? "parcial" : "aberta"}</p>
-                    </div>
-                    <ChevronRight size={16} className="text-muted" />
-                  </button>
-                );
-              })
+                    <span className="text-[12px] tabular-nums text-ink">{formatCurrency(grupo.total)}</span>
+                  </div>
+
+                  {grupo.vendas.map((venda) => {
+                    const total = totalDoPedido(venda);
+                    const statusPag = statusPagamentoVenda(venda, total);
+                    const pagoVenda = Number(venda.pedido.valorPago ?? 0);
+
+                    return (
+                      <button
+                        key={venda.pedido.pedidoId}
+                        onClick={() => abrirNota({ id: venda.pedido.pedidoId, clienteId: venda.clienteId, nome: venda.nomeCliente })}
+                        className="group relative flex w-full items-center gap-3 border-b border-fg/[0.04] px-5 py-3.5 text-left transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-r before:bg-accent before:opacity-0 before:transition-opacity hover:bg-fg/[0.03] hover:before:opacity-100"
+                      >
+                        <Avatar name={venda.nomeCliente} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[13px] text-ink">{venda.nomeCliente}</p>
+                          <p className="text-[11px] text-faint">
+                            {/* A data já está no cabeçalho do grupo — repetir em
+                                cada linha só gastaria espaço. */}
+                            {horaVenda(venda.pedido.dataPedido)}
+                            {statusPag === "PARCIAL" && ` · pago ${formatCurrency(pagoVenda)} de ${formatCurrency(total)}`}
+                          </p>
+                        </div>
+
+                        <span className="hidden sm:block">
+                          <StatusBadge status={statusPag} />
+                        </span>
+
+                        <div className="text-right">
+                          <p className="text-[13px] tabular-nums text-ink">{formatCurrency(total)}</p>
+                          <p className={`text-[11px] tabular-nums ${statusPag === "PAGA" ? "text-success" : statusPag === "PARCIAL" ? "text-accent-soft" : "text-warning"}`}>{statusPag === "PAGA" ? "paga" : statusPag === "PARCIAL" ? "parcial" : "aberta"}</p>
+                        </div>
+                        <ChevronRight size={16} className="text-muted" />
+                      </button>
+                    );
+                  })}
+                </section>
+              ))
             ) : (
               <div className="flex h-full items-center justify-center py-10">
                 <div className="flex max-w-xs flex-col items-center gap-3 text-center text-faint">
@@ -464,6 +628,49 @@ const PontoDeVenda = () => {
           </div>
         </div>
       </Modal>
+
+        {/* Orçamento: só o nome, e a nota abre para montar a proposta. */}
+        <Modal open={orcamentoOpen} onClose={() => setOrcamentoOpen(false)} title="Novo orçamento" subtitle="Para quem é a proposta?">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              abrirOrcamento();
+            }}
+            className="flex flex-col gap-4"
+          >
+            <div>
+              <label className="mb-1.5 block text-[11px] uppercase tracking-[0.08em] text-faint">Nome do cliente</label>
+              <input
+                autoFocus
+                value={nomeOrcamento}
+                onChange={(e) => setNomeOrcamento(e.target.value)}
+                placeholder="Digite qualquer nome"
+                className="w-full rounded-xl border border-fg/[0.08] bg-fg/[0.03] px-3.5 py-3 text-[14px] text-ink outline-none focus:border-accent/60"
+              />
+              <p className="mt-1.5 text-[11.5px] leading-relaxed text-faint">Não precisa ter cadastro. Na próxima tela você lança os produtos e clica em “Orçamento”.</p>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setOrcamentoOpen(false)} className="min-h-[42px] rounded-xl border border-fg/[0.1] px-4 text-[13px] text-mist transition-colors hover:text-ink">
+                Cancelar
+              </button>
+              <button type="submit" className="min-h-[42px] rounded-xl bg-accent px-5 text-[13px] text-white transition-all hover:brightness-110 active:scale-[0.99]">
+                Montar orçamento
+              </button>
+            </div>
+          </form>
+        </Modal>
+
+        {/* Cadastros sem sair da tela — as rotas são as mesmas de Clientes e Estoque. */}
+        {/* Sem `Modal` em volta: o `ClienteForm` já traz o próprio overlay de
+            tela cheia. Envolvê-lo empilhava dois fundos escuros e dois cartões,
+            que era o "bugado" — a caixa aparecia dentro de outra caixa. */}
+        {novoClienteOpen && <ClienteForm saving={salvandoCadastro} onClose={() => setNovoClienteOpen(false)} onSubmit={handleNovoCliente} />}
+
+        <Modal open={novoProdutoOpen} onClose={() => setNovoProdutoOpen(false)} title="Novo produto" subtitle="Ele fica disponível na nota na hora">
+          <ProdutoForm submitText={salvandoCadastro ? "Salvando..." : "Cadastrar produto"} onCancel={() => setNovoProdutoOpen(false)} onSubmit={handleNovoProduto} />
+        </Modal>
+
     </PageScreen>
   );
 };

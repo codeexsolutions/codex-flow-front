@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { ShoppingCart, Search, XCircle } from "lucide-react";
+import { ShoppingCart, Search, XCircle, UserRound } from "lucide-react";
 import { Modal } from "@/shared/ui/Modal";
 import Invoice from "@/features/vendas/components/Invoice";
 import { formatCurrency } from "@/shared/utils/currency";
 import { type PedidoClienteType, estaAberto, estaCancelado, estaFechado, totalDoPedido, valorPagoDoPedido, valorPendenteDoPedido } from "@/shared/domain/pedido";
 import { formatDateShort } from "@/shared/utils/date";
 import { PedidoStatusBadge } from "@/shared/ui/StatusBadge";
+import useAuth from "@/features/auth/store/auth.store";
+import { ehGestor } from "@/features/vendas/components/TabsVendas";
 import useVendaStore from "@/features/vendas/store/venda.store";
 import VendasMobile, { type VendaItem } from "@/features/vendas/components/VendasMobile";
 import Sheet from "@/shared/ui/Sheet";
@@ -22,7 +24,12 @@ const SalesList = () => {
 
   const [notaAberta, setNotaAberta] = useState<NotaAberta | null>(null);
   const [search, setSearch] = useState("");
+  const { user } = useAuth();
+  const gestor = ehGestor(user);
+
   const [status, setStatus] = useState<StatusFiltro>("todos");
+  /** "" = todos. Só o gestor vê este filtro — o vendedor já recebe só as dele. */
+  const [vendedor, setVendedor] = useState("");
 
   useEffect(() => {
     fetchVendas();
@@ -42,11 +49,31 @@ const SalesList = () => {
     else if (status === "pendente") base = base.filter(estaAberto);
     else if (status === "cancelado") base = base.filter(estaCancelado);
 
+    if (vendedor) base = base.filter((v) => String(v.vendedorId ?? "") === vendedor);
+
     const termo = search.trim().toLowerCase();
     if (termo) base = base.filter((v) => v.nomeCliente?.toLowerCase().includes(termo));
 
     return base;
-  }, [vendas, status, search]);
+  }, [vendas, status, search, vendedor]);
+
+  /**
+   * Vendedores extraídos das próprias vendas, não da lista de funcionários.
+   *
+   * Assim quem saiu da empresa continua aparecendo enquanto tiver venda no
+   * período — some da lista quando não houver mais o que filtrar. Buscar de
+   * `/funcionarios` daria o oposto: ex-funcionário sumiria e as vendas dele
+   * ficariam inalcançáveis.
+   */
+  const vendedores = useMemo(() => {
+    const mapa = new Map<string, string>();
+
+    for (const v of vendas) {
+      if (v.vendedorId) mapa.set(String(v.vendedorId), v.nomeVendedor || "Sem nome");
+    }
+
+    return Array.from(mapa, ([id, nome]) => ({ id, nome })).sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [vendas]);
 
 const totalEmAberto = useMemo(() => {
   return vendas
@@ -97,6 +124,10 @@ const totalEmAberto = useMemo(() => {
           setSearch={setSearch}
           status={status}
           setStatus={setStatus}
+          vendedor={vendedor}
+          setVendedor={setVendedor}
+          /* Vendedor só filtra o que já é dele — o seletor é do gestor. */
+          vendedores={gestor ? vendedores : []}
           onAbrir={(v: PedidoClienteType) =>
             abrirNota({
               id: v.pedido.pedidoId,
@@ -123,6 +154,9 @@ function TabSales({
   setSearch,
   status,
   setStatus,
+  vendedor,
+  setVendedor,
+  vendedores,
   onAbrir,
 }: {
   vendas: PedidoClienteType[];
@@ -132,6 +166,9 @@ function TabSales({
   setSearch: (v: string) => void;
   status: StatusFiltro;
   setStatus: (v: StatusFiltro) => void;
+  vendedor: string;
+  setVendedor: (v: string) => void;
+  vendedores: { id: string; nome: string }[];
   onAbrir: (v: PedidoClienteType) => void;
 }) {
   return (
@@ -142,6 +179,27 @@ function TabSales({
           <Search className="h-3.5 w-3.5 text-muted" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente..." className="flex-1 bg-transparent py-2 text-xs text-ink outline-none placeholder:text-faint" />
         </div>
+
+        {/* Só aparece quando há mais de um vendedor com venda: com um só, o
+            seletor não filtra nada e vira ruído na barra. */}
+        {vendedores.length > 1 && (
+          <div className="flex items-center gap-2 rounded-lg border border-fg/[0.08] bg-fg/[0.05] px-3">
+            <UserRound className="h-3.5 w-3.5 shrink-0 text-muted" />
+            <select
+              value={vendedor}
+              onChange={(e) => setVendedor(e.target.value)}
+              aria-label="Filtrar por vendedor"
+              className="cursor-pointer bg-transparent py-2 text-xs text-ink outline-none"
+            >
+              <option value="">Todos os vendedores</option>
+              {vendedores.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="flex gap-1.5">
           {(["todos", "pago", "pendente", "cancelado"] as const).map((opt) => (

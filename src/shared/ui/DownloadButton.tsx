@@ -92,6 +92,16 @@ export const handleDownload = async (ref: RefObject<HTMLDivElement>, filename = 
 
   try {
     const blob = await toBlob(node, {
+      /*
+       * Tudo marcado com `data-sem-foto` fica de fora do PNG.
+       *
+       * Existem controles que precisam estar na tela e não podem estar no
+       * arquivo que o cliente recebe — os atalhos de pagamento parcial, por
+       * exemplo. Filtrar na hora de rasterizar é mais seguro do que esconder e
+       * mostrar por CSS: não há intervalo em que o elemento pisca, e não
+       * depende de o `finally` conseguir devolver o estilo se algo falhar.
+       */
+      filter: (no) => !(no instanceof HTMLElement && no.dataset.semFoto !== undefined),
       backgroundColor: resolveToken("--surface", "#15132a"),
       width: node.scrollWidth,
       height: node.scrollHeight,

@@ -1,5 +1,7 @@
+import { useEffect } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
-import { Package, Users, DollarSign, Settings, LogOut, ShoppingCart, BarChart3, LayoutDashboard, Wallet, Truck } from "lucide-react";
+import { Package, Users, DollarSign, Settings, LogOut, ShoppingCart, BarChart3, LayoutDashboard, Truck, UserCog, Wallet, LifeBuoy, Factory } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import useAuth from "@/features/auth/store/auth.store";
@@ -7,6 +9,8 @@ import useEnterprise from "@/features/empresa/store/enterprise.store";
 import { ehGestor } from "@/features/vendas/components/TabsVendas";
 import SinoNotificacoes from "@/features/notificacoes/components/SinoNotificacoes";
 import { getInitials } from "@/shared/utils/format";
+import { tocarNavegacao } from "@/shared/session/somSessao";
+import useEquipeStore, { planoTemEquipe } from "@/features/funcionarios/store/equipe.store";
 
 const Sidebar = () => {
   const { pathname } = useLocation();
@@ -21,9 +25,42 @@ const Sidebar = () => {
   /** Dono ou administrador promovido: vê o sistema inteiro. */
   const gestor = ehGestor(user);
 
-  const isActive = (route: string) => (route === "" ? pathname === "/" : pathname === `/${route}` || pathname.startsWith(`/${route}/`));
+  /* Só o gestor pergunta: a API recusa para vendedor, e uma chamada que sempre
+     falha em toda navegação é ruído no log e na rede. */
+  const equipe = useEquipeStore((s) => s.equipe);
+  const buscarEquipe = useEquipeStore((s) => s.buscar);
 
-  const goto = (route: string) => navigate(route);
+  useEffect(() => {
+    if (gestor) buscarEquipe();
+  }, [gestor, buscarEquipe]);
+
+  /**
+   * Rotas que são filhas de outra no menu. Sem esta lista, estar em
+   * `/vendas/orcamentos` acenderia "Vendas" **e** "Orçamentos" ao mesmo tempo,
+   * porque Vendas casa por prefixo.
+   */
+  const FILHAS_COM_ITEM_PROPRIO = ["/vendas/orcamentos"];
+
+  const isActive = (route: string) => {
+    if (route === "") return pathname === "/";
+
+    const alvo = `/${route}`;
+
+    if (pathname === alvo) return true;
+    if (!pathname.startsWith(`${alvo}/`)) return false;
+
+    // O pai não acende quando a filha tem item próprio no menu.
+    return !FILHAS_COM_ITEM_PROPRIO.some((f) => f !== alvo && pathname.startsWith(f));
+  };
+
+  const reduzir = useReducedMotion();
+
+  const goto = (route: string) => {
+    // Não toca ao clicar onde já se está: som sem mudança confunde.
+    if (!isActive(route)) tocarNavegacao();
+
+    navigate(route);
+  };
 
   const handleLogout = () => {
     Promise.resolve(logout()).catch(() => {});
@@ -46,14 +83,55 @@ const Sidebar = () => {
         type="button"
         onClick={() => goto(route)}
         aria-current={active ? "page" : undefined}
-        className={`group focus-ring relative mb-1 flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-[13.5px] transition-all duration-200 ${active ? " text-ink" : "text-mist hover:bg-fg/[0.05] hover:text-ink"}`}
+        className={`group focus-ring relative mb-1 flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-[13.5px] transition-colors duration-200 ${active ? " text-ink" : "text-mist hover:bg-fg/[0.05] hover:text-ink"}`}
       >
-        {/* Pílula de fundo do item ativo */}
-        {active && <span aria-hidden className="absolute inset-0 rounded-xl border border-accent/25 bg-gradient-to-r from-accent/[0.22] via-accent/[0.10] to-transparent" style={{ boxShadow: "inset 0 1px 0 rgb(var(--glass-highlight) / 0.14)" }} />}
+        {/*
+         * Sem `layoutId` aqui, de propósito.
+         *
+         * A pílula deslizante distorcia: animação de layout precisa medir o
+         * elemento em pixels reais, e a sidebar vive dentro de um contêiner que
+         * o `MainLayout` anima com `scale`. O framer mede na escala errada e o
+         * resultado é a borda esticada, atravessando os itens vizinhos.
+         *
+         * A troca aqui é rápida e curta — quem clica no menu já está olhando
+         * para o item que clicou. Um surgimento firme com o traço lateral
+         * crescendo comunica a mesma coisa, e nunca quebra.
+         */}
+        {active && (
+          <motion.span
+            aria-hidden
+            className="absolute inset-0 rounded-xl border border-accent/25 bg-gradient-to-r from-accent/[0.22] via-accent/[0.10] to-transparent"
+            style={{ boxShadow: "inset 0 1px 0 rgb(var(--glass-highlight) / 0.14)" }}
+            initial={reduzir ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          />
+        )}
 
-        {active && <span aria-hidden className="absolute left-0 top-1/2 h-7 w-[3px] -translate-y-1/2 rounded-r-full bg-gradient-to-b from-accent-soft to-accent" style={{ boxShadow: "0 0 12px rgb(var(--accent) / calc(0.8 * var(--fx-glow, 1)))" }} />}
+        {active && (
+          <motion.span
+            aria-hidden
+            className="absolute left-0 top-1/2 w-[3px] -translate-y-1/2 rounded-r-full bg-gradient-to-b from-accent-soft to-accent"
+            style={{ boxShadow: "0 0 12px rgb(var(--accent) / calc(0.8 * var(--fx-glow, 1)))" }}
+            /* Só a altura anima: é uma propriedade que não depende de medir o
+               elemento contra a viewport, então a escala do pai não a afeta. */
+            initial={reduzir ? { height: 28 } : { height: 0 }}
+            animate={{ height: 28 }}
+            transition={{ type: "spring", stiffness: 480, damping: 30 }}
+          />
+        )}
 
-        <span className={`relative flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-200 ${active ? "bg-accent/25 text-accent-soft" : "bg-fg/[0.04] text-faint group-hover:bg-fg/[0.08] group-hover:text-accent-soft"}`}>{icon}</span>
+        {/* O ícone dá um pulinho ao virar ativo: confirma o clique sem precisar
+            de outro elemento na tela. `scale` num filho é seguro — o que não
+            funciona é medir posição dentro de um pai escalado. */}
+        <motion.span
+          className={`relative flex h-8 w-8 items-center justify-center rounded-lg transition-colors duration-200 ${active ? "bg-accent/25 text-accent-soft" : "bg-fg/[0.04] text-faint group-hover:bg-fg/[0.08] group-hover:text-accent-soft"}`}
+          animate={reduzir ? {} : { scale: active ? 1.06 : 1 }}
+          transition={{ type: "spring", stiffness: 460, damping: 22 }}
+        >
+          {icon}
+        </motion.span>
+
         <span className="relative flex-1">{label}</span>
       </button>
     );
@@ -107,23 +185,59 @@ const Sidebar = () => {
         </div>
 
         <nav className="relative flex-1 overflow-y-auto px-3 py-3">
-          {/* O funcionário opera a loja inteira: o menu é o mesmo para todos.
-              O que é do dono não vive aqui — está em Configurações (empresa e
-              faturas) e na aba Funcionários, dentro de Vendas. */}
-          {cat("Operação")}
+          {/*
+           * Agrupado pelo que a pessoa está fazendo, não pelo módulo técnico.
+           *
+           * Produção é o trabalho do dia — vender, orçar, atender. Orçamento
+           * mora aqui e não em Financeiro porque proposta ainda não é dinheiro:
+           * é conversa de balcão, feita entre uma venda e outra.
+           */}
+          {cat("Produção")}
           {item("", <LayoutDashboard size={17} />, "Dashboard")}
           {item("pdv", <ShoppingCart size={17} />, "PDV")}
+          {/* Em breve, e só no plano Ilimitado. Fica visível desabilitado em
+              vez de escondido: quem não sabe que existe não pergunta, e o item
+              cinza é o que faz o dono querer saber quando chega. */}
+          {item("planilhas", <Factory size={17} />, "Produção", true)}
 
           {cat("Gerenciamento")}
           {item("estoque", <Package size={17} />, "Estoque")}
           {item("clientes", <Users size={17} />, "Clientes")}
+          {/* Equipe só existe em plano que comporta mais de um usuário: mostrar
+              para quem tem uma vaga só seria oferecer porta que não abre. */}
+          {gestor && planoTemEquipe(equipe) && item("funcionarios", <UserCog size={17} />, "Funcionários")}
           {item("correios", <Truck size={17} />, "Correios", true)}
 
           {cat("Financeiro")}
-          {item("vendas", <DollarSign size={17} />, "Vendas")}
-          {item("financeiro", <Wallet size={17} />, "Financeiro")}
+          {/*
+           * Um item só para o assunto "dinheiro". Ter "Vendas" e "Financeiro"
+           * lado a lado era redundante — são a mesma tela, e a lista de vendas
+           * fica a uma aba de distância. O vendedor não entra aqui: para ele o
+           * menu leva direto às vendas dele, que é tudo o que pode ver.
+           */}
+          {gestor
+            ? item("vendas/financeiro", <Wallet size={17} />, "Financeiro")
+            : item("vendas/lista", <DollarSign size={17} />, "Minhas vendas")}
           {item("relatorios", <BarChart3 size={17} />, "Relatórios")}
         </nav>
+
+        {/* Ajuda — fica fora da navegação, junto do rodapé: não é lugar que se
+            visita no fluxo de trabalho, é a saída para quando algo trava. */}
+        <div className="relative px-3 pb-1 pt-2">
+          <button
+            type="button"
+            onClick={() => goto("ajuda")}
+            aria-current={isActive("ajuda") ? "page" : undefined}
+            className={`group focus-ring relative flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-[13.5px] transition-colors duration-200 ${
+              isActive("ajuda") ? "text-ink" : "text-mist hover:bg-fg/[0.05] hover:text-ink"
+            }`}
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-fg/[0.04] text-faint transition-colors group-hover:bg-fg/[0.08] group-hover:text-accent-soft">
+              <LifeBuoy size={17} />
+            </span>
+            <span className="flex-1">Ajuda e suporte</span>
+          </button>
+        </div>
 
         {/* Usuário */}
         <div className="relative p-3">

@@ -1,9 +1,9 @@
 import axios from "axios";
 
-const baseURL = import.meta.env.PROD ? import.meta.env.VITE_API_PRODUCTION : import.meta.env.VITE_API_LOCAL;
+import { API_URL } from "@/shared/api/apiUrl";
 
 const sysgrafix = axios.create({
-  baseURL,
+  baseURL: API_URL,
 });
 
 sysgrafix.interceptors.request.use((config) => {

@@ -1,7 +1,5 @@
-import { useEffect, useState } from "react";
-import { QrCode, Copy } from "lucide-react";
+import { Copy } from "lucide-react";
 import { useAlert } from "@/shared/ui/Alert";
-import { getQrCodeDataUrl } from "@/shared/utils/pix";
 
 type PixSectionProps = {
   pixPayload: string;
@@ -9,39 +7,11 @@ type PixSectionProps = {
 
 const PixSection = ({ pixPayload }: PixSectionProps) => {
   const alert = useAlert();
-  // Data URI local: a nota precisa levar o QR embutido para o download
-  // funcionar (ver `getQrCodeDataUrl`).
-  const [qrCodeUrl, setQrCodeUrl] = useState("");
-
-  useEffect(() => {
-    let vivo = true;
-
-    getQrCodeDataUrl(pixPayload).then((url) => vivo && setQrCodeUrl(url));
-
-    return () => {
-      vivo = false;
-    };
-  }, [pixPayload]);
-
   if (!pixPayload) return null;
 
   return (
     <div className="border-t border-fg/[0.05] px-5 py-5">
-      <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start">
-        {/* QR Code */}
-        <div className="flex shrink-0 flex-col items-center gap-2">
-          <div className="overflow-hidden rounded-2xl border border-fg/[0.08] bg-white p-3 shadow-sm">
-            {qrCodeUrl ? (
-              <img src={qrCodeUrl} alt="QR Code PIX" className="h-48 w-48 rounded-xl" />
-            ) : (
-              <div className="flex h-48 w-48 items-center justify-center rounded-xl bg-fg/[0.03]">
-                <QrCode size={60} className="text-faint" />
-              </div>
-            )}
-          </div>
-          <span className="text-[10px] text-faint">Pagar com PIX</span>
-        </div>
-
+      <div className="flex flex-col gap-5">
         {/* Copia-e-cola */}
         <div className="min-w-0 flex-1">
           <p className="text-[11px] uppercase tracking-[0.08em] text-faint">Pagamento via PIX</p>

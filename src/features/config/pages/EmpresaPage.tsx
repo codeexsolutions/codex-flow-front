@@ -14,6 +14,7 @@ import EmpresaIdentificacao from "@/features/config/components/EmpresaIdentifica
 import EmpresaContato from "@/features/config/components/EmpresaContato";
 import EmpresaEndereco from "@/features/config/components/EmpresaEndereco";
 import CorporateBadge from "@/features/config/components/CorporateBadge";
+import PixEmpresa from "@/features/config/components/PixEmpresa";
 
 type EnterpriseLike = {
   id?: string;
@@ -239,8 +240,10 @@ const EmpresaPage = () => {
         )}
       </div>
 
-      <aside className="min-w-0 xl:sticky xl:top-0">
+      <aside className="flex min-w-0 flex-col gap-3 xl:sticky xl:top-0">
         <CorporateBadge />
+        {/* Chave Pix mora aqui: é cadastro da empresa, não assunto de nota. */}
+        <PixEmpresa />
       </aside>
     </div>
   );

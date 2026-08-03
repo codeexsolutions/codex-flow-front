@@ -50,6 +50,9 @@ export type PedidoClienteType = {
   statusCliente: string;
   pedido: PedidoType;
   codigoEmpresa: string;
+  /** Quem fez a venda. Nulo em pedido anterior ao registro de vendedor. */
+  vendedorId?: string | null;
+  nomeVendedor?: string | null;
 };
 
 /** Item enviado ao backend ao criar ou alterar um pedido. */

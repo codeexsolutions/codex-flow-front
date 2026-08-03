@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Users, ShieldCheck, UserPlus, KeyRound, Power, Crown, Loader2, AlertTriangle, Pencil } from "lucide-react";
+import { Users, ShieldCheck, UserPlus, KeyRound, Power, Crown, Loader2, AlertTriangle, Pencil, UserCog } from "lucide-react";
 
 import { TabelaCard, TabelaHead, TabelaRow, TabelaVazia, type Coluna } from "@/shared/ui/DataTable";
 import { Modal } from "@/shared/ui/Modal";
 import { useAlert } from "@/shared/ui/Alert";
 import useAuth from "@/features/auth/store/auth.store";
 import FuncionarioService, { type Equipe, type Funcionario, type PermissaoFuncionario } from "@/features/funcionarios/services/funcionario.service";
+import useEquipeStore from "@/features/funcionarios/store/equipe.store";
+import { PageScreen } from "@/shared/ui/PageShell";
 
 const COLS = "grid-cols-[1.4fr_1fr_110px_100px_112px]";
 
@@ -64,7 +66,11 @@ const FuncionariosPage = () => {
 
   const carregar = useCallback(async () => {
     try {
-      setEquipe(await FuncionarioService.listar());
+      const nova = await FuncionarioService.listar();
+
+      setEquipe(nova);
+      // A sidebar usa o mesmo dado para decidir se mostra "Funcionários".
+      useEquipeStore.getState().definir(nova);
       setErro("");
     } catch (e) {
       setErro((e as Error).message);
@@ -238,8 +244,12 @@ const FuncionariosPage = () => {
   }
 
   return (
-    /* Conteúdo de aba: sem casca própria — espaçamento e rolagem vêm do
-       `PageScreen` da tela de Vendas, como nas abas vizinhas. */
+    /* Tela própria: deixou de ser aba de Vendas, então traz a própria moldura. */
+    <PageScreen
+      icon={<UserCog className="h-5 w-5" />}
+      title="Funcionários"
+      subtitle="Cadastro e acesso de quem trabalha na loja"
+    >
     <div className="flex h-full min-h-0 flex-col gap-3">
       {/* Vagas do plano — é a regra que limita o cadastro */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-fg/[0.07] bg-fg/[0.02] px-4 py-3">
@@ -391,6 +401,7 @@ const FuncionariosPage = () => {
         </div>
       </Modal>
     </div>
+    </PageScreen>
   );
 };
 

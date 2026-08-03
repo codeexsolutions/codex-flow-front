@@ -102,3 +102,54 @@ export const SkeletonSummary = ({ cards = 6 }: { cards?: number }) => (
     ))}
   </div>
 );
+
+/* ─────────────────────────── Dashboard ─────────────────────────── */
+
+/**
+ * Esqueletos do painel.
+ *
+ * A regra que seguimos: o esqueleto tem **a forma e a altura do conteúdo real**.
+ * Um bloco cinza genérico troca uma espera por outra — a tela ainda salta
+ * quando os dados chegam. Reproduzindo o formato, o layout já nasce no lugar
+ * certo e só falta a informação aparecer.
+ */
+export const SkeletonKpis = ({ cards = 4 }: { cards?: number }) => (
+  <div className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">
+    {Array.from({ length: cards }).map((_, i) => (
+      <div key={i} className="card glass-sheen p-4">
+        <Skeleton className="mb-2.5 h-9 w-9 rounded-xl" />
+        <Skeleton className="h-2.5 w-16" />
+        <Skeleton className="mt-2 h-5 w-24" />
+        <Skeleton className="mt-2 h-2.5 w-20" />
+      </div>
+    ))}
+  </div>
+);
+
+/** Barras de alturas variadas: parece um gráfico, não um retângulo cinza. */
+export const SkeletonGrafico = ({ altura = 220 }: { altura?: number }) => {
+  const alturas = [42, 58, 35, 72, 50, 88, 64, 46, 78, 55, 68, 40];
+
+  return (
+    <div className="flex items-end gap-2 p-4" style={{ height: altura }}>
+      {alturas.map((h, i) => (
+        <Skeleton key={i} className="flex-1 rounded-t-md" style={{ height: `${h}%` }} />
+      ))}
+    </div>
+  );
+};
+
+export const SkeletonListaPainel = ({ linhas = 5 }: { linhas?: number }) => (
+  <div className="flex flex-col">
+    {Array.from({ length: linhas }).map((_, i) => (
+      <div key={i} className="flex items-center gap-3 border-b border-fg/[0.04] px-4 py-2.5 last:border-0">
+        <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+        <div className="min-w-0 flex-1">
+          <Skeleton className="h-3 w-32" />
+          <Skeleton className="mt-1.5 h-2.5 w-20" />
+        </div>
+        <Skeleton className="h-3 w-16 shrink-0" />
+      </div>
+    ))}
+  </div>
+);

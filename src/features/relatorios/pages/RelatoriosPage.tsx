@@ -320,7 +320,8 @@ const RelatoriosPage = () => {
                 <FolhaKpis
                   itens={[
                     { label: "Produtos", valor: formatNumber(produtos.length) },
-                    { label: "Unidades", valor: formatNumber(produtos.reduce((a, p) => a + (p.quantidade ?? 0), 0)) },
+                    { label: "Unidades", valor: formatNumber(/* bigint chega como string: sem Number() a soma concatena. */
+                      produtos.reduce((a, p) => a + (Number(p.quantidade) || 0), 0)) },
                     { label: "Baixo/esgotado", valor: formatNumber(produtos.filter((p) => stockLevel(p.quantidade) !== "disponivel").length) },
                     { label: "Valor em estoque", valor: formatCurrency(produtos.reduce((a, p) => a + (p.valorCompra ?? 0) * (p.quantidade ?? 0), 0)) },
                   ]}

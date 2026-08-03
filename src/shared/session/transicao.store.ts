@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+import { tocarEntrada, tocarSaida } from "@/shared/session/somSessao";
+
 export type ModoTransicao = "entrada" | "saida";
 
 type Estado = {
@@ -30,6 +32,11 @@ const useTransicao = create<Estado>((set, get) => ({
 
   tocar: (modo, nome) =>
     new Promise<void>((resolver) => {
+      /* Aqui e não na tela: `tocar` é o único ponto por onde as duas transições
+         passam, então o som acompanha a animação sem depender de quem chamou. */
+      if (modo === "entrada") tocarEntrada();
+      else tocarSaida();
+
       set({ modo, nome, resolver });
     }),
 

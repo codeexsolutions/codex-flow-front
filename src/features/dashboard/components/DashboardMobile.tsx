@@ -29,6 +29,9 @@ type Props = {
 
 const saudacao = () => {
   const h = new Date().getHours();
+
+  /* A madrugada era o buraco: às 2 da manhã caía em "Bom dia". */
+  if (h < 5) return "Boa madrugada";
   if (h < 12) return "Bom dia";
   if (h < 18) return "Boa tarde";
   return "Boa noite";

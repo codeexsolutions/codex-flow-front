@@ -1,34 +1,24 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Wallet, TrendingUp, TrendingDown, CalendarClock, CheckCircle2, Trash2, AlertTriangle, RotateCw, Receipt, ArrowLeftRight } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, CalendarClock, CheckCircle2, Trash2, AlertTriangle, RotateCw, Receipt, ArrowLeftRight, CalendarDays } from "lucide-react";
 
-import { PageScreen } from "@/shared/ui/PageShell";
 import { TabelaCard, TabelaHead, TabelaRow, TabelaVazia, type Coluna } from "@/shared/ui/DataTable";
 import { Modal } from "@/shared/ui/Modal";
-import { Form, FormSection, FormGrid, FormActions, TextField, SelectBox } from "@/shared/ui/form/FormKit";
+import { Form, FormSection, FormGrid, FormActions, TextField } from "@/shared/ui/form/FormKit";
 import { useAlert } from "@/shared/ui/Alert";
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import useFinanceiroStore from "@/features/financeiro/store/financeiro.store";
 import type { MovimentacaoType, NotaFinanceiroType, NovaMovimentacaoType } from "@/shared/domain/financeiro";
 import { formatCurrency as brl } from "@/shared/utils/currency";
-import { formatDate } from "@/shared/utils/date";
+import { formatDate, MONTHS as MESES } from "@/shared/utils/date";
 import { useIsMobile } from "@/shared/hooks/useIsMobile";
 import FinanceiroMobile from "@/features/financeiro/components/FinanceiroMobile";
+import PagamentoForm from "@/shared/ui/PagamentoForm";
 
 const brDate = (v?: string | null) => (v ? formatDate(v, "-") : "-");
 const money = (v?: number) => brl(v ?? 0);
 
-type Aba = "notas" | "caixa";
 
-const STATUS_LOOK: Record<NotaFinanceiroType["status_pagamento"], { label: string; cls: string }> = {
-  PENDENTE: { label: "Pendente", cls: "border-warning/40 bg-warning/15 text-warning" },
-  PAGO: { label: "Pago", cls: "border-success/40 bg-success/15 text-success" },
-};
-
-const StatusBadge = ({ status }: { status: NotaFinanceiroType["status_pagamento"] }) => {
-  const s = STATUS_LOOK[status] ?? { label: status ?? "-", cls: "border-fg/10 bg-fg/[0.04] text-mist" };
-  return <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] ${s.cls}`}>{s.label}</span>;
-};
 
 const ResumoCard = ({ icon, label, value, tone }: { icon: ReactNode; label: string; value: string; tone: "accent" | "success" | "warning" | "danger" }) => {
   const tones = {
@@ -54,7 +44,6 @@ const ResumoCard = ({ icon, label, value, tone }: { icon: ReactNode; label: stri
  * valores e o status iam parar na borda direita do monitor, longe do nome a
  * que pertencem. Assim os dados ficam agrupados à esquerda.
  */
-const COLS_NOTAS = "grid-cols-[minmax(180px,420px)_120px_120px_170px_minmax(0,1fr)]";
 const COLS_CAIXA = "grid-cols-[110px_minmax(180px,420px)_130px_120px_60px_minmax(0,1fr)]";
 
 /** Célula vazia que ocupa o vão flexível do fim da linha. */
@@ -74,13 +63,11 @@ export default function FinanceiroPage() {
   const criarMovimentacaoStore = useFinanceiroStore((s) => s.criarMovimentacao);
   const excluirMovimentacaoStore = useFinanceiroStore((s) => s.excluirMovimentacao);
 
-  const [aba, setAba] = useState<Aba>("notas");
   const [showNovaMovimentacao, setShowNovaMovimentacao] = useState(false);
   const [notaParaPagar, setNotaParaPagar] = useState<NotaFinanceiroType | null>(null);
   const [salvando, setSalvando] = useState(false);
 
   const [novaMovimentacao, setNovaMovimentacao] = useState<NovaMovimentacaoType>({ tipo: "ENTRADA", categoria: "", descricao: "", valor: 0, dataMovimentacao: "" });
-  const [formaPagamentoBaixa, setFormaPagamentoBaixa] = useState("Pix");
 
   useEffect(() => {
     fetchFinanceiro();
@@ -88,13 +75,80 @@ export default function FinanceiroPage() {
 
   const carregar = () => fetchFinanceiro(true);
 
-  const handleRegistrarPagamentoNota = async () => {
+  /* Só o que está em aberto: nota quitada não tem ação aqui, e repetir o
+     histórico inteiro era a redundância com Vendas. */
+  const pendentes = notas.filter((n) => n.status_pagamento !== "PAGO");
+
+  /**
+   * Caixa é assunto de mês fechado.
+   *
+   * Sem recorte, a lista virava o histórico inteiro da loja e o saldo perdia
+   * significado — ninguém confere caixa "desde sempre". O mês corrente é o
+   * padrão, e os meses anteriores ficam a um clique para quem for fechar o
+   * período.
+   */
+  const [mes, setMes] = useState(() => {
+    const hoje = new Date();
+    return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+  });
+
+  /* Os meses vêm dos próprios lançamentos: mês sem movimento não aparece no
+     seletor, então não há como escolher uma tela vazia. */
+  const mesesDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+
+    for (const m of movimentacoes) {
+      const d = new Date(m.data_movimentacao);
+      if (!Number.isNaN(+d)) set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+    }
+
+    set.add(mes);
+
+    return Array.from(set).sort().reverse();
+  }, [movimentacoes, mes]);
+
+  const movimentacoesDoMes = useMemo(
+    () =>
+      movimentacoes.filter((m) => {
+        const d = new Date(m.data_movimentacao);
+        if (Number.isNaN(+d)) return false;
+
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` === mes;
+      }),
+    [movimentacoes, mes],
+  );
+
+  /* Entradas, saídas e saldo do mês escolhido — não os totais de todo o
+     histórico, que era o que os cartões mostravam antes. */
+  const totaisDoMes = useMemo(() => {
+    let entradas = 0;
+    let saidas = 0;
+
+    for (const m of movimentacoesDoMes) {
+      if (m.tipo === "ENTRADA") entradas += Number(m.valor ?? 0);
+      else saidas += Number(m.valor ?? 0);
+    }
+
+    return { entradas, saidas, saldo: entradas - saidas };
+  }, [movimentacoesDoMes]);
+
+  const rotuloMes = (v: string) => {
+    const [ano, m] = v.split("-");
+    return `${MESES[Number(m) - 1]}/${ano}`;
+  };
+
+  /* Recebe o valor do formulário em vez de quitar tudo: metade agora e o resto
+     depois é o caso mais comum do balcão, e antes não havia como registrar. */
+  const handleRegistrarPagamentoNota = async (valor: number, forma: string) => {
     if (!notaParaPagar) return;
-    const valorRestante = Number(notaParaPagar.total) - Number(notaParaPagar.valor_pago ?? 0);
+
     setSalvando(true);
     try {
-      await registrarPagamentoNotaStore(notaParaPagar.pedido_id, valorRestante, formaPagamentoBaixa);
-      alert.success("Nota paga!", "O pagamento foi registrado.");
+      await registrarPagamentoNotaStore(notaParaPagar.pedido_id, valor, forma);
+
+      const quitou = valor >= Number(notaParaPagar.total) - Number(notaParaPagar.valor_pago ?? 0);
+      alert.success(quitou ? "Nota quitada!" : "Pagamento registrado!", quitou ? "Não há mais saldo em aberto." : "O restante continua a receber.");
+
       setNotaParaPagar(null);
     } catch (err) {
 
@@ -133,41 +187,6 @@ export default function FinanceiroPage() {
     }
   };
 
-  const colNotas: Coluna<NotaFinanceiroType>[] = [
-    {
-      id: "cliente",
-      header: "Cliente / Pedido",
-      cell: (n) => (
-        <span className="block min-w-0">
-          <span className="block truncate text-ink">{n.cliente_nome}</span>
-          <span className="block truncate text-[11px] text-faint">
-            Pedido #{n.codigo_pedido}
-            {n.status_pagamento === "PAGO" && n.forma_pagamento ? ` · ${n.forma_pagamento}` : ""}
-            {n.status_pagamento === "PENDENTE" && Number(n.valor_pago) > 0 ? ` · pago ${brl(n.valor_pago)} de ${brl(n.total)}` : ""}
-          </span>
-        </span>
-      ),
-    },
-    { id: "total", header: "Total", align: "right", cell: (n) => <span className="nums text-ink">{brl(n.total)}</span> },
-    { id: "data", header: "Data", align: "right", cell: (n) => <span className="nums text-mist">{brDate(n.data_pedido)}</span> },
-    {
-      id: "status",
-      header: "Status",
-      align: "right",
-      cell: (n) => (
-        <span className="flex items-center justify-end gap-2">
-          <StatusBadge status={n.status_pagamento} />
-          {n.status_pagamento !== "PAGO" && (
-            <button onClick={() => setNotaParaPagar(n)} className="focus-ring shrink-0 rounded-lg bg-fg/[0.05] p-1.5 text-faint transition-colors hover:bg-accent/20 hover:text-accent-soft" title="Registrar pagamento">
-              <CheckCircle2 size={15} />
-            </button>
-          )}
-        </span>
-      ),
-    },
-    COLUNA_VAO,
-  ];
-
   const colCaixa: Coluna<MovimentacaoType>[] = [
     {
       id: "tipo",
@@ -199,26 +218,7 @@ export default function FinanceiroPage() {
     COLUNA_VAO,
   ];
 
-  const abas: { id: Aba; label: string; icon: ReactNode }[] = [
-    { id: "notas", label: "Notas", icon: <Receipt size={14} /> },
-    { id: "caixa", label: "Fluxo de caixa", icon: <ArrowLeftRight size={14} /> },
-  ];
 
-  const filtros = (
-    <div className="flex items-center gap-2">
-      <div className="glass-subtle flex items-center gap-1 rounded-lg p-1">
-        {abas.map((a) => (
-          <button key={a.id} onClick={() => setAba(a.id)} className={`focus-ring flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] transition-all ${aba === a.id ? "bg-accent text-white shadow-glow" : "text-mist hover:text-ink"}`}>
-            {a.icon}
-            {a.label}
-          </button>
-        ))}
-      </div>
-      <button onClick={carregar} title="Atualizar" className="focus-ring glass-subtle rounded-lg p-2 text-faint transition-colors hover:text-ink">
-        <RotateCw size={14} className={loading ? "animate-spin" : ""} />
-      </button>
-    </div>
-  );
 
   /* Os mesmos formulários servem as duas versões — o que muda é a moldura. */
   const modais = (
@@ -258,23 +258,24 @@ export default function FinanceiroPage() {
         </Modal>
 
         {/* Modal: registrar pagamento da nota */}
-        <Modal open={!!notaParaPagar} onClose={() => setNotaParaPagar(null)} title="Registrar pagamento" subtitle={notaParaPagar ? `${notaParaPagar.cliente_nome} — restam ${brl(Number(notaParaPagar.total) - Number(notaParaPagar.valor_pago ?? 0))}` : ""}>
-          <Form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleRegistrarPagamentoNota();
-            }}
-          >
-            <SelectBox label="Forma de pagamento" value={formaPagamentoBaixa} onChange={(e) => setFormaPagamentoBaixa(e.target.value)}>
-              <option value="Pix">Pix</option>
-              <option value="Dinheiro">Dinheiro</option>
-              <option value="Cartão de crédito">Cartão de crédito</option>
-              <option value="Cartão de débito">Cartão de débito</option>
-              <option value="Boleto">Boleto</option>
-            </SelectBox>
-
-            <FormActions onCancel={() => setNotaParaPagar(null)} saving={salvando} submitText="Confirmar" />
-          </Form>
+        {/* Mesmo formulário da nota — recebimento é o mesmo ato nos dois
+            lugares, e antes aqui só dava para quitar tudo de uma vez. */}
+        <Modal
+          open={!!notaParaPagar}
+          onClose={() => setNotaParaPagar(null)}
+          title="Registrar pagamento"
+          subtitle={notaParaPagar ? `${notaParaPagar.cliente_nome} · nota #${notaParaPagar.codigo_pedido}` : ""}
+        >
+          {notaParaPagar && (
+            <PagamentoForm
+              total={Number(notaParaPagar.total ?? 0)}
+              jaPago={Number(notaParaPagar.valor_pago ?? 0)}
+              salvando={salvando}
+              textoConfirmar="Confirmar recebimento"
+              onCancelar={() => setNotaParaPagar(null)}
+              onConfirmar={handleRegistrarPagamentoNota}
+            />
+          )}
         </Modal>
     </>
   );
@@ -283,13 +284,12 @@ export default function FinanceiroPage() {
     return (
       <>
         <FinanceiroMobile
-          aba={aba}
-          onAba={setAba}
+          aba="caixa"
+          onAba={() => {}}
           saldoCaixa={resumo?.saldoCaixa ?? 0}
           aReceber={resumo?.totalAReceber ?? 0}
-          atrasado={resumo?.totalAtrasado ?? 0}
-          entradas={resumo?.totalEntradas ?? 0}
-          saidas={resumo?.totalSaidas ?? 0}
+          entradas={totaisDoMes.entradas}
+          saidas={totaisDoMes.saidas}
           notas={notas.map((n) => ({
             id: String(n.pedido_id),
             cliente: n.cliente_nome,
@@ -300,7 +300,7 @@ export default function FinanceiroPage() {
             quitada: n.status_pagamento === "PAGO",
             formaPagamento: n.forma_pagamento,
           }))}
-          movimentacoes={movimentacoes.map((m) => ({
+          movimentacoes={movimentacoesDoMes.map((m) => ({
             id: String(m.id),
             descricao: m.descricao,
             categoria: m.categoria,
@@ -322,7 +322,11 @@ export default function FinanceiroPage() {
   }
 
   return (
-    <PageScreen icon={<Wallet className="h-5 w-5" />} title="Financeiro" subtitle="Notas de clientes e fluxo de caixa da empresa">
+    /* Conteúdo de aba: SEM casca própria. O cabeçalho, o espaçamento e a
+       rolagem vêm do `PageScreen` da tela de Vendas, que é quem hospeda esta
+       rota. Com `PageScreen` aqui também, a página exibia dois títulos
+       "Financeiro" empilhados — um do outlet e outro deste componente. */
+    <div className="flex h-full min-h-0 flex-col gap-3">
         {error && (
           <div className="flex shrink-0 items-center justify-between gap-2.5 rounded-lg border border-danger/40 bg-danger/15 px-4 py-2.5 text-[13px] text-danger">
             <span className="flex items-center gap-2.5">
@@ -335,12 +339,13 @@ export default function FinanceiroPage() {
           </div>
         )}
 
-        <div className="stagger grid shrink-0 grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {/* 2 colunas no celular, 3 no tablet, 6 só com largura de verdade: em
+            seis colunas num monitor médio os valores truncavam. */}
+        <div className="stagger grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
           <ResumoCard icon={<CalendarClock size={17} />} label="A receber" value={money(resumo?.totalAReceber)} tone="warning" />
           <ResumoCard icon={<CheckCircle2 size={17} />} label="Recebido" value={money(resumo?.totalRecebido)} tone="success" />
-          <ResumoCard icon={<AlertTriangle size={17} />} label="Atrasado" value={money(resumo?.totalAtrasado)} tone="danger" />
-          <ResumoCard icon={<TrendingUp size={17} />} label="Entradas" value={money(resumo?.totalEntradas)} tone="success" />
-          <ResumoCard icon={<TrendingDown size={17} />} label="Saídas" value={money(resumo?.totalSaidas)} tone="danger" />
+          <ResumoCard icon={<TrendingUp size={17} />} label="Entradas do mês" value={money(totaisDoMes.entradas)} tone="success" />
+          <ResumoCard icon={<TrendingDown size={17} />} label="Saídas do mês" value={money(totaisDoMes.saidas)} tone="danger" />
           <ResumoCard icon={<Wallet size={17} />} label="Saldo em caixa" value={money(resumo?.saldoCaixa)} tone="accent" />
         </div>
 
@@ -356,27 +361,98 @@ export default function FinanceiroPage() {
           </div>
         )}
 
-        {aba === "notas" ? (
-          <TabelaCard title="Notas de clientes" icon={<Receipt size={15} />} count={notas.length} countLabel={notas.length === 1 ? "nota" : "notas"} filters={filtros}>
-            <TabelaHead colunas={colNotas} cols={COLS_NOTAS} />
-            {notas.length === 0 ? (
-              <TabelaVazia icon={<Receipt size={20} />} title={loading ? "Carregando…" : "Nenhuma nota registrada"} description="As notas emitidas no Ponto de Venda aparecem aqui para você acompanhar o recebimento." />
-            ) : (
-              notas.map((n) => <TabelaRow key={n.pedido_id} colunas={colNotas} cols={COLS_NOTAS} row={n} />)
-            )}
-          </TabelaCard>
-        ) : (
-          <TabelaCard title="Fluxo de caixa" icon={<ArrowLeftRight size={15} />} count={movimentacoes.length} countLabel={movimentacoes.length === 1 ? "lançamento" : "lançamentos"} onAdd={() => setShowNovaMovimentacao(true)} addLabel="Nova movimentação" filters={filtros}>
-            <TabelaHead colunas={colCaixa} cols={COLS_CAIXA} />
-            {movimentacoes.length === 0 ? (
-              <TabelaVazia icon={<ArrowLeftRight size={20} />} title={loading ? "Carregando…" : "Nenhuma movimentação registrada"} description="Lance entradas e saídas para acompanhar o caixa da empresa." />
-            ) : (
-              movimentacoes.map((m) => <TabelaRow key={m.id} colunas={colCaixa} cols={COLS_CAIXA} row={m} />)
-            )}
-          </TabelaCard>
+        {/*
+         * Uma tela, um assunto: o caixa da loja.
+         *
+         * Eram duas abas, e a de Notas repetia a lista de Vendas com outras
+         * colunas — a mesma nota em dois menus, somada de dois jeitos. O que
+         * Vendas não faz é cobrar: por isso aqui sobrou o que está EM ABERTO,
+         * com a baixa ao lado. Nota quitada não tem ação nesta tela.
+         */}
+        {pendentes.length > 0 && (
+          <section className="card glass-sheen shrink-0 overflow-hidden">
+            <header className="flex flex-wrap items-center gap-2.5 border-b border-fg/[0.07] px-4 py-3">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-warning/[0.14] text-warning ring-1 ring-inset ring-warning/20">
+                <Receipt size={15} />
+              </span>
+
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[13.5px] leading-none text-ink">A receber</h2>
+                <p className="mt-1 text-[11.5px] text-faint">
+                  {pendentes.length} {pendentes.length === 1 ? "nota aberta" : "notas abertas"} · {money(resumo?.totalAReceber)}
+                </p>
+              </div>
+
+              <button onClick={carregar} title="Atualizar" className="focus-ring glass-subtle shrink-0 rounded-lg p-2 text-faint transition-colors hover:text-ink">
+                <RotateCw size={14} className={loading ? "animate-spin" : ""} />
+              </button>
+            </header>
+
+            {/* Linhas que quebram em vez de tabela: em tela estreita a nota vira
+                bloco, sem colunas espremidas nem rolagem lateral. */}
+            <div className="max-h-[220px] overflow-y-auto">
+              {pendentes.map((n) => {
+                const restante = Number(n.total) - Number(n.valor_pago ?? 0);
+
+                return (
+                  <div key={n.pedido_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-fg/[0.04] px-4 py-2.5 last:border-0">
+                    <span className="min-w-0 flex-1 basis-[160px]">
+                      <span className="block truncate text-[13px] text-ink">{n.cliente_nome}</span>
+                      <span className="block truncate text-[11px] text-faint">
+                        #{n.codigo_pedido} · {brDate(n.data_pedido)}
+                        {Number(n.valor_pago) > 0 ? ` · pago ${brl(n.valor_pago)}` : ""}
+                      </span>
+                    </span>
+
+                    <span className="shrink-0 text-right">
+                      <span className="block text-[13px] tabular-nums text-warning">{brl(restante)}</span>
+                      <span className="block text-[10.5px] text-faint">falta</span>
+                    </span>
+
+                    <button
+                      onClick={() => setNotaParaPagar(n)}
+                      title="Registrar pagamento"
+                      className="focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/[0.1] text-success ring-1 ring-inset ring-success/20 transition-colors hover:bg-success/20"
+                    >
+                      <CheckCircle2 size={16} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         )}
 
+        {/* Fluxo de caixa — o conteúdo principal da tela. */}
+        <TabelaCard
+          title="Fluxo de caixa"
+          icon={<ArrowLeftRight size={15} />}
+          count={movimentacoesDoMes.length}
+          countLabel={movimentacoesDoMes.length === 1 ? "lançamento" : "lançamentos"}
+          filters={
+            <div className="flex items-center gap-2 rounded-lg border border-fg/[0.08] bg-fg/[0.05] px-3">
+              <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted" />
+              <select value={mes} onChange={(e) => setMes(e.target.value)} aria-label="Filtrar por mês" className="cursor-pointer bg-transparent py-2 text-xs text-ink outline-none">
+                {mesesDisponiveis.map((v) => (
+                  <option key={v} value={v}>
+                    {rotuloMes(v)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          }
+          onAdd={() => setShowNovaMovimentacao(true)}
+          addLabel="Nova movimentação"
+        >
+          <TabelaHead colunas={colCaixa} cols={COLS_CAIXA} />
+          {movimentacoesDoMes.length === 0 ? (
+            <TabelaVazia icon={<ArrowLeftRight size={20} />} title={loading ? "Carregando…" : "Nenhuma movimentação registrada"} description="Nenhum lançamento neste mês. Escolha outro período ou registre uma movimentação." />
+          ) : (
+            movimentacoesDoMes.map((m) => <TabelaRow key={m.id} colunas={colCaixa} cols={COLS_CAIXA} row={m} />)
+          )}
+        </TabelaCard>
+
         {modais}
-      </PageScreen>
+    </div>
   );
 }

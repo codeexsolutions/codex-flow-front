@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { io, type Socket } from "socket.io-client";
 import { Bell, BellRing, BellOff, Package, ShoppingCart, UserPlus, Wallet, Users, Trash2, CheckCheck, BadgeCheck } from "lucide-react";
@@ -7,6 +8,7 @@ import { Bell, BellRing, BellOff, Package, ShoppingCart, UserPlus, Wallet, Users
 import NotificacaoService, { type Mural, type Notificacao, type TipoNotificacao } from "@/features/notificacoes/services/notificacao.service";
 import { formatDateTime } from "@/shared/utils/date";
 import { notificarNoAparelho, notificacoesLigadas, pedirPermissao, definirPreferencia, permissaoAtual, suportaNotificacao } from "@/shared/pwa/notificacaoDispositivo";
+import { API_ORIGEM } from "@/shared/api/apiUrl";
 
 /** Ícone e cor por tipo de evento — o rótulo sempre acompanha, nunca só a cor. */
 const LOOK: Record<TipoNotificacao, { icon: React.ReactNode; cls: string }> = {
@@ -38,6 +40,7 @@ const SinoNotificacoes = () => {
 
   const [mural, setMural] = useState<Mural>({ notificacoes: [], naoLidas: 0 });
   const [aberto, setAberto] = useState(false);
+  const reduzir = useReducedMotion();
   const [ancora, setAncora] = useState<DOMRect | null>(null);
   const [noAparelho, setNoAparelho] = useState(() => notificacoesLigadas() && permissaoAtual() === "granted");
   const painelRef = useRef<HTMLDivElement>(null);
@@ -57,8 +60,7 @@ const SinoNotificacoes = () => {
 
   /* ---------------- Tempo real ---------------- */
   useEffect(() => {
-    const baseUrl = (import.meta.env.PROD ? import.meta.env.VITE_API_PRODUCTION : import.meta.env.VITE_API_LOCAL) ?? "";
-    const origem = String(baseUrl).replace(/\/v1\/?$/, "");
+    const origem = API_ORIGEM;
 
     let socket: Socket | null = null;
 
@@ -147,26 +149,60 @@ const SinoNotificacoes = () => {
 
   return (
     <>
-      <button
+      <motion.button
         ref={botaoRef}
         type="button"
         onClick={alternar}
         aria-label={mural.naoLidas > 0 ? `Notificações: ${mural.naoLidas} não lidas` : "Notificações"}
-        className={`focus-ring relative flex h-8 w-8 items-center justify-center rounded-lg transition-all duration-200 hover:bg-fg/[0.08] ${aberto ? "text-accent-soft" : "text-faint hover:text-accent-soft"}`}
+        whileTap={reduzir ? undefined : { scale: 0.88 }}
+        transition={{ type: "spring", stiffness: 520, damping: 26 }}
+        className={`focus-ring relative flex h-8 w-8 items-center justify-center rounded-lg transition-colors duration-200 hover:bg-fg/[0.08] ${aberto ? "text-accent-soft" : "text-faint hover:text-accent-soft"}`}
       >
-        <Bell size={16} />
-        {mural.naoLidas > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-accent px-1 text-[9px] leading-none text-white">
-            {mural.naoLidas > 9 ? "9+" : mural.naoLidas}
-          </span>
-        )}
-      </button>
+        {/* O sino balança quando o painel abre — dá o "toque" que o ícone
+            promete e liga o clique ao painel que aparece. */}
+        <motion.span
+          animate={reduzir || !aberto ? { rotate: 0 } : { rotate: [0, -18, 14, -8, 0] }}
+          transition={{ duration: 0.55, ease: "easeOut" }}
+          style={{ transformOrigin: "50% 15%" }}
+        >
+          <Bell size={16} />
+        </motion.span>
 
-      {aberto && ancora && createPortal(
-        <div
+        {mural.naoLidas > 0 && (
+          <motion.span
+            /* `key` no número: quando ele muda, o selo pulsa em vez de trocar
+               o texto em silêncio. */
+            key={mural.naoLidas}
+            initial={reduzir ? false : { scale: 0.4 }}
+            animate={{ scale: 1 }}
+            transition={{ type: "spring", stiffness: 600, damping: 18 }}
+            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-accent px-1 text-[9px] leading-none text-white"
+          >
+            {mural.naoLidas > 9 ? "9+" : mural.naoLidas}
+          </motion.span>
+        )}
+      </motion.button>
+
+      {ancora && createPortal(
+        /* `AnimatePresence` para a saída existir: sem ela o painel sumiria de
+           um frame para o outro, e abrir suave para fechar seco fica pior do
+           que não animar. */
+        <AnimatePresence>
+          {aberto && (
+        <motion.div
           ref={painelRef}
           className="glass-strong elev-3 fixed z-[260] w-[320px] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-fg/[0.08]"
-          style={{ left: Math.max(12, ancora.left), bottom: Math.max(12, window.innerHeight - ancora.top + 8) }}
+          style={{
+            left: Math.max(12, ancora.left),
+            bottom: Math.max(12, window.innerHeight - ancora.top + 8),
+            /* Cresce a partir do canto de baixo à esquerda, que é onde o sino
+               está: o painel parece sair do botão, não aparecer no meio do nada. */
+            transformOrigin: "bottom left",
+          }}
+          initial={reduzir ? false : { opacity: 0, scale: 0.92, y: 8 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={reduzir ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 6 }}
+          transition={{ type: "spring", stiffness: 420, damping: 30, mass: 0.7 }}
         >
           <div className="flex items-center justify-between gap-2 border-b border-fg/[0.07] px-4 py-2.5">
             <p className="text-[12.5px] text-ink">Atividade da equipe</p>
@@ -224,7 +260,9 @@ const SinoNotificacoes = () => {
               })
             )}
           </div>
-        </div>,
+        </motion.div>
+          )}
+        </AnimatePresence>,
         document.body,
       )}
     </>

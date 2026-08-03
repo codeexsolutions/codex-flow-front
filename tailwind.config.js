@@ -27,8 +27,8 @@ export default {
       },
       fontFamily: {
         // `sans` é a de texto: ela é o padrão herdado por toda a interface.
-        sans: ["Plus Jakarta Sans", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
-        display: ["Space Grotesk", "system-ui", "sans-serif"],
+        sans: ["Inter Variable", "Inter", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        display: ["Sora Variable", "Sora", "system-ui", "sans-serif"],
       },
       borderColor: {
         DEFAULT: "rgb(var(--fg) / 0.08)",

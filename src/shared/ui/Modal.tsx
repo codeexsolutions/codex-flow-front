@@ -81,7 +81,10 @@ const Modal = memo(({ open, onClose, title, subtitle, accent = "rgb(var(--accent
         </div>
 
         {/* flex-1 + overflow: o conteúdo rola e o painel respeita a altura da tela */}
-        <div className={`flex-1 overflow-y-auto ${isFull ? "p-3 sm:p-4" : "p-4 sm:p-5"}`}>{children}</div>
+        {/* Sem padding próprio: quem decide o respiro é o conteúdo.
+            A nota tem o seu; formulários trazem o deles. O padding fixo aqui
+            somava ao do conteúdo e criava moldura dentro de moldura. */}
+        <div className="flex-1 overflow-y-auto">{children}</div>
       </div>
     </div>
   );

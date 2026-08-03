@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import HeaderInterprise from "@/shared/ui/HeaderInterprise";
 
 import { formatDate } from "@/shared/utils/date";
@@ -15,17 +16,20 @@ import MoneyInput from "@/shared/ui/inputs/MoneyInput";
 import { Modal } from "@/shared/ui/Modal";
 import { handleDownload } from "@/shared/ui/DownloadButton";
 import { useAlert } from "@/shared/ui/Alert";
-import PixSection from "@/features/vendas/components/PixSection";
+import OrcamentoService from "@/features/orcamentos/services/orcamento.service";
 
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 
-import { CreditCard, Download, PackageSearch, Plus, Receipt, Save, Trash2, Wallet, X, QrCode, Check, Loader2, Banknote } from "lucide-react";
+import { Download, PackageSearch, Plus, Save, Trash2, X, QrCode, Check, Loader2, FileText } from "lucide-react";
 import { Skeleton, SkeletonInvoiceCard, SkeletonInvoiceHeader, SkeletonInvoiceRow, SkeletonProductList, SkeletonSummary } from "@/shared/ui/skeleton";
 
-import { getPixSettings, savePixSettings, isPixConfigured, generatePixPayload, type PixKeyType } from "@/shared/utils/pix";
+import { generatePixPayload, getQrCodeDataUrl } from "@/shared/utils/pix";
+import PixService, { pixConfigurado, type ConfigPix } from "@/features/config/services/pix.service";
 import useAuth from "@/features/auth/store/auth.store";
 import useClientes from "@/features/clientes/store/cliente.store";
 import { maskPhone } from "@/shared/validation/masks";
+import { formatDocument } from "@/shared/utils/format";
+import PagamentoForm from "@/shared/ui/PagamentoForm";
 
 const gerarUID = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -36,7 +40,6 @@ type InvoiceProps = {
   onSaved?: () => void;
 };
 
-const TIPOS_PAGAMENTO = ["Dinheiro", "Pix", "Cheque", "Débito", "Negociação", "Crédito"];
 
 const STATUS_STYLE: Record<string, string> = {
   ABERTO: "bg-warning/25 text-warning ring-warning/25",
@@ -46,13 +49,6 @@ const STATUS_STYLE: Record<string, string> = {
   CANCELADO: "bg-danger/25 text-danger ring-danger/25",
 };
 
-const PIX_KEY_TYPES: { id: PixKeyType; label: string }[] = [
-  { id: "cpf", label: "CPF" },
-  { id: "cnpj", label: "CNPJ" },
-  { id: "phone", label: "Telefone" },
-  { id: "email", label: "E-mail" },
-  { id: "random", label: "Chave aleatória" },
-];
 
 type PagamentoType = {
   id: string;
@@ -69,13 +65,6 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
   const { user } = useAuth();
   const clientes = useClientes((s) => s.clientes);
 
-  /**
-   * A chave Pix é da EMPRESA e define para onde o dinheiro do cliente vai.
-   * Por isso só o usuário master configura: um vendedor conseguiria apontar
-   * o recebimento para a própria conta.
-   */
-  const ehMaster = Boolean(user?.root);
-
   /** O vendedor da nota é quem está logado emitindo-a. */
   const vendedor = user?.nome || user?.email || "—";
 
@@ -83,6 +72,13 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
    * O pedido só traz o nome do cliente; o telefone mora no cadastro. Pega do
    * que já está carregado em memória — sem disparar requisição para a nota.
    */
+  /* Documento e e-mail vêm do cadastro já carregado — sem requisição a mais
+     só para enriquecer a nota. */
+  const clienteCadastro = clientes.find((c) => c.id === clienteId);
+
+  const documentoCliente = clienteCadastro?.cpfCnpj ? formatDocument(String(clienteCadastro.cpfCnpj)) : "";
+  const emailCliente = clienteCadastro?.contato?.email ?? "";
+
   const telefoneCliente = (() => {
     const alvo = clientes.find((c) => c.id === clienteId);
     const contato = alvo?.contato;
@@ -100,35 +96,38 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
   const [pedido, setPedido] = useState<PedidoClienteType | null>(null);
   const [itens, setItens] = useState<ItemPedidoType[]>([]);
   const [pagamentos, setPagamentos] = useState<PagamentoType[]>([]);
+
+  /** Data de emissão ao lado do vendedor: quem fez e quando, na mesma leitura. */
+  const dataEmissao = formatDate(pedido?.pedido?.dataPedido ?? new Date());
+
   const [valorPagoAnterior, setValorPagoAnterior] = useState(0);
   const [confirmandoPagamento, setConfirmandoPagamento] = useState(false);
+
 
   /* ─── UI state ─── */
   const [busca, setBusca] = useState("");
   const [tipoPagamento, setTipoPagamento] = useState("");
   const [valorPagamento, setValorPagamento] = useState(0);
   const [modalProdutos, setModalProdutos] = useState(false);
-  const [modalPagamentos, setModalPagamentos] = useState(false);
+  const [gerandoOrcamento, setGerandoOrcamento] = useState(false);
+
+  /* Quanto do total o QR vai cobrar. 100 = tudo. Serve para entrada/sinal:
+     o cliente paga metade agora e o resto na entrega. */
+  const [percentual, setPercentual] = useState(100);
+  const [percentualLivre, setPercentualLivre] = useState("");
+  const [qrCodeNota, setQrCodeNota] = useState("");
   const [modalExcluir, setModalExcluir] = useState(false);
-  const [modalPixConfig, setModalPixConfig] = useState(false);
 
-  /* ─── PIX settings ─── */
-  const [pixKey, setPixKey] = useState("");
-  const [pixKeyType, setPixKeyType] = useState<PixKeyType>("cpf");
-  const [pixOwner, setPixOwner] = useState("");
-  const [pixCity, setPixCity] = useState("");
+  /* ─── PIX ───
+     A configuração é da EMPRESA e vem do servidor. A nota só lê: quem
+     configura é o usuário master, em Configurações → Empresa. */
+  const [configPix, setConfigPix] = useState<ConfigPix | null>(null);
 
-  const pixConfig = Boolean(pixOwner && pixKey && pixCity);
+  const pixConfig = pixConfigurado(configPix);
 
   /* ─── Carrega config PIX salva ─── */
   useEffect(() => {
-    const saved = getPixSettings();
-    if (saved) {
-      setPixKey(saved.key);
-      setPixKeyType(saved.keyType);
-      setPixOwner(saved.ownerName);
-      setPixCity(saved.city);
-    }
+    PixService.consultar().then(setConfigPix);
   }, []);
 
   /* ─── Carrega produtos ─── */
@@ -158,22 +157,6 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
       .catch((err) => alert.error(getErrorTitle(err), extractErrorMessage(err, "Erro ao carregar o pedido.")))
       .finally(() => setLoadingPedido(false));
   }, [id]);
-
-  /* ─── Salvar config PIX ─── */
-  const salvarPixConfig = () => {
-    if (!pixKey || !pixOwner || !pixCity) {
-      alert.warning("Preencha todos os campos", "Chave PIX, nome e cidade são obrigatórios.");
-      return;
-    }
-    if (!ehMaster) {
-      alert.error("Sem permissão", "Só o usuário master pode configurar a chave Pix da empresa.");
-      return;
-    }
-
-    savePixSettings({ key: pixKey, keyType: pixKeyType, ownerName: pixOwner, city: pixCity });
-    setModalPixConfig(false);
-    alert.success("Chave PIX salva!", "A configuração foi salva no navegador.");
-  };
 
   /* ─── Produtos ─── */
   const adicionarProduto = (produtoHandle: ProductType) => {
@@ -222,19 +205,38 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
   const formaPagamento = pagamentos.length > 0 ? (pagamentos.every((p) => p.tipo === pagamentos[0].tipo) ? pagamentos[0].tipo : "Misto") : (pedido?.pedido?.formaPagamento ?? "Não consta");
 
   /* ─── PIX payload ─── */
+  /* O QR cobra o percentual escolhido, não necessariamente o total. */
+  const valorCobranca = useMemo(() => Math.round(total * (percentual / 100) * 100) / 100, [total, percentual]);
+
   const pixPayload = useMemo(() => {
-    const settings = getPixSettings();
-    if (!settings || total <= 0) return "";
+    if (!pixConfigurado(configPix) || valorCobranca <= 0) return "";
     return generatePixPayload({
-      pixKey: settings.key,
-      pixKeyType: settings.keyType,
-      merchantName: settings.ownerName,
-      merchantCity: settings.city,
-      amount: total,
+      pixKey: configPix!.chave,
+      pixKeyType: configPix!.tipoChave,
+      merchantName: configPix!.beneficiario,
+      merchantCity: configPix!.cidade,
+      amount: valorCobranca,
       transactionId: id || `nota-${Date.now()}`,
       description: "Nota de venda",
     });
-  }, [total, id]);
+  }, [valorCobranca, id, configPix]);
+
+  /* Data URI: é isso que faz o QR sair no PNG do download — imagem externa
+     contaminaria o canvas e derrubaria a exportação inteira. */
+  useEffect(() => {
+    if (!pixPayload) {
+      setQrCodeNota("");
+      return;
+    }
+
+    let vivo = true;
+    getQrCodeDataUrl(pixPayload).then((url) => vivo && setQrCodeNota(url));
+
+    return () => {
+      vivo = false;
+    };
+  }, [pixPayload]);
+
 
   /* ─── Nota CRUD ─── */
   const montarItens = () =>
@@ -243,6 +245,50 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
       quantidade: item.quantidadeItem,
       valorVenda: item.valorVendaItem
     }));
+
+  /**
+   * Gera o orçamento a partir do que já está montado na nota.
+   *
+   * Reaproveita a mesma tela: o operador escolhe cliente e produtos do jeito
+   * que já conhece e, em vez de fechar a venda, manda a proposta. Nada é
+   * baixado do estoque e nada entra no faturamento — vira uma linha na aba
+   * Orçamentos, esperando a resposta do cliente.
+   */
+  const handleGerarOrcamento = async () => {
+    const nomeCliente = (nome ?? "").trim();
+
+    if (!nomeCliente) {
+      alert.warning("Escolha o cliente", "O orçamento precisa saber para quem é.");
+      return;
+    }
+
+    if (itens.length === 0) {
+      alert.warning("Nota vazia", "Adicione ao menos um produto antes de gerar o orçamento.");
+      return;
+    }
+
+    setGerandoOrcamento(true);
+
+    try {
+      await OrcamentoService.criar({
+        clienteNome: nomeCliente,
+        clienteId: clienteId ?? null,
+        clienteContato: telefoneCliente || null,
+        itens: itens.map((l) => ({
+          produtoId: String(l.produto.produtoId ?? "") || null,
+          nomeProduto: l.produto.nomeProduto,
+          quantidade: l.quantidadeItem,
+          valorUnitario: l.valorVendaItem,
+        })),
+      });
+
+      alert.success("Orçamento gerado!", "Ele está em Vendas → Orçamentos, aguardando a resposta do cliente.");
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível gerar o orçamento."));
+    } finally {
+      setGerandoOrcamento(false);
+    }
+  };
 
   const handleSalvar = async () => {
     if (!clienteId) {
@@ -258,11 +304,11 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
       return;
     }
 
-    // Exige configurar PIX antes da primeira nota
-    if (!id && !isPixConfigured()) {
-      setModalPixConfig(true);
-      return;
-    }
+    /* Sem exigir Pix para salvar.
+       Antes a primeira nota travava até configurar a chave — mas venda em
+       dinheiro ou cartão não depende de Pix, e o vendedor não pode nem
+       configurar (é do usuário master). Ele ficava preso sem saída. Sem chave,
+       a nota simplesmente sai sem QR. */
 
     setSavingNote(true);
     try {
@@ -309,8 +355,14 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
   /* ─── Pagamentos: local state (fallback se API não existir) ─── */
   const gerarIdPagamento = () => `pag-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
 
-  const handleAdicionarPagamento = () => {
-    if (!tipoPagamento || valorPagamento <= 0) return;
+  /* Recebe valor e forma por parâmetro: o formulário compartilhado tem o
+     próprio estado, e depender do estado desta tela criava um render de
+     atraso — o primeiro clique lançava o valor anterior. */
+  const handleAdicionarPagamento = (valorRecebido?: number, formaRecebida?: string) => {
+    const valorFinal = valorRecebido ?? valorPagamento;
+    const tipoFinal = formaRecebida ?? tipoPagamento;
+
+    if (!tipoFinal || valorFinal <= 0) return;
     if (!id) {
       alert.warning("Salve a nota primeiro", "A nota precisa ser salva antes de registrar pagamentos.");
       return;
@@ -318,8 +370,8 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
 
     const novoPagamento: PagamentoType = {
       id: gerarIdPagamento(),
-      tipo: tipoPagamento,
-      valor: valorPagamento,
+      tipo: tipoFinal,
+      valor: valorFinal,
       dataPagamento: new Date().toISOString(),
     };
 
@@ -372,38 +424,7 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
 
   return (
     <div className="flex h-full flex-col">
-      {/* ════════════ MODAL: CONFIG PIX ════════════ */}
-      <Modal open={modalPixConfig} onClose={() => setModalPixConfig(false)} title="Configurar PIX" subtitle="Informe sua chave para receber pagamentos" accent="rgb(var(--accent))" size="sm">
-        <div className="flex flex-col gap-4">
-          <p className="text-[12px] leading-relaxed text-mist">Esta chave será usada para gerar o QR Code na nota. Os dados ficam salvos no navegador.</p>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] uppercase tracking-[0.08em] text-faint">Tipo de chave</label>
-            <div className="flex flex-wrap gap-1.5">
-              {PIX_KEY_TYPES.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setPixKeyType(t.id)}
-                  className={`cursor-pointer rounded-lg border px-3 py-1.5 text-[12px] transition-colors ${pixKeyType === t.id ? "border-accent/50 bg-accent/15 text-accent-soft" : "border-fg/[0.08] text-mist hover:border-fg/[0.15]"}`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <input value={pixKey} onChange={(e) => setPixKey(e.target.value)} placeholder={pixKeyType === "phone" ? "+55 11 99999-9999" : pixKeyType === "email" ? "email@exemplo.com" : "000.000.000-00"} className={campoBase} />
-          <input value={pixOwner} onChange={(e) => setPixOwner(e.target.value)} placeholder="Nome do titular" className={campoBase} />
-          <input value={pixCity} onChange={(e) => setPixCity(e.target.value)} placeholder="Cidade" className={campoBase} />
-          <div className="mt-2 flex gap-2">
-            <button type="button" onClick={() => setModalPixConfig(false)} className="flex-1 cursor-pointer rounded-xl border border-fg/[0.08] bg-fg/[0.04] py-2.5 text-sm text-mist transition-colors hover:bg-fg/[0.08]">
-              Cancelar
-            </button>
-            <button type="button" onClick={salvarPixConfig} className="flex-1 cursor-pointer rounded-xl bg-accent py-2.5 text-sm text-white transition-all hover:brightness-110">
-              Salvar
-            </button>
-          </div>
-        </div>
-      </Modal>
+
 
       {/* ════════════ MODAL: PRODUTOS ════════════ */}
       <Modal
@@ -446,86 +467,6 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
       </Modal>
 
       {/* ════════════ MODAL: PAGAMENTOS ════════════ */}
-      <Modal open={modalPagamentos} onClose={() => setModalPagamentos(false)} title="Pagamentos" subtitle="Registre os pagamentos recebidos" accent="rgb(var(--accent))">
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <div className="relative">
-              <select value={tipoPagamento} onChange={(e) => setTipoPagamento(e.target.value)} className={`${campoBase} appearance-none pl-9`}>
-                <option disabled value="">
-                  Tipo de pagamento
-                </option>
-                {TIPOS_PAGAMENTO.map((op) => (
-                  <option key={op} value={op}>
-                    {op}
-                  </option>
-                ))}
-              </select>
-              <CreditCard size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-mist" />
-            </div>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <MoneyInput value={valorPagamento} onChange={setValorPagamento} placeholder="R$ 0,00" withIcon className={`${campoBase} pl-9`} />
-                <Banknote size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-mist" />
-              </div>
-              <button onClick={handleAdicionarPagamento} disabled={!tipoPagamento || valorPagamento <= 0 || !id} className="grid h-11 w-12 shrink-0 place-items-center rounded-xl bg-accent text-white transition-colors hover:bg-accent-soft disabled:opacity-40">
-                <Plus size={16} />
-              </button>
-            </div>
-            {!id && <p className="text-[11px] text-warning">Salve a nota primeiro para registrar pagamentos.</p>}
-          </div>
-
-          {pagamentos.length === 0 ? (
-            <div className="flex flex-col items-center py-8 text-center text-sm text-mist">
-              <Wallet size={26} className="mb-2 opacity-50" />
-              Nenhum pagamento registrado
-            </div>
-          ) : (
-            <ul className="max-h-60 space-y-2 overflow-y-auto">
-              {pagamentos.map((p) => (
-                <li key={p.id} className="flex items-center justify-between rounded-xl border border-fg/[0.06] bg-fg/[0.03] p-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-fg/[0.05]">
-                      <Receipt size={15} className="text-mist" />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="block truncate text-sm capitalize text-ink">{p.tipo}</span>
-                      <span className="block text-xs text-mist">{formatDate(p.dataPagamento, "-")}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm tabular-nums text-ink">{formatCurrency(p.valor)}</span>
-                    <button onClick={() => handleRemoverPagamento(p.id)} className="grid h-7 w-7 place-items-center rounded-lg text-mist transition-colors hover:bg-danger/25 hover:text-danger">
-                      <X size={13} />
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div className="grid grid-cols-2 gap-2 border-t border-fg/[0.06] pt-3">
-            <div>
-              <span className="block text-xs text-mist">Total pago</span>
-              <span className="text-sm tabular-nums text-ink">{formatCurrency(totalPago)}</span>
-            </div>
-            <div className="text-right">
-              <span className="block text-xs text-mist">Pendente</span>
-              <span className={`text-sm tabular-nums ${pendente > 0 ? "text-warning" : "text-success"}`}>{formatCurrency(pendente)}</span>
-            </div>
-          </div>
-
-          {pagamentos.length > 0 && (
-            <button
-              onClick={handleConfirmarPagamentos}
-              disabled={confirmandoPagamento}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-2.5 text-sm text-white transition-all hover:bg-accent-soft disabled:opacity-40"
-            >
-              {confirmandoPagamento ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-              {confirmandoPagamento ? "Confirmando..." : `Confirmar ${formatCurrency(totalPagoNaSessao)}`}
-            </button>
-          )}
-        </div>
-      </Modal>
 
       {/* ════════════ MODAL: EXCLUIR ════════════ */}
       <Modal open={modalExcluir} onClose={() => setModalExcluir(false)} title="Excluir nota" subtitle="Essa ação não pode ser desfeita" accent="rgb(var(--danger))" maxWidth="max-w-sm">
@@ -541,7 +482,8 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
       </Modal>
 
       {/* ════════════ NOTA ════════════ */}
-      <div className="flex h-full flex-col overflow-hidden rounded-2xl bg-surface ring-1 ring-fg/[0.06]">
+      <div className="flex h-full min-h-0 overflow-hidden rounded-2xl bg-surface ring-1 ring-fg/[0.06]">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-fg/[0.05] px-3 py-2.5">
           <div className="flex min-w-0 items-center gap-2">
@@ -554,20 +496,16 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
             )}
           </div>
           <div className="flex items-center gap-1.5">
-            <button
-              title={ehMaster ? (pixConfig ? "PIX configurado" : "Configurar PIX") : "Só o usuário master configura a chave Pix"}
-              onClick={() => ehMaster && setModalPixConfig(true)}
-              disabled={!ehMaster}
-              className={`${btnToolbar} ${pixConfig ? "bg-success/[0.1] text-success ring-success/20" : "bg-accent/[0.1] text-accent-soft ring-accent/20"} ${ehMaster ? "" : "cursor-not-allowed opacity-40"}`}
+            {/* Só indica; configurar é em Configurações → Empresa, e só o
+                usuário master vê o formulário. Chave Pix não é assunto de nota. */}
+            <span
+              title={pixConfig ? "Pix configurado — o QR sai na nota" : "Pix não configurado (Configurações → Empresa)"}
+              className={`${btnToolbar} ${pixConfig ? "bg-success/[0.1] text-success ring-success/20" : "bg-fg/[0.05] text-faint ring-fg/10"}`}
             >
               {pixConfig ? <Check size={19} /> : <QrCode size={19} />}
-            </button>
+            </span>
             <button title="Adicionar produto" onClick={() => setModalProdutos(true)} className={`${btnToolbar} bg-success/[0.1] text-success ring-success/20 hover:bg-success hover:text-success`}>
               <PackageSearch size={19} />
-            </button>
-            <button title="Pagamentos" onClick={() => setModalPagamentos(true)} className={`relative ${btnToolbar} bg-accent/[0.1] text-accent-soft ring-accent/20 hover:bg-accent hover:text-white`}>
-              <Wallet size={19} />
-              {total > 0 && pendente > 0 && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-warning ring-2 ring-surface" />}
             </button>
             <button title="Baixar nota" onClick={() => handleDownload(notaRef)} className={`${btnToolbar} bg-accent-soft/[0.1] text-accent-soft ring-accent-soft/20 hover:bg-accent-soft hover:text-accent`}>
               <Download size={19} />
@@ -580,9 +518,14 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
 
         {/* Conteúdo da nota (capturado no PNG) */}
         <div className="flex-1 overflow-y-auto">
-          <div ref={notaRef} className="flex w-full flex-col bg-surface">
+          {/* Largura limitada e centralizada.
+              Sem teto, a nota acompanhava o monitor: em tela larga, o nome do
+              cliente ficava a meia tela do valor, e a tabela de itens virava
+              linhas com um vão enorme no meio. 900px é o suficiente para as
+              cinco colunas de item sem espalhar. */}
+          <div ref={notaRef} className="mx-auto flex w-full max-w-[900px] flex-col bg-surface">
             {/* Cabeçalho */}
-            <div className="border-b border-fg/[0.05] p-5">
+            <div className="border-b border-fg/[0.05] p-6">
               {loadingPedido ? (
                 <SkeletonInvoiceHeader />
               ) : (
@@ -596,43 +539,141 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
               )}
             </div>
 
-            {/* Cliente e vendedor */}
-            <div className="grid gap-3 px-5 pt-5 sm:grid-cols-2">
-              <div>
-                <label className="mb-1.5 block text-[11px] uppercase tracking-[0.08em] text-faint">Cliente</label>
-                {loadingPedido ? (
-                  <Skeleton className="h-11 rounded-xl" />
+            {/*
+             * Identificação empilhada à esquerda, QR à direita.
+             *
+             * Antes cliente e telefone dividiam a linha e o QR ficava lá
+             * embaixo, no fim da nota. Quem recebe a foto pelo WhatsApp lê de
+             * cima para baixo e para no primeiro bloco: pôr o código de
+             * pagamento ao lado de para-quem-é resolve a nota num olhar.
+             */}
+            <div className="flex flex-col gap-6 px-6 pt-6 sm:flex-row sm:items-start sm:gap-8">
+              {/*
+               * Lista compacta, não três caixas de formulário.
+               *
+               * Eram campos de 44px com moldura e fundo — pareciam editáveis
+               * sem ser, e sozinhos ocupavam mais altura que o QR ao lado. Numa
+               * nota isto é dado impresso: rótulo pequeno, valor legível, uma
+               * linha fina separando. Ganha-se metade da altura e a leitura
+               * melhora.
+               */}
+              {/*
+               * Sem moldura: o que separa as linhas é espaço, não borda.
+               *
+               * Caixa dentro de caixa dentro do cartão da nota empilha três
+               * contornos na mesma região e faz a leitura pesar. Retirando a
+               * borda e abrindo o respiro, os mesmos dados ocupam a mesma
+               * largura e a nota fica mais limpa — que é o que uma nota deve
+               * parecer: papel, não formulário.
+               */}
+              {/* Sem ícone. Numa nota, o que o cliente lê é o dado — o símbolo
+                  ao lado do rótulo era ruído numa peça que já tem pouco espaço
+                  e vai impressa. */}
+              <dl className="flex min-w-0 flex-1 flex-col gap-3.5">
+                {[
+                  { rotulo: "Cliente", valor: pedido?.nomeCliente || nome || "—", extra: documentoCliente },
+                  { rotulo: "Telefone", valor: telefoneCliente || "Não informado", extra: emailCliente },
+                  { rotulo: "Vendedor", valor: vendedor, extra: dataEmissao },
+                ].map((linha) => (
+                  <div key={linha.rotulo} className="min-w-0">
+                    <dt className="text-[10.5px] uppercase tracking-[0.1em] text-faint">{linha.rotulo}</dt>
+                    <dd className="mt-0.5 min-w-0 truncate text-[14.5px] leading-snug text-ink">{loadingPedido ? <Skeleton className="h-4 w-40" /> : linha.valor}</dd>
+                    {linha.extra && !loadingPedido && <dd className="truncate text-[11.5px] text-faint">{linha.extra}</dd>}
+                  </div>
+                ))}
+              </dl>
+
+              {/*
+               * A coluna do QR existe sempre.
+               *
+               * Antes ela era condicionada ao `pixPayload`: sem chave Pix
+               * cadastrada o bloco inteiro sumia, e quem abria a nota achava que
+               * o QR tinha quebrado. Agora o espaço fica lá e diz o motivo — que
+               * quase sempre é chave não configurada, coisa que só o usuário
+               * master resolve.
+               */}
+              <div className="flex shrink-0 flex-col items-center gap-2 sm:w-[176px]">
+                {pixPayload ? (
+                  <>
+                    <div className="overflow-hidden rounded-2xl border border-fg/[0.08] bg-white p-2.5">
+                      {qrCodeNota ? <img src={qrCodeNota} alt="QR Code para pagamento via Pix" className="h-[144px] w-[144px] rounded-lg" /> : <div className="h-[144px] w-[144px] animate-pulse rounded-lg bg-fg/[0.06]" />}
+                    </div>
+
+                    <span className="text-[10.5px] text-faint">Pix · {formatCurrency(valorCobranca)}</span>
+                  </>
                 ) : (
-                  <div className="flex h-11 items-center gap-2 rounded-xl border border-fg/[0.06] bg-fg/[0.04] px-3 text-sm text-ink">
-                    <span>👤</span>
-                    <span className="truncate">{pedido?.nomeCliente || nome || "Nome do cliente"}</span>
+                  /* Aviso de configuração é para quem atende, não para o cliente:
+                     fica fora da foto. */
+                  <div data-sem-foto className="flex h-[167px] w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-fg/[0.12] px-3 text-center">
+                    <QrCode size={22} className="text-faint" />
+                    <p className="text-[11px] leading-relaxed text-mist">
+                      {pixConfig ? "O QR aparece quando a nota tiver valor." : "Chave Pix não cadastrada."}
+                    </p>
+                    {!pixConfig && <p className="text-[10.5px] leading-relaxed text-faint">Configurações → Empresa (só o usuário master).</p>}
                   </div>
                 )}
-              </div>
 
-              <div>
-                <label className="mb-1.5 block text-[11px] uppercase tracking-[0.08em] text-faint">Telefone</label>
-                {loadingPedido ? (
-                  <Skeleton className="h-11 rounded-xl" />
-                ) : (
-                  <div className="flex h-11 items-center gap-2 rounded-xl border border-fg/[0.06] bg-fg/[0.04] px-3 text-sm text-ink">
-                    <span>📞</span>
-                    <span className="truncate">{telefoneCliente || "Não informado"}</span>
+                  {/*
+                   * Atalhos de cobrança parcial.
+                   *
+                   * `data-sem-foto` mantém isto FORA do PNG: é ferramenta de
+                   * quem atende, não informação do cliente. Na foto sai só o QR
+                   * e o valor que ele deve pagar — ver o botão "50%" numa nota
+                   * levantaria a pergunta errada na hora errada.
+                   */}
+                {pixPayload && (
+                  /*
+                   * Uma linha só, não um bloco empilhado.
+                   *
+                   * Eram dois botões numa linha e o campo livre em outra: isso
+                   * esticava a coluna do QR muito além da altura dos detalhes
+                   * ao lado, e a sobra virava o vazio que incomodava. Os três
+                   * controles cabem lado a lado — são curtos por natureza.
+                   *
+                   * `data-sem-foto`: ferramenta de quem atende, fora do PNG.
+                   */
+                  <div data-sem-foto className="flex w-full items-stretch gap-1 text-[11px]">
+                    {[100, 50].map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => {
+                          setPercentual(p);
+                          setPercentualLivre("");
+                        }}
+                        className={`flex-1 rounded-md border py-1 transition-colors ${
+                          percentual === p && !percentualLivre ? "border-accent bg-accent text-white" : "border-fg/[0.1] text-mist hover:text-ink"
+                        }`}
+                      >
+                        {p === 100 ? "Total" : "50%"}
+                      </button>
+                    ))}
+
+                    <div className={`flex w-[52px] shrink-0 items-center rounded-md border px-1 ${percentualLivre ? "border-accent" : "border-fg/[0.1]"}`}>
+                      <input
+                        value={percentualLivre}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 3);
+                          setPercentualLivre(v);
+
+                          const n = Number(v);
+                          if (n > 0 && n <= 100) setPercentual(n);
+                          else if (!v) setPercentual(100);
+                        }}
+                        inputMode="numeric"
+                        placeholder="—"
+                        aria-label="Percentual personalizado"
+                        className="w-full bg-transparent py-1 text-center text-ink outline-none placeholder:text-faint"
+                      />
+                      <span className="text-faint">%</span>
+                    </div>
                   </div>
                 )}
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="mb-1.5 block text-[11px] uppercase tracking-[0.08em] text-faint">Vendedor responsável</label>
-                <div className="flex h-11 items-center gap-2 rounded-xl border border-fg/[0.06] bg-fg/[0.04] px-3 text-sm text-ink">
-                  <span>🧑‍💼</span>
-                  <span className="truncate">{vendedor}</span>
-                </div>
               </div>
             </div>
 
             {/* Tabela de itens */}
-            <div className="hidden px-5 pt-4 md:block">
+            <div className="hidden px-6 pt-6 md:block">
               {/* Sem altura máxima e sem rolagem própria aqui. O teto de 42vh
                   cortava a tabela pela metade na tela e, no download, capturava
                   só a parte visível — nota com muitos itens saía truncada. Quem
@@ -703,7 +744,7 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
             </div>
 
             {/* Mobile */}
-            <div className="space-y-3 px-5 pt-4 md:hidden">
+            <div className="space-y-3 px-6 pt-6 md:hidden">
               {loadingPedido ? (
                 Array.from({ length: 3 }).map((_, i) => <SkeletonInvoiceCard key={i} />)
               ) : itens.length > 0 ? (
@@ -773,10 +814,12 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
                     <span className={lblResumo}>T. Pago</span>
                     <span className={`${valResumo} tabular-nums`}>{formatCurrency(totalPago)}</span>
                   </div>
-                  <button onClick={() => setModalPagamentos(true)} className={`rounded-xl border p-3 text-left transition-colors hover:bg-fg/[0.06] ${pendente > 0 ? "border-warning/20 bg-warning/[0.12]" : "border-success/20 bg-success/[0.12]"}`}>
+                  {/* Virou informação, não botão: o pagamento agora está sempre
+                      visível na coluna ao lado — não há mais o que abrir. */}
+                  <div className={`rounded-xl border p-3 ${pendente > 0 ? "border-warning/20 bg-warning/[0.12]" : "border-success/20 bg-success/[0.12]"}`}>
                     <span className={`${lblResumo} ${pendente > 0 ? "text-warning" : "text-success"}`}>Pendente</span>
                     <span className={`mt-1 block truncate text-sm tabular-nums ${pendente > 0 ? "text-warning" : "text-success"}`}>{formatCurrency(pendente)}</span>
-                  </button>
+                  </div>
                   <div className="rounded-xl border border-fg/[0.06] bg-fg/[0.03] p-3">
                     <span className={lblResumo}>F. Pagamento</span>
                     <span className={valResumo}>{formaPagamento}</span>
@@ -785,10 +828,12 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
               )}
             </div>
 
-            {/* ─── PIX ───
-                Precisa ficar DENTRO de `notaRef`: é esse nó que vira PNG no
-                download. Como irmão, o QR aparecia na tela e sumia do arquivo. */}
-            <PixSection pixPayload={pixPayload} />
+            {/* O copia-e-cola do Pix saiu daqui.
+                Era um bloco largo com o código inteiro quebrado em várias
+                linhas — ocupava mais altura que o resumo da venda para uma
+                ação que quase ninguém usa: no balcão, o cliente aponta a câmera
+                para o QR. Quem paga pelo computador escaneia pelo celular
+                assim mesmo. */}
           </div>
         </div>
 
@@ -807,13 +852,16 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Sai antes do Pagamento de propósito: orçamento é a decisão de
+                NÃO faturar agora, e vem antes de qualquer coisa de dinheiro. */}
             <button
-              onClick={() => setModalPagamentos(true)}
-              disabled={loadingPedido}
-              className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent/[0.1] px-4 text-sm text-accent-soft transition-colors hover:bg-accent/20 disabled:opacity-40 sm:flex-none"
+              onClick={handleGerarOrcamento}
+              disabled={gerandoOrcamento || loadingPedido || itens.length === 0}
+              title="Gerar orçamento com estes itens"
+              className="flex h-12 shrink-0 items-center gap-2 rounded-xl border border-fg/[0.1] px-4 text-sm text-mist transition-colors hover:border-accent/40 hover:text-ink disabled:opacity-40"
             >
-              <Wallet size={18} /> Pagamento
-              {pendente > 0 && <span className="rounded-full bg-warning/25 px-1.5 py-0.5 text-[10px] tabular-nums text-warning">{formatCurrency(pendente)}</span>}
+              {gerandoOrcamento ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
+              <span className="hidden sm:inline">Orçamento</span>
             </button>
 
             <button
@@ -826,6 +874,132 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
             </button>
           </div>
         </footer>
+        </div>
+
+        {/*
+         * Pagamentos na lateral, não em modal.
+         *
+         * Receber é conferência: quem lança olha o total da nota, o que já
+         * entrou e o que falta ao mesmo tempo. O modal cobria justamente a nota
+         * que se está conferindo, e obrigava a fechar e reabrir para checar um
+         * item. Ao lado, os dois convivem.
+         *
+         * À ESQUERDA, com `order-first`: quem opera lê a nota da esquerda para
+         * a direita e termina no total. Pôr o recebimento depois disso obrigava
+         * o olho a voltar. Antes da nota, ele é o primeiro passo do fechamento.
+         *
+         * Some abaixo de `lg`: em tela estreita não há largura para duas
+         * colunas, e lá o rodapé continua sendo o caminho.
+         */}
+        <aside className="order-first hidden w-[320px] shrink-0 flex-col border-r border-fg/[0.06] bg-fg/[0.02] lg:flex">
+          {/*
+           * O cabeçalho mostra o que falta, em corpo grande.
+           *
+           * Era um rótulo de 12px dizendo "Recebimentos" — o nome da coluna, que
+           * a pessoa já sabe por estar olhando para ela. O número que importa
+           * é quanto ainda falta receber, e ele muda a cada lançamento: em
+           * destaque, quem atende confere sem procurar.
+           */}
+          <header className="shrink-0 border-b border-fg/[0.06] px-4 py-4">
+            <p className="text-[10.5px] uppercase tracking-[0.1em] text-faint">{pendente > 0 ? "Falta receber" : "Recebido"}</p>
+
+            <motion.p
+              key={pendente}
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className={`mt-1 text-[26px] leading-none tracking-tight tabular-nums ${pendente > 0 ? "text-warning" : "text-success"}`}
+            >
+              {formatCurrency(pendente > 0 ? pendente : totalPago)}
+            </motion.p>
+
+            <p className="mt-1.5 text-[11px] text-faint">
+              {statusPedido ? statusPedido.toLowerCase() : "nova nota"} · total {formatCurrency(total)}
+            </p>
+          </header>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            {!id ? (
+              <p className="rounded-xl border border-warning/30 bg-warning/[0.08] px-3.5 py-3 text-[12px] leading-relaxed text-warning">
+                Salve a nota antes de registrar pagamentos.
+              </p>
+            ) : (
+              <PagamentoForm
+                total={total}
+                jaPago={totalPago}
+                textoConfirmar="Adicionar pagamento"
+                onConfirmar={(valor, forma) => handleAdicionarPagamento(valor, forma)}
+              />
+            )}
+
+            {pagamentos.length > 0 && (
+              <div className="mt-5 border-t border-fg/[0.06] pt-4">
+                <p className="mb-2 text-[11px] uppercase tracking-[0.08em] text-faint">Ainda não gravados</p>
+
+                {/* Cada pagamento entra deslizando e sai encolhendo — confirma
+                    o lançamento sem precisar de um aviso na tela. */}
+                <AnimatePresence initial={false}>
+                  {pagamentos.map((p) => (
+                    <motion.div
+                      key={p.id}
+                      layout
+                      initial={{ opacity: 0, x: 20, height: 0 }}
+                      animate={{ opacity: 1, x: 0, height: "auto" }}
+                      exit={{ opacity: 0, x: 20, height: 0 }}
+                      transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="mb-2 flex items-center gap-2.5 rounded-xl border border-success/20 bg-success/[0.06] px-3 py-2">
+                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-success/15 text-success">
+                          <Check size={13} />
+                        </span>
+
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[12.5px] text-ink">{p.tipo}</span>
+                          <span className="block text-[10.5px] text-faint">{formatDate(p.dataPagamento, "-")}</span>
+                        </span>
+
+                        {/* Editável no lugar: errar o valor é comum, e obrigar a
+                            remover e lançar de novo custa três cliques para
+                            corrigir um dígito. */}
+                        <MoneyInput
+                          value={p.valor}
+                          onChange={(v) => setPagamentos((prev) => prev.map((x) => (x.id === p.id ? { ...x, valor: v } : x)))}
+                          className="w-[86px] shrink-0 rounded-md bg-transparent px-1 text-right text-[12.5px] tabular-nums text-success outline-none focus:bg-fg/[0.06]"
+                        />
+
+                        <button
+                          onClick={() => handleRemoverPagamento(p.id)}
+                          aria-label={`Remover ${p.tipo}`}
+                          className="shrink-0 text-muted transition-colors hover:text-danger"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+
+                {/*
+                 * Confirmar grava de verdade.
+                 *
+                 * Adicionar acumula na lista; confirmar envia ao servidor. Separar
+                 * os dois é o que permite registrar "50 no Pix e 30 em dinheiro"
+                 * como um recebimento só, e desfazer um deles antes de gravar.
+                 */}
+                <motion.button
+                  layout
+                  onClick={handleConfirmarPagamentos}
+                  disabled={confirmandoPagamento}
+                  className="mt-1 flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-success px-4 text-[13px] text-white transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-50"
+                >
+                  {confirmandoPagamento ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                  Confirmar {formatCurrency(totalPagoNaSessao)}
+                </motion.button>
+              </div>
+            )}
+          </div>
+        </aside>
       </div>
     </div>
   );

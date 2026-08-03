@@ -1,0 +1,228 @@
+import { useEffect, useMemo, useState } from "react";
+import { FileText, Search, Check, X, Trash2, Loader2, ChevronDown, Info, ShoppingCart } from "lucide-react";
+
+import OrcamentoService, { type Orcamento, type StatusOrcamento } from "@/features/orcamentos/services/orcamento.service";
+import { useAlert } from "@/shared/ui/Alert";
+import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
+import { formatCurrency } from "@/shared/utils/currency";
+import { formatDate } from "@/shared/utils/date";
+import { SkeletonListaPainel } from "@/shared/ui/skeleton";
+import { PageScreen } from "@/shared/ui/PageShell";
+import { TabsPdv } from "@/features/vendas/components/TabsPdv";
+
+const SITUACAO: Record<StatusOrcamento, { label: string; cls: string }> = {
+  ABERTO: { label: "Aguardando", cls: "border-warning/40 bg-warning/15 text-warning" },
+  APROVADO: { label: "Aprovado", cls: "border-success/40 bg-success/15 text-success" },
+  RECUSADO: { label: "Recusado", cls: "border-danger/40 bg-danger/15 text-danger" },
+  EXPIRADO: { label: "Expirado", cls: "border-fg/[0.12] bg-fg/[0.04] text-mist" },
+};
+
+const FILTROS: { id: "todos" | StatusOrcamento; label: string }[] = [
+  { id: "todos", label: "Todos" },
+  { id: "ABERTO", label: "Aguardando" },
+  { id: "APROVADO", label: "Aprovados" },
+  { id: "RECUSADO", label: "Recusados" },
+];
+
+/**
+ * Orçamentos: propostas enviadas, ainda sem compromisso.
+ *
+ * A tela é deliberadamente diferente de Vendas em uma coisa: **não há totais no
+ * topo**. Somar orçamento dá um número que parece faturamento e não é — bastaria
+ * alguém olhar de longe para tomar proposta por venda. O que interessa aqui é
+ * quantas propostas estão paradas esperando resposta, e essa contagem fica no
+ * próprio filtro.
+ */
+const OrcamentosPage = () => {
+  const alert = useAlert();
+
+  const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [busca, setBusca] = useState("");
+  const [filtro, setFiltro] = useState<"todos" | StatusOrcamento>("todos");
+  const [aberto, setAberto] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState<string | null>(null);
+
+  const carregar = async () => {
+    setCarregando(true);
+
+    try {
+      setOrcamentos(await OrcamentoService.listar());
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível carregar os orçamentos."));
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  useEffect(() => {
+    carregar();
+    // Só na montagem.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const filtrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+
+    return orcamentos.filter((o) => {
+      if (filtro !== "todos" && o.status !== filtro) return false;
+      if (!termo) return true;
+
+      return o.clienteNome.toLowerCase().includes(termo) || String(o.codigo).includes(termo);
+    });
+  }, [orcamentos, busca, filtro]);
+
+  const aguardando = orcamentos.filter((o) => o.status === "ABERTO").length;
+
+  const mudarStatus = async (o: Orcamento, status: StatusOrcamento) => {
+    setSalvando(o.id);
+
+    try {
+      await OrcamentoService.alterarStatus(o.id, status);
+      setOrcamentos((prev) => prev.map((x) => (x.id === o.id ? { ...x, status } : x)));
+
+      if (status === "APROVADO") {
+        alert.success("Orçamento aprovado!", "Agora abra a venda no PDV para faturar — orçamento não vira venda sozinho.");
+      }
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível atualizar a situação."));
+    } finally {
+      setSalvando(null);
+    }
+  };
+
+  const excluir = async (o: Orcamento) => {
+    setSalvando(o.id);
+
+    try {
+      await OrcamentoService.excluir(o.id);
+      setOrcamentos((prev) => prev.filter((x) => x.id !== o.id));
+      alert.success("Orçamento excluído.", "A proposta foi removida.");
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível excluir."));
+    } finally {
+      setSalvando(null);
+    }
+  };
+
+  return (
+    <PageScreen icon={<ShoppingCart className="h-5 w-5" />} title="Ponto de Venda" subtitle="Registre vendas e monte orçamentos" tabs={TabsPdv}>
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      {/* Explica a regra uma vez, onde ela importa. */}
+      <div className="flex shrink-0 items-start gap-2.5 rounded-xl border border-fg/[0.07] bg-fg/[0.02] px-4 py-2.5">
+        <Info size={14} className="mt-0.5 shrink-0 text-accent-soft" />
+        <p className="text-[12px] leading-relaxed text-mist">
+          Orçamento é proposta: <span className="text-ink">não entra no faturamento, não baixa estoque e não gera conta a receber</span>. Quando o cliente aceitar, abra a venda no PDV.
+        </p>
+      </div>
+
+      {/* Filtros */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="flex max-w-xs flex-1 items-center gap-2 rounded-lg border border-fg/[0.08] bg-fg/[0.05] px-3 focus-within:border-accent">
+          <Search className="h-3.5 w-3.5 shrink-0 text-muted" />
+          <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por cliente ou número..." className="flex-1 bg-transparent py-2 text-xs text-ink outline-none placeholder:text-faint" />
+        </div>
+
+        <div className="flex gap-1.5">
+          {FILTROS.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setFiltro(f.id)}
+              className={`cursor-pointer rounded-lg px-3 py-2 text-[11px] transition-colors ${filtro === f.id ? "bg-accent text-white" : "border border-fg/[0.08] bg-fg/[0.05] text-mist hover:bg-fg/[0.09]"}`}
+            >
+              {f.label}
+              {f.id === "ABERTO" && aguardando > 0 && <span className="ml-1.5 rounded-full bg-warning/25 px-1.5 text-[10px] text-warning">{aguardando}</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Lista */}
+      <div className="card glass-sheen min-h-0 flex-1 overflow-y-auto">
+        {carregando ? (
+          <SkeletonListaPainel linhas={6} />
+        ) : filtrados.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-6 py-16 text-center">
+            <span className="grid h-14 w-14 place-items-center rounded-2xl border border-fg/[0.08] bg-fg/[0.03] text-faint">
+              <FileText size={22} />
+            </span>
+            <p className="text-[14px] text-ink">{busca.trim() || filtro !== "todos" ? "Nenhum orçamento encontrado" : "Nenhum orçamento ainda"}</p>
+            <p className="max-w-[280px] text-[12.5px] leading-relaxed text-faint">
+              {busca.trim() || filtro !== "todos" ? "Tente outro filtro ou outra busca." : "Monte uma proposta no PDV: escolha os produtos e clique em “Gerar orçamento”."}
+            </p>
+          </div>
+        ) : (
+          filtrados.map((o) => {
+            const s = SITUACAO[o.status] ?? SITUACAO.ABERTO;
+            const expandido = aberto === o.id;
+            const ocupado = salvando === o.id;
+
+            return (
+              <div key={o.id} className="border-b border-fg/[0.04] last:border-0">
+                <button onClick={() => setAberto(expandido ? null : o.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-fg/[0.03]">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-fg/[0.05] text-[11px] tabular-nums text-mist">#{o.codigo}</span>
+
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] text-ink">{o.clienteNome}</span>
+                    <span className="block truncate text-[11px] text-faint">
+                      {formatDate(o.criadoEm)}
+                      {o.vendedorNome ? ` · ${o.vendedorNome}` : ""}
+                      {o.itens.length ? ` · ${o.itens.length} ${o.itens.length === 1 ? "item" : "itens"}` : ""}
+                    </span>
+                  </span>
+
+                  <span className={`hidden shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] sm:inline-flex ${s.cls}`}>{s.label}</span>
+
+                  <span className="shrink-0 text-right text-[13px] tabular-nums text-ink">{formatCurrency(o.total)}</span>
+
+                  <ChevronDown size={15} className={`shrink-0 text-muted transition-transform ${expandido ? "rotate-180" : ""}`} />
+                </button>
+
+                {expandido && (
+                  <div className="border-t border-fg/[0.04] bg-fg/[0.02] px-4 py-3">
+                    <ul className="mb-3 flex flex-col gap-1.5">
+                      {o.itens.map((i, n) => (
+                        <li key={i.id ?? n} className="flex items-center justify-between gap-3 text-[12px]">
+                          <span className="min-w-0 truncate text-mist">
+                            {Number(i.quantidade)}× {i.nomeProduto}
+                          </span>
+                          <span className="shrink-0 tabular-nums text-ink">{formatCurrency(Number(i.subtotal ?? Number(i.valorUnitario) * Number(i.quantidade)))}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {o.observacao && <p className="mb-3 text-[12px] leading-relaxed text-faint">{o.observacao}</p>}
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {o.status !== "APROVADO" && (
+                        <button disabled={ocupado} onClick={() => mudarStatus(o, "APROVADO")} className="flex min-h-[36px] items-center gap-1.5 rounded-lg border border-success/30 bg-success/[0.1] px-3 text-[12px] text-success transition-colors hover:bg-success/20 disabled:opacity-50">
+                          {ocupado ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                          Cliente aprovou
+                        </button>
+                      )}
+
+                      {o.status !== "RECUSADO" && (
+                        <button disabled={ocupado} onClick={() => mudarStatus(o, "RECUSADO")} className="flex min-h-[36px] items-center gap-1.5 rounded-lg border border-fg/[0.1] px-3 text-[12px] text-mist transition-colors hover:text-ink disabled:opacity-50">
+                          <X size={13} />
+                          Recusou
+                        </button>
+                      )}
+
+                      <button disabled={ocupado} onClick={() => excluir(o)} className="ml-auto flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 text-[12px] text-muted transition-colors hover:text-danger disabled:opacity-50">
+                        <Trash2 size={13} />
+                        Excluir
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+    </PageScreen>
+  );
+};
+
+export default OrcamentosPage;

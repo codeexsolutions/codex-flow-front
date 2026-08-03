@@ -3,6 +3,7 @@ import { io, type Socket } from "socket.io-client";
 
 import useAuth from "@/features/auth/store/auth.store";
 import AssinaturaService from "@/features/assinatura/services/assinatura.service";
+import { API_ORIGEM } from "@/shared/api/apiUrl";
 
 /**
  * Escuta a liberação da empresa e destrava o cliente sozinho.
@@ -46,9 +47,8 @@ export function useLiberacaoEmpresa(aoLiberar: (dados: { planoNome?: string | nu
       }
     };
 
-    const baseUrl = (import.meta.env.PROD ? import.meta.env.VITE_API_PRODUCTION : import.meta.env.VITE_API_LOCAL) ?? "";
     // A API monta o socket na raiz do servidor, não no prefixo /v1.
-    const origem = String(baseUrl).replace(/\/v1\/?$/, "");
+    const origem = API_ORIGEM;
 
     let socket: Socket | null = null;
 

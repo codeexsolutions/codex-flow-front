@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Sparkles, ShoppingCart, Package, Wallet, WifiOff } from "lucide-react";
+import { Sparkles, ShoppingCart, Package, Wallet, WifiOff, Building2, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import useAuth from "@/features/auth/store/auth.store";
 
@@ -63,13 +63,18 @@ const AuthPage = () => {
     /* No desktop o cartão sozinho boiava num monitor inteiro. Vira duas colunas:
        à esquerda a marca com a mesma rede animada da página inicial — quem entra
        reconhece de onde veio; à direita o formulário. Abaixo de `lg` nada muda. */
-    <div className="vitrine relative h-[100dvh] w-full overflow-hidden bg-canvas lg:grid lg:grid-cols-[1.05fr_1fr]">
+    /* Sem `vitrine`: estas telas passam a seguir o tema e o destaque que a
+       pessoa escolheu. Quem já é cliente reconhece o próprio sistema antes de
+       entrar; a identidade fixa fica só na página pública de vendas. */
+    <div className="relative h-[100dvh] w-full overflow-hidden bg-canvas lg:grid lg:grid-cols-[1.05fr_1fr]">
       <aside className="relative hidden overflow-hidden border-r border-fg/[0.07] lg:flex lg:flex-col lg:justify-between lg:p-12">
         <RedeAnimada className="absolute inset-0" />
 
         <div className="relative flex items-center gap-3">
           <img src="/logo.png" alt="" width={40} height={40} className="h-10 w-10 rounded-xl shadow-glow" />
-          <span className="text-[17px] tracking-tight text-ink">CodeEx Flow</span>
+          <span className="font-display text-[19px] tracking-tight text-ink">
+            CodeEx <span className="text-accent-soft">Flow</span>
+          </span>
         </div>
 
         <div className="relative max-w-md">
@@ -124,17 +129,20 @@ const AuthPage = () => {
         >
           <button type="button" onClick={() => navigate(LANDING_ROUTE)} className="group relative inline-flex items-center justify-center transition-transform duration-300 hover:scale-[1.04]" aria-label="Ir para a página inicial do CodeEx Flow">
             <span className="pointer-events-none absolute left-1/2 top-1/2 h-[80px] w-[80px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent blur-[36px]" style={{ opacity: "calc(0.5 * var(--fx-glow, 1))" }} />
-            <img src="/logo.png" alt="CodeEx Flow" width={48} height={48} className="relative h-10 w-10 rounded-xl shadow-glow sm:h-12 sm:w-12" />
+            <img src="/logo.png" alt="CodeEx Flow" width={48} height={48} className="relative h-11 w-11 rounded-xl shadow-glow" />
           </button>
+
           <div className="flex flex-col leading-tight">
-            <span className="text-base tracking-tight text-ink sm:text-lg">CodeEx Flow</span>
+            <span className="font-display text-[19px] tracking-tight text-ink">
+              CodeEx <span className="text-accent-soft">Flow</span>
+            </span>
             <span className="text-[10px] uppercase tracking-[2px] text-faint">Painel da empresa</span>
           </div>
         </motion.div>
 
         {/* Card — ao entrar, ele é "consumido": encolhe, desfoca e some. */}
         <motion.div
-          className="glass-strong glass-sheen elev-3 relative rounded-2xl p-4 sm:p-6"
+          className="glass-liquid glass-sheen relative rounded-2xl p-5 sm:p-7"
           initial={{ opacity: 0, y: 18, scale: 0.98 }}
           animate={consumindo ? { opacity: 0, scale: 0.94, filter: "blur(10px)", y: -12 } : { opacity: 1, scale: 1, filter: "blur(0px)", y: 0 }}
           transition={{ duration: consumindo ? 0.55 : 0.6, delay: consumindo ? 0 : 0.12, ease: [0.22, 0.61, 0.36, 1] }}
@@ -146,20 +154,33 @@ const AuthPage = () => {
 
           <AuthForm onSubmit={onSubmit} isLoading={isLoading} loginError={loginError} />
 
-          <p className="mt-3 text-center text-[11px] text-faint">
-            Ainda não tem conta?{" "}
-            <button type="button" onClick={() => navigate("/cadastro")} className="text-accent transition-colors hover:text-accent-soft">
-              Cadastre sua empresa
-            </button>
-          </p>
+          {/* Era uma linha de 11px no rodapé do cartão — justamente o convite
+              para quem ainda não é cliente ficava sendo a coisa menos visível
+              da tela. Vira botão, com um separador que o desgruda do formulário
+              sem competir com o "Entrar". */}
+          <div className="mt-4 flex items-center gap-3">
+            <span className="h-px flex-1 bg-fg/[0.08]" />
+            <span className="text-[10.5px] uppercase tracking-[1.4px] text-faint">Ainda não tem conta?</span>
+            <span className="h-px flex-1 bg-fg/[0.08]" />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => navigate("/cadastro")}
+            className="focus-ring group mt-3 flex min-h-[46px] w-full items-center justify-center gap-2 rounded-xl border border-accent/30 bg-accent/[0.08] text-[13.5px] text-accent-soft transition-all hover:border-accent/50 hover:bg-accent/[0.14] active:scale-[0.99]"
+          >
+            <Building2 size={16} />
+            Cadastrar minha empresa
+            <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+          </button>
         </motion.div>
 
-        {/* No celular "conhecer o site" era um link de 10px espremido no rodapé —
-            invisível justamente para quem ainda não é cliente. Vira botão. */}
+        {/* Vale para as duas larguras: no desktop isto era um link de 10px
+            perdido no aviso de copyright. */}
         <motion.button
           type="button"
           onClick={() => navigate(LANDING_ROUTE)}
-          className="focus-ring mt-4 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl border border-fg/[0.1] text-[13.5px] text-mist transition-colors active:bg-fg/[0.05] sm:hidden"
+          className="focus-ring mt-4 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl border border-fg/[0.1] text-[13.5px] text-mist transition-colors hover:border-fg/[0.2] hover:text-ink active:bg-fg/[0.05]"
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.28 }}
@@ -174,10 +195,7 @@ const AuthPage = () => {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.35, duration: 0.5 }}
         >
-          © {new Date().getFullYear()} CodeEx Flow ·{" "}
-          <button type="button" onClick={() => navigate(LANDING_ROUTE)} className="text-accent transition-colors hover:text-accent-soft">
-            Conheça o CodeEx Flow
-          </button>
+          © {new Date().getFullYear()} CodeEx Flow
         </motion.p>
 
         <p className="mt-3 text-center text-[10px] text-muted sm:hidden">© {new Date().getFullYear()} CodeEx Flow</p>

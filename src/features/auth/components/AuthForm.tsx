@@ -31,6 +31,14 @@ const AuthForm = ({ onSubmit, isLoading, loginError }: AuthFormProps) => {
   const borderOk = "border-fg/[0.1] focus:border-accent";
   const borderErr = "border-danger/50 focus:border-danger";
 
+  /*
+   * Acessibilidade dos erros.
+   *
+   * `aria-invalid` sozinho anuncia "inválido" e para aí — a pessoa fica sabendo
+   * que errou, não o que errou. `aria-describedby` amarra a mensagem ao campo,
+   * e `role="alert"` faz o leitor de tela ler assim que ela aparece, sem
+   * esperar o foco voltar ao campo.
+   */
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
       {loginError && (
@@ -52,6 +60,7 @@ const AuthForm = ({ onSubmit, isLoading, loginError }: AuthFormProps) => {
             inputMode="numeric"
             placeholder="00.000.000/0000-00"
             aria-invalid={!!errors.cpfCnpjEmpresa}
+            aria-describedby={errors.cpfCnpjEmpresa ? "erro-cpfCnpjEmpresa" : undefined}
             className={`${inputBase} pr-4 ${errors.cpfCnpjEmpresa ? borderErr : borderOk}`}
             {...regCpfCnpj}
             onChange={(e) => {
@@ -61,7 +70,11 @@ const AuthForm = ({ onSubmit, isLoading, loginError }: AuthFormProps) => {
             }}
           />
         </div>
-        {errors.cpfCnpjEmpresa?.message && <p className="text-[12.5px] text-danger">{errors.cpfCnpjEmpresa.message}</p>}
+        {errors.cpfCnpjEmpresa?.message && (
+          <p id="erro-cpfCnpjEmpresa" role="alert" className="text-[12.5px] text-danger">
+            {errors.cpfCnpjEmpresa.message}
+          </p>
+        )}
       </div>
 
       {/* Email */}
@@ -71,9 +84,14 @@ const AuthForm = ({ onSubmit, isLoading, loginError }: AuthFormProps) => {
         </label>
         <div className="relative">
           <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-mist" />
-          <input id="email" type="email" placeholder="seu@email.com" autoComplete="email" aria-invalid={!!errors.email} className={`${inputBase} pr-4 ${errors.email ? borderErr : borderOk}`} {...register("email")} />
+          <input id="email" type="email" placeholder="seu@email.com" autoComplete="email" aria-invalid={!!errors.email}
+            aria-describedby={errors.email ? "erro-email" : undefined} className={`${inputBase} pr-4 ${errors.email ? borderErr : borderOk}`} {...register("email")} />
         </div>
-        {errors.email?.message && <p className="text-[12.5px] text-danger">{errors.email.message}</p>}
+        {errors.email?.message && (
+          <p id="erro-email" role="alert" className="text-[12.5px] text-danger">
+            {errors.email.message}
+          </p>
+        )}
       </div>
 
       {/* Senha */}
@@ -88,12 +106,17 @@ const AuthForm = ({ onSubmit, isLoading, loginError }: AuthFormProps) => {
         </div>
         <div className="relative">
           <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-mist" />
-          <input id="senha" type={showPassword ? "text" : "password"} placeholder="••••••••" autoComplete="current-password" aria-invalid={!!errors.senha} className={`${inputBase} pr-11 ${errors.senha ? borderErr : borderOk}`} {...register("senha")} />
+          <input id="senha" type={showPassword ? "text" : "password"} placeholder="••••••••" autoComplete="current-password" aria-invalid={!!errors.senha}
+            aria-describedby={errors.senha ? "erro-senha" : undefined} className={`${inputBase} pr-11 ${errors.senha ? borderErr : borderOk}`} {...register("senha")} />
           <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-mist transition-colors hover:text-accent-soft" aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}>
             {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
         </div>
-        {errors.senha?.message && <p className="text-[12.5px] text-danger">{errors.senha.message}</p>}
+        {errors.senha?.message && (
+          <p id="erro-senha" role="alert" className="text-[12.5px] text-danger">
+            {errors.senha.message}
+          </p>
+        )}
       </div>
 
       <button

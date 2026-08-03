@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Users, UserPlus, Search, AlertTriangle, ChevronLeft, ChevronRight, PieChart, RotateCw } from "lucide-react";
 import CustomerService from "@/features/clientes/services/client.service";
 import useClienteStore from "@/features/clientes/store/cliente.store";
+import useSincronizacao from "@/shared/realtime/useSincronizacao";
 import { eStatus, type ContactType } from "@/shared/domain/cliente";
 import ClienteForm from "@/features/clientes/components/ClienteForm";
 import ClientesMobile, { type ClienteItem } from "@/features/clientes/components/ClientesMobile";
@@ -73,6 +74,9 @@ const Clientes = () => {
   useEffect(() => {
     fetchClientes();
   }, [fetchClientes]);
+
+  /* Cliente cadastrado no PDV de outro balcão aparece aqui sem recarregar. */
+  useSincronizacao(["clientes"], () => fetchClientes(true));
 
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
@@ -184,7 +188,19 @@ const Clientes = () => {
         )}
 
         {/* Grid principal: tabela + lateral, ambos esticados até o fim */}
-        <section className="flex min-h-0 flex-1 flex-col gap-3">
+        {/*
+         * Duas colunas: tabela à esquerda, painéis empilhados à direita.
+         *
+         * Antes eles eram faixa horizontal — embaixo da tabela (fora da vista)
+         * e depois em cima dela (roubando altura da lista). Como coluna
+         * lateral os dois convivem: a lista fica com a altura inteira e os
+         * números ficam sempre à mão.
+         *
+         * Abaixo de `lg` volta a empilhar: em tela estreita não há largura para
+         * duas colunas sem espremer as duas.
+         */}
+        <section className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
+
           {/* Card da tabela — altura fixa da viewport */}
           <div className="flex min-h-[260px] min-w-0 flex-1 flex-col overflow-hidden card glass-sheen rounded-lg">
             {/* Toolbar do card */}
@@ -319,7 +335,8 @@ const Clientes = () => {
           </div>
 
           {/* Lateral: gráfico + composição */}
-          <aside className="grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-2">
+
+          <aside className="flex shrink-0 flex-col gap-3 overflow-y-auto lg:w-[300px]">
             <div className="flex min-h-[280px] flex-1 flex-col [&>*]:h-full">
               <ClientesGrowthChart customers={customers} />
             </div>

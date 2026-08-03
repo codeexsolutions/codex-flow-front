@@ -11,38 +11,16 @@ export type PixPayload = {
   description?: string;
 };
 
-export type PixSettings = {
-  key: string;
-  keyType: PixKeyType;
-  ownerName: string;
-  city: string;
-};
+/*
+ * As funções de `localStorage` foram REMOVIDAS.
+ *
+ * A chave Pix é da empresa e vive no banco — ver `features/config/services/
+ * pix.service.ts`. No navegador ela era por máquina, editável pelo DevTools
+ * (trocar a chave desvia o pagamento do cliente) e sumia ao limpar o cache.
+ *
+ * O que sobrou aqui é só a geração do payload EMV, que é cálculo puro.
+ */
 
-const PIX_STORAGE_KEY = "codex_pix_settings";
-
-/* ─── Persistência localStorage ─── */
-
-export function getPixSettings(): PixSettings | null {
-  try {
-    const raw = localStorage.getItem(PIX_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as PixSettings) : null;
-  } catch {
-    return null;
-  }
-}
-
-export function savePixSettings(settings: PixSettings): void {
-  localStorage.setItem(PIX_STORAGE_KEY, JSON.stringify(settings));
-}
-
-export function isPixConfigured(): boolean {
-  const s = getPixSettings();
-  return !!(s?.key && s?.keyType && s?.ownerName && s?.city);
-}
-
-export function clearPixSettings(): void {
-  localStorage.removeItem(PIX_STORAGE_KEY);
-}
 
 /* ─── CRC16-CCITT ─── */
 

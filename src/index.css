@@ -9,8 +9,6 @@
  * a maior parte da interface vive entre 11 e 14px, e ela mantém a abertura
  * das letras nesse corpo melhor que a média das grotescas.
  */
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -66,8 +64,10 @@
 
   --ring-focus: 0 0 0 3px rgb(var(--accent) / 0.28);
 
-  --font-display: "Space Grotesk", system-ui, sans-serif;
-  --font-body: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Carregadas em `main.tsx` a partir do pacote — ver o comentário de lá.
+     A pilha de reserva só vale para o instante antes de a fonte pintar. */
+  --font-display: "Sora Variable", "Sora", system-ui, sans-serif;
+  --font-body: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 .dark {
@@ -435,6 +435,7 @@
   color: rgb(var(--ink));
 }
 
+
 /* ---------- Modo aplicativo instalado ---------- */
 /*
  * `touch-action: manipulation` mata o zoom de duplo-toque, que o viewport
@@ -518,9 +519,22 @@ html[data-font-scale="lg"] {
    ══════════════════════════════════════════════════════════════════════ */
 
 body {
-  @apply bg-canvas font-sans text-ink antialiased;
+  /*
+   * Sem `antialiased`.
+   *
+   * `-webkit-font-smoothing: antialiased` é herança de projeto feito no Mac.
+   * No Windows ele DESLIGA o ClearType (renderização por subpixel) e afina o
+   * traço: a letra perde os subpixels que dão nitidez e passa a parecer trêmula,
+   * principalmente nos 11–13px em que este sistema vive. `auto` devolve o
+   * ClearType e é o padrão certo aqui.
+   */
+  @apply bg-canvas font-sans text-ink;
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  letter-spacing: -0.011em;
+  /* Era -0.011em: apertar o espaçamento em corpo pequeno junta as hastes e
+     soma ao borrão. Neutro é mais legível nesta escala. */
+  letter-spacing: 0;
   overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
   transition:
@@ -602,6 +616,40 @@ input[type="number"]::-webkit-outer-spin-button {
     backdrop-filter: blur(var(--blur-lg)) saturate(180%);
     -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(180%);
     border: 1px solid rgb(var(--glass-border) / calc(var(--glass-border-alpha) + 0.04));
+  }
+
+  /*
+   * Vidro líquido — cartões de entrada e cadastro.
+   *
+   * Três camadas sobre o vidro forte: um degradê diagonal que simula a luz
+   * atravessando o material, um brilho de borda superior e um halo interno.
+   * Tudo em cima dos tokens do tema, então acompanha as 7 paletas e os 9
+   * destaques — não é um efeito de cor fixa colado por cima.
+   */
+  .glass-liquid {
+    position: relative;
+    background-image:
+      linear-gradient(135deg, rgb(var(--glass-highlight) / 0.1) 0%, transparent 45%),
+      linear-gradient(220deg, rgb(var(--accent) / 0.1) 0%, transparent 55%);
+    background-color: rgb(var(--glass-bg) / calc(var(--glass-alpha) + 0.2));
+    backdrop-filter: blur(var(--blur-lg)) saturate(190%);
+    -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(190%);
+    border: 1px solid rgb(var(--glass-border) / calc(var(--glass-border-alpha) + 0.06));
+    box-shadow:
+      inset 0 1px 0 rgb(var(--glass-highlight) / 0.16),
+      inset 0 -1px 0 rgb(var(--glass-border) / 0.04),
+      var(--shadow-3);
+  }
+
+  /* O fio de luz que corre a borda de cima — o "menisco" do vidro. */
+  .glass-liquid::before {
+    content: "";
+    position: absolute;
+    inset-inline: 12%;
+    top: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgb(var(--accent-soft) / 0.7), transparent);
+    pointer-events: none;
   }
 
   /* Vidro sutil — hovers, chips, linhas de tabela */
@@ -689,6 +737,17 @@ input[type="number"]::-webkit-outer-spin-button {
   from {
     opacity: 0;
     transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes tela-entra {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
   }
   to {
     opacity: 1;

@@ -4,10 +4,13 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Building2, User, Mail, Phone, Smartphone, MessageCircle, MapPin, Hash, FileText,
-  Image as ImageIcon, ArrowLeft, ArrowRight, Loader2, Lock, Eye, EyeOff, Check, Sparkles,
+  Image as ImageIcon, ArrowLeft, ArrowRight, Loader2, Lock, Eye, EyeOff, Sparkles,
+  Zap, QrCode, Repeat, LogIn,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import RedeAnimada from "@/features/landing/components/RedeAnimada";
+import CarrosselPlanos from "@/features/auth/components/CarrosselPlanos";
 
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -23,6 +26,13 @@ import AssinaturaService from "@/features/assinatura/services/assinatura.service
 import { CICLO_LABEL, type Plano } from "@/features/assinatura/types/assinatura.types";
 
 const LANDING_ROUTE = "/";
+
+/** Três coisas concretas, não adjetivos. Aparecem só no painel do desktop. */
+const DESTAQUES_CAD = [
+  { icone: Zap, titulo: "Entra na hora", texto: "Cadastrou, já tem acesso. Sem instalação e sem técnico." },
+  { icone: QrCode, titulo: "Paga por Pix", texto: "QR na tela, você manda o comprovante e a gente libera." },
+  { icone: Repeat, titulo: "Troca quando quiser", texto: "Mudou de plano depois? Paga só a diferença." },
+];
 
 /* ------------------------------------------------------------------ */
 /* Schema Zod */
@@ -311,7 +321,6 @@ const CadastroEmpresaPage = () => {
   const regTelefone = register("contato.telefone");
   const regCelular = register("contato.celular");
   const regWhatsapp = register("contato.whatsapp");
-  const regPlano = register("planoCodigo");
 
   /** Resumo mostrado na última etapa, antes de enviar. */
   const resumo = () => {
@@ -330,8 +339,53 @@ const CadastroEmpresaPage = () => {
   };
 
   return (
+    /* Mesma moldura do login: painel da marca à esquerda, conteúdo à direita.
+       Diferença importante — o cartão do cadastro é alto (cinco etapas, uma
+       delas com os planos), então a coluna da direita rola por conta própria em
+       vez de esticar a página inteira e levar o painel junto. */
+    /* Sem `vitrine`: acompanha o tema escolhido, como o login. */
+    <div className="relative min-h-[100dvh] w-full overflow-x-hidden bg-canvas lg:grid lg:h-[100dvh] lg:min-h-0 lg:grid-cols-[1.05fr_1fr]">
+      <aside className="relative hidden overflow-hidden border-r border-fg/[0.07] lg:flex lg:flex-col lg:justify-between lg:p-12">
+        <RedeAnimada className="absolute inset-0" />
+
+        <div className="relative flex items-center gap-3">
+          <img src="/logo.png" alt="" width={40} height={40} className="h-10 w-10 rounded-xl shadow-glow" />
+          <span className="font-display text-[19px] tracking-tight text-ink">
+            CodeEx <span className="text-accent-soft">Flow</span>
+          </span>
+        </div>
+
+        <div className="relative max-w-md">
+          <h2 className="text-[34px] leading-[1.1] tracking-tight text-ink">
+            Comece a vender
+            <br />
+            <span className="text-accent-soft">ainda hoje.</span>
+          </h2>
+
+          <ul className="mt-8 flex flex-col gap-4">
+            {DESTAQUES_CAD.map(({ icone: Icone, titulo, texto }) => (
+              <li key={titulo} className="flex items-start gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-accent/[0.12] text-accent-soft ring-1 ring-inset ring-accent/20">
+                  <Icone size={16} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[13.5px] text-ink">{titulo}</span>
+                  <span className="block text-[12.5px] leading-relaxed text-mist">{texto}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <p className="relative text-[11.5px] text-faint">© {new Date().getFullYear()} CodeEx Flow · CodEx Solutions</p>
+      </aside>
+
     <div
-      className="vitrine relative flex min-h-[100dvh] w-full items-center justify-center overflow-x-hidden bg-canvas px-3 sm:px-4"
+      /* `items-start` + `my-auto` no filho, e não `items-center`: com centralização
+         de flex, conteúdo mais alto que o container transborda para cima e a parte
+         de fora fica inalcançável pela rolagem. A margem automática centraliza
+         quando sobra espaço e recua quando falta. */
+      className="relative flex w-full items-start justify-center overflow-x-hidden px-3 sm:px-4 lg:h-full lg:overflow-y-auto"
       /* No iPhone o rodapé do cartão ficava sob a barra de gestos. */
       style={{ paddingTop: "max(1.5rem, env(safe-area-inset-top))", paddingBottom: "max(1.5rem, env(safe-area-inset-bottom))" }}
     >
@@ -374,27 +428,22 @@ const CadastroEmpresaPage = () => {
         <div className="absolute left-1/2 top-1/2 h-[300px] w-[300px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-soft opacity-[0.1] blur-[110px]" />
       </div>
 
-      <div className="relative z-10 flex w-full max-w-sm flex-col sm:max-w-xl">
-        {/* Marca compacta e horizontal */}
-        <div className="cf-rise mb-3 flex items-center justify-center gap-3 sm:mb-4">
-          <button
-            type="button"
-            onClick={() => navigate(LANDING_ROUTE)}
-            className="group relative inline-flex items-center justify-center rounded-xl transition-transform duration-300 hover:scale-[1.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-            aria-label="Ir para a página inicial do CodeEx Flow"
-          >
-            <span className="cf-halo pointer-events-none absolute left-1/2 top-1/2 h-[80px] w-[80px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent opacity-50 blur-[36px]" />
-            <img src="/logo.png" alt="CodeEx Flow" width={48} height={48} className="relative h-10 w-10 rounded-xl shadow-[0_10px_30px_-8px_rgba(108,92,231,0.6)] sm:h-12 sm:w-12" />
-          </button>
-
-          <div className="flex flex-col leading-tight">
-            <span className="text-base tracking-tight text-ink sm:text-lg">CodeEx Flow</span>
-            <span className="text-[10px] uppercase tracking-[2px] text-faint">Cadastro de empresa</span>
+      <div className="relative z-10 my-auto flex w-full max-w-sm flex-col sm:max-w-xl">
+        {/* Logo e nome na horizontal, não empilhados.
+            Empilhado, este bloco custava ~90px de altura — e o cadastro tem
+            cinco etapas para caber na tela sem rolar. Deitado, custa 40px. */}
+        <div className="cf-rise mb-3 flex items-center justify-center gap-2.5">
+          <img src="/logo.png" alt="CodeEx Flow" width={36} height={36} className="h-9 w-9 rounded-lg shadow-glow" />
+          <div className="flex flex-col leading-none">
+            <span className="font-display text-[17px] tracking-tight text-ink">
+              CodeEx <span className="text-accent-soft">Flow</span>
+            </span>
+            <span className="mt-1 text-[9.5px] uppercase tracking-[2px] text-faint">Cadastro de empresa</span>
           </div>
         </div>
 
         {/* Card */}
-        <div className="cf-rise-2 relative rounded-2xl border border-fg/[0.07] bg-fg/[0.03] p-4 shadow-[0_25px_70px_-25px_rgba(0,0,0,0.8)] backdrop-blur-xl sm:p-6">
+        <div className="glass-liquid cf-rise-2 relative rounded-2xl p-4 sm:p-5">
           <span className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-accent-soft to-transparent opacity-70" />
 
           <div className="mb-0.5 flex items-baseline justify-between">
@@ -424,8 +473,18 @@ const CadastroEmpresaPage = () => {
             )}
           </div>
 
-          {/* Indicador de etapas */}
-          <div className="mb-3 flex gap-1.5 sm:mb-4">
+          {/* Indicador de etapas.
+              `role="progressbar"` com os valores: sem isso, o leitor de tela
+              via cinco divs coloridas e não sabia dizer em que passo a pessoa
+              está — que é a única informação que a barra carrega. */}
+          <div
+            className="mb-3 flex gap-1.5 sm:mb-4"
+            role="progressbar"
+            aria-valuenow={step + 1}
+            aria-valuemin={1}
+            aria-valuemax={STEPS.length}
+            aria-label={`Etapa ${step + 1} de ${STEPS.length}: ${STEPS[step]}`}
+          >
             {STEPS.map((label, i) => (
               <div key={label} className="flex-1">
                 <div className={`h-[3px] rounded-full transition-all duration-300 ${i <= step ? "bg-gradient-to-r from-accent-soft to-accent-strong" : "bg-fg/[0.08]"}`} />
@@ -433,7 +492,7 @@ const CadastroEmpresaPage = () => {
             ))}
           </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-1.5 sm:gap-2">
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-1.5">
             <AnimatePresence mode="popLayout" initial={false} custom={direcao}>
               <motion.div
                 key={step}
@@ -461,41 +520,13 @@ const CadastroEmpresaPage = () => {
                   </p>
                 )}
 
-                <div className="flex flex-col gap-2">
-                  {planos.map((plano) => {
-                    const marcado = planoCodigo === plano.codigo;
+                <CarrosselPlanos
+                  planos={planos}
+                  selecionado={planoCodigo}
+                  onSelecionar={(codigo) => setValue("planoCodigo", codigo, { shouldValidate: true })}
+                />
 
-                    return (
-                      <label
-                        key={plano.id}
-                        className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-3 transition-all duration-200 ${
-                          marcado ? "border-accent bg-accent/[0.1] ring-2 ring-accent/15" : "border-fg/[0.08] bg-fg/[0.03] hover:border-fg/[0.16]"
-                        }`}
-                      >
-                        <input type="radio" value={plano.codigo} {...regPlano} className="sr-only" />
-
-                        <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition ${marcado ? "border-accent bg-accent text-white" : "border-fg/[0.2]"}`}>
-                          {marcado && <Check size={12} />}
-                        </span>
-
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-2">
-                            <span className="truncate text-sm text-ink">{plano.nome}</span>
-                            {plano.destaque && <span className="rounded-full bg-accent/20 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.5px] text-accent-soft">Popular</span>}
-                          </span>
-                          <span className="mt-0.5 block truncate text-[11px] text-mist">{plano.descricao}</span>
-                        </span>
-
-                        <span className="shrink-0 text-right">
-                          <span className="block text-sm text-ink">{formatCurrencyFromCents(plano.precoCentavos)}</span>
-                          <span className="block text-[10px] text-faint">{CICLO_LABEL[plano.ciclo]}</span>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-
-                <p className={errCls}>{errors.planoCodigo?.message}</p>
+                <p role="alert" className={errCls}>{errors.planoCodigo?.message}</p>
 
                 <button type="button" onClick={() => navigate("/planos")} className="self-start text-[11px] text-accent transition-colors hover:text-accent-soft">
                   Comparar planos em detalhe
@@ -512,7 +543,7 @@ const CadastroEmpresaPage = () => {
                     <Building2 size={14} className="shrink-0 text-muted" />
                     <input {...register("nomeFantasia")} placeholder="Nome da sua empresa" className={inputCls} />
                   </div>
-                  <p className={errCls}>{errors.nomeFantasia?.message}</p>
+                  <p role="alert" className={errCls}>{errors.nomeFantasia?.message}</p>
                 </div>
 
                 <div>
@@ -521,7 +552,7 @@ const CadastroEmpresaPage = () => {
                     <User size={14} className="shrink-0 text-muted" />
                     <input {...register("nomeRepresentante")} placeholder="Nome completo do responsável" className={inputCls} />
                   </div>
-                  <p className={errCls}>{errors.nomeRepresentante?.message}</p>
+                  <p role="alert" className={errCls}>{errors.nomeRepresentante?.message}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
@@ -540,7 +571,7 @@ const CadastroEmpresaPage = () => {
                         className={inputCls}
                       />
                     </div>
-                    <p className={errCls}>{errors.cpfCnpj?.message}</p>
+                    <p role="alert" className={errCls}>{errors.cpfCnpj?.message}</p>
                   </div>
 
                   <div>
@@ -549,7 +580,7 @@ const CadastroEmpresaPage = () => {
                       <Hash size={14} className="shrink-0 text-muted" />
                       <input {...register("inscMunicipal")} placeholder="Opcional" className={inputCls} />
                     </div>
-                    <p className={errCls}>{errors.inscMunicipal?.message}</p>
+                    <p role="alert" className={errCls}>{errors.inscMunicipal?.message}</p>
                   </div>
                 </div>
 
@@ -560,7 +591,7 @@ const CadastroEmpresaPage = () => {
                       <ImageIcon size={14} className="shrink-0 text-muted" />
                       <input {...register("urlLogo")} placeholder="Opcional" className={inputCls} />
                     </div>
-                    <p className={errCls}>{errors.urlLogo?.message}</p>
+                    <p role="alert" className={errCls}>{errors.urlLogo?.message}</p>
                   </div>
 
                   <div>
@@ -569,7 +600,7 @@ const CadastroEmpresaPage = () => {
                       <ImageIcon size={14} className="shrink-0 text-muted" />
                       <input {...register("urlImagem")} placeholder="Opcional" className={inputCls} />
                     </div>
-                    <p className={errCls}>{errors.urlImagem?.message}</p>
+                    <p role="alert" className={errCls}>{errors.urlImagem?.message}</p>
                   </div>
                 </div>
               </>
@@ -585,7 +616,7 @@ const CadastroEmpresaPage = () => {
                     <input {...register("contato.email")} type="email" placeholder="empresa@email.com" autoComplete="email" className={inputCls} />
                   </div>
                   {errors.contato?.email ? (
-                    <p className={errCls}>{errors.contato.email.message}</p>
+                    <p role="alert" className={errCls}>{errors.contato.email.message}</p>
                   ) : (
                     <p className="mt-0.5 min-h-[13px] text-[10px] leading-[13px] text-faint">Este e-mail será seu login no sistema.</p>
                   )}
@@ -607,7 +638,7 @@ const CadastroEmpresaPage = () => {
                         className={inputCls}
                       />
                     </div>
-                    <p className={errCls}>{errors.contato?.celular?.message}</p>
+                    <p role="alert" className={errCls}>{errors.contato?.celular?.message}</p>
                   </div>
 
                   <div>
@@ -625,7 +656,7 @@ const CadastroEmpresaPage = () => {
                         className={inputCls}
                       />
                     </div>
-                    <p className={errCls}>{errors.contato?.telefone?.message}</p>
+                    <p role="alert" className={errCls}>{errors.contato?.telefone?.message}</p>
                   </div>
                 </div>
 
@@ -657,7 +688,7 @@ const CadastroEmpresaPage = () => {
                       className={inputCls}
                     />
                   </div>
-                  <p className={errCls}>{errors.contato?.whatsapp?.message}</p>
+                  <p role="alert" className={errCls}>{errors.contato?.whatsapp?.message}</p>
                 </div>
               </>
             )}
@@ -686,7 +717,7 @@ const CadastroEmpresaPage = () => {
                       />
                       {cepLoading && <Loader2 size={14} className="shrink-0 animate-spin text-accent" />}
                     </div>
-                    <p className={errCls}>{errors.endereco?.cep?.message}</p>
+                    <p role="alert" className={errCls}>{errors.endereco?.cep?.message}</p>
                   </div>
 
                   <div>
@@ -695,7 +726,7 @@ const CadastroEmpresaPage = () => {
                       <Hash size={14} className="shrink-0 text-muted" />
                       <input {...register("endereco.numero")} placeholder="123" className={inputCls} />
                     </div>
-                    <p className={errCls}>{errors.endereco?.numero?.message}</p>
+                    <p role="alert" className={errCls}>{errors.endereco?.numero?.message}</p>
                   </div>
                 </div>
 
@@ -705,7 +736,7 @@ const CadastroEmpresaPage = () => {
                     <MapPin size={14} className="shrink-0 text-muted" />
                     <input {...register("endereco.logradouro")} placeholder="Rua, avenida..." className={inputCls} />
                   </div>
-                  <p className={errCls}>{errors.endereco?.logradouro?.message}</p>
+                  <p role="alert" className={errCls}>{errors.endereco?.logradouro?.message}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
@@ -715,7 +746,7 @@ const CadastroEmpresaPage = () => {
                       <Hash size={14} className="shrink-0 text-muted" />
                       <input {...register("endereco.complemento")} placeholder="Opcional" className={inputCls} />
                     </div>
-                    <p className={errCls}>{errors.endereco?.complemento?.message}</p>
+                    <p role="alert" className={errCls}>{errors.endereco?.complemento?.message}</p>
                   </div>
 
                   <div>
@@ -724,7 +755,7 @@ const CadastroEmpresaPage = () => {
                       <MapPin size={14} className="shrink-0 text-muted" />
                       <input {...register("endereco.bairro")} placeholder="Seu bairro" className={inputCls} />
                     </div>
-                    <p className={errCls}>{errors.endereco?.bairro?.message}</p>
+                    <p role="alert" className={errCls}>{errors.endereco?.bairro?.message}</p>
                   </div>
                 </div>
 
@@ -735,7 +766,7 @@ const CadastroEmpresaPage = () => {
                       <Building2 size={14} className="shrink-0 text-muted" />
                       <input {...register("endereco.cidade")} placeholder="Sua cidade" className={inputCls} />
                     </div>
-                    <p className={errCls}>{errors.endereco?.cidade?.message}</p>
+                    <p role="alert" className={errCls}>{errors.endereco?.cidade?.message}</p>
                   </div>
 
                   <div>
@@ -750,7 +781,7 @@ const CadastroEmpresaPage = () => {
                         ))}
                       </select>
                     </div>
-                    <p className={errCls}>{errors.endereco?.uf?.message}</p>
+                    <p role="alert" className={errCls}>{errors.endereco?.uf?.message}</p>
                   </div>
                 </div>
               </>
@@ -769,7 +800,7 @@ const CadastroEmpresaPage = () => {
                         {verSenha ? <EyeOff size={14} /> : <Eye size={14} />}
                       </button>
                     </div>
-                    <p className={errCls}>{errors.senha?.message}</p>
+                    <p role="alert" className={errCls}>{errors.senha?.message}</p>
                   </div>
 
                   <div>
@@ -778,7 +809,7 @@ const CadastroEmpresaPage = () => {
                       <Lock size={14} className="shrink-0 text-muted" />
                       <input {...register("confirmarSenha")} type={verSenha ? "text" : "password"} placeholder="Repita a senha" autoComplete="new-password" className={inputCls} />
                     </div>
-                    <p className={errCls}>{errors.confirmarSenha?.message}</p>
+                    <p role="alert" className={errCls}>{errors.confirmarSenha?.message}</p>
                   </div>
                 </div>
 
@@ -813,7 +844,7 @@ const CadastroEmpresaPage = () => {
                     primeiro pagamento.
                   </span>
                 </label>
-                <p className={errCls}>{errors.aceite?.message}</p>
+                <p role="alert" className={errCls}>{errors.aceite?.message}</p>
               </>
             )}
 
@@ -854,20 +885,33 @@ const CadastroEmpresaPage = () => {
             </div>
           </form>
 
-          <p className="mt-3 text-center text-[11px] text-faint">
-            Já tem conta?{" "}
-            <button type="button" onClick={() => navigate("/login")} className="text-accent transition-colors hover:text-accent-soft">
-              Entrar
-            </button>
-          </p>
         </div>
 
-        <p className="mt-2 text-center text-[10px] text-muted sm:mt-3">
-          © {new Date().getFullYear()} CodeEx Flow ·{" "}
-          <button type="button" onClick={() => navigate(LANDING_ROUTE)} className="text-accent transition-colors hover:text-accent-soft">
-            Conheça o CodeEx Flow
+        {/* As duas saídas com o mesmo peso: quem já tem conta e quem ainda está
+            conhecendo estão igualmente fora do cadastro. Um link de 11px perdido
+            no rodapé fazia quem já é cliente procurar como voltar. */}
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => navigate("/login")}
+            className="focus-ring flex min-h-[44px] items-center justify-center gap-2 rounded-2xl border border-fg/[0.1] text-[13px] text-mist transition-colors hover:border-fg/[0.2] hover:text-ink active:bg-fg/[0.05]"
+          >
+            <LogIn size={15} className="text-accent-soft" />
+            Já tenho conta
           </button>
-        </p>
+
+          <button
+            type="button"
+            onClick={() => navigate(LANDING_ROUTE)}
+            className="focus-ring flex min-h-[44px] items-center justify-center gap-2 rounded-2xl border border-fg/[0.1] text-[13px] text-mist transition-colors hover:border-fg/[0.2] hover:text-ink active:bg-fg/[0.05]"
+          >
+            <Sparkles size={15} className="text-accent-soft" />
+            Conhecer o Flow
+          </button>
+        </div>
+
+        <p className="mt-3 text-center text-[10px] text-muted">© {new Date().getFullYear()} CodeEx Flow</p>
+      </div>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import {
   ChevronLeft, Building2, Receipt, Loader2, QrCode, Check, Copy, Sparkles, ArrowRight,
   CircleCheck, Clock, AlertTriangle, MessageCircle, Mail, RefreshCw, LogOut, CalendarDays,
@@ -319,9 +320,18 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
             </button>
           )}
 
+          <img src="/logo.png" alt="" width={36} height={36} className="h-9 w-9 shrink-0 rounded-lg shadow-glow" />
+
           <div className="min-w-0 flex-1">
-            <h1 className="text-[15px] tracking-tight text-ink">Assinatura e faturas</h1>
-            <p className="truncate text-[11px] text-faint">{empresa?.nomeFantasia}</p>
+            {/* O título fala da situação, não do módulo. Quem chega aqui com a
+                conta bloqueada quer saber o que fazer para entrar; "Assinatura
+                e faturas" descreve a tela e não responde nada. */}
+            <h1 className="font-display text-[15.5px] tracking-tight text-ink">
+              {contaLiberada ? "Assinatura e faturas" : "Falta pouco para começar"}
+            </h1>
+            <p className="truncate text-[11px] text-faint">
+              {contaLiberada ? empresa?.nomeFantasia : "Confirme o pagamento e o acesso é liberado na hora"}
+            </p>
           </div>
 
           {/* Sem botão de atualizar: a liberação chega pelo socket. */}
@@ -367,15 +377,22 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
         )}
 
         {/* ---------- Hero: o número que importa + ação ---------- */}
-        <section className="card glass-sheen overflow-hidden">
+        {/* Entra como as demais telas: opacidade e um passo curto, em escada.
+            Sem escala — o número grande do total borraria enquanto anima. */}
+        <motion.section
+          className="card glass-sheen overflow-hidden"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: [0.22, 0.61, 0.36, 1] }}
+        >
           <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-end sm:justify-between lg:p-7">
             <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-[1.2px] text-faint">Total em aberto</p>
+              <p className="text-[11px] uppercase tracking-[1.2px] text-faint">{faturasAbertas.length === 0 ? "Tudo em dia" : "Você tem a pagar"}</p>
               <p className="mt-1 text-[44px] leading-none tracking-tight text-ink sm:text-5xl">{formatCurrencyFromCents(totalAPagar)}</p>
               <p className="mt-2 text-[13px] text-mist">
                 {faturasAbertas.length === 0
-                  ? "Nenhuma fatura pendente."
-                  : `${faturasAbertas.length} ${faturasAbertas.length === 1 ? "fatura" : "faturas"} · vence ${dataBr(proximaFatura?.vencimento)}`}
+                  ? "Nenhuma fatura em aberto — nada a fazer por aqui."
+                  : `${faturasAbertas.length} ${faturasAbertas.length === 1 ? "fatura" : "faturas"} · a próxima vence em ${dataBr(proximaFatura?.vencimento)}`}
               </p>
             </div>
 
@@ -418,7 +435,7 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
               hint={contaLiberada ? "Acesso completo" : "Liberamos após o pagamento"}
             />
           </div>
-        </section>
+        </motion.section>
 
         {/* ---------- Faturas: uma lista só ---------- */}
         <section className="card glass-sheen overflow-hidden">
@@ -448,7 +465,7 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
           </div>
 
           {faturasFiltradas.length === 0 ? (
-            <p className="px-5 py-14 text-center text-[13px] text-faint">Nenhuma fatura aqui. Troque o filtro para ver as demais.</p>
+            <p className="px-5 py-14 text-center text-[13px] text-faint">Nada neste filtro. Troque para ver as outras faturas.</p>
           ) : (
             <ul className="divide-y divide-fg/[0.05]">
               {faturasFiltradas.map((f) => (

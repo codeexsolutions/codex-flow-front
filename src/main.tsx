@@ -1,5 +1,17 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+/*
+ * As fontes vêm do pacote, não do Google Fonts.
+ *
+ * Com `@import` de CDN, quem abre o app sem rede — ou antes da fonte chegar —
+ * caía na `system-ui`, que é San Francisco no iPhone e Roboto no Android: a
+ * mesma tela com duas larguras de texto, duas alturas de linha e quebras
+ * diferentes. Empacotadas, o desenho é byte a byte o mesmo nos dois, e continua
+ * o mesmo offline, que é requisito de PWA instalado.
+ */
+import "@fontsource-variable/inter";
+import "@fontsource-variable/sora";
+
 import "./index.css";
 
 import AppRoutes from "@/app/routes/AppRoutes";

@@ -17,6 +17,7 @@ import { SkeletonTableRows, SkeletonIdentityCell } from "@/shared/ui/skeleton";
 import { useAutoPageSize, ROW_HEIGHT } from "@/shared/hooks/useAutoPageSize";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { useIsMobile } from "@/shared/hooks/useIsMobile";
+import useSincronizacao from "@/shared/realtime/useSincronizacao";
 import EstoqueMobile from "@/features/estoque/components/EstoqueMobile";
 
 const LOW_STOCK = 5;
@@ -43,7 +44,18 @@ const TABLE_MIN_WIDTH = 660;
 
 type StockLevel = "disponivel" | "baixo" | "esgotado";
 function stockLevel(qtd?: number): StockLevel {
-  const q = qtd ?? 0;
+  /*
+   * `Number()` não é redundante.
+   *
+   * `produtos.quantidade` é `bigint` no banco, e o driver do Postgres devolve
+   * bigint como STRING para não perder precisão além do limite do `number` do
+   * JS. O tipo daqui diz `number` e mente: em runtime chega "12".
+   *
+   * Comparação ainda funcionaria por coerção, mas soma não: `0 + "12" + "24"`
+   * concatena e vira "01224". Era isso que produzia as "4.027.221.819.168.275
+   * .000.000.000.000.000.000 unidades" na tela.
+   */
+  const q = Number(qtd ?? 0) || 0;
   if (q <= 0) return "esgotado";
   if (q <= LOW_STOCK) return "baixo";
   return "disponivel";
@@ -122,6 +134,13 @@ const Estoque = () => {
     fetchVendas();
   }, [fetchVendas]);
 
+  /* Produto criado no PDV ou por outro operador entra na lista sozinho — e a
+     baixa de estoque de uma venda também. */
+  useSincronizacao(["produtos", "pedidos"], () => {
+    load();
+    fetchVendas(true);
+  });
+
   const handleCreateProduct = async (data: ProductFormData) => {
     setError(null);
     try {
@@ -180,8 +199,9 @@ const Estoque = () => {
     const esgotados = products.filter((p) => stockLevel(p.quantidade) === "esgotado").length;
     const baixos = products.filter((p) => stockLevel(p.quantidade) === "baixo").length;
     const disponiveis = total - esgotados - baixos;
-    const unidades = products.reduce((acc, p) => acc + (p.quantidade ?? 0), 0);
-    const valorEstoque = products.reduce((acc, p) => acc + (p.valorCompra ?? 0) * (p.quantidade ?? 0), 0);
+    // Ver a nota em `stockLevel`: quantidade e valores chegam como string.
+    const unidades = products.reduce((acc, p) => acc + (Number(p.quantidade) || 0), 0);
+    const valorEstoque = products.reduce((acc, p) => acc + (Number(p.valorCompra) || 0) * (Number(p.quantidade) || 0), 0);
     return { total, esgotados, baixos, disponiveis, unidades, valorEstoque };
   }, [products]);
 
@@ -294,7 +314,19 @@ const Estoque = () => {
         )}
 
         {/* Grid principal: tabela + lateral, ambos esticados até o fim */}
-        <section className="flex min-h-0 flex-1 flex-col gap-3">
+        {/*
+         * Duas colunas: tabela à esquerda, painéis empilhados à direita.
+         *
+         * Antes eles eram faixa horizontal — embaixo da tabela (fora da vista)
+         * e depois em cima dela (roubando altura da lista). Como coluna
+         * lateral os dois convivem: a lista fica com a altura inteira e os
+         * números ficam sempre à mão.
+         *
+         * Abaixo de `lg` volta a empilhar: em tela estreita não há largura para
+         * duas colunas sem espremer as duas.
+         */}
+        <section className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
+
           {/* Card da tabela — altura fixa da viewport */}
           <div className="flex min-h-[260px] min-w-0 flex-1 flex-col overflow-hidden card glass-sheen rounded-lg">
             {/* Toolbar do card */}
@@ -437,8 +469,8 @@ const Estoque = () => {
             </div>
           </div>
 
-          {/* Lateral: valor + composição */}
-          <aside className="grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-3">
+
+          <aside className="flex shrink-0 flex-col gap-3 overflow-y-auto lg:w-[300px]">
             {/* Valor do estoque */}
             <div className="card glass-sheen rounded-lg p-4">
               <div className="mb-3.5 flex items-center gap-2.5">

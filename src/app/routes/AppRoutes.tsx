@@ -24,6 +24,9 @@ import SalesPage from "@/features/vendas/pages/SalesPage";
 import SalesOverviewPage from "@/features/vendas/pages/SalesOverviewPage";
 import SalesList from "@/features/vendas/pages/SalesListPage";
 import FuncionariosPage from "@/features/funcionarios/pages/FuncionariosPage";
+import OrcamentosPage from "@/features/orcamentos/pages/OrcamentosPage";
+import AjudaPage from "@/features/ajuda/pages/AjudaPage";
+import PlanilhasPage from "@/features/planilhas/pages/PlanilhasPage";
 import { ehGestor } from "@/features/vendas/components/TabsVendas";
 
 import CheckoutPage from "@/features/checkout/pages/CheckoutPage";
@@ -90,7 +93,12 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
   // esquecer de incluí-la aqui não tranca ninguém para fora do próprio serviço.
   // Esconder do menu não basta — digitar a rota na mão não pode abrir a tela.
   if (isLogged && user?.ativo && !ehGestor(user)) {
-    const soDoDono = path.startsWith("/configuracoes/empresa") || path.startsWith("/configuracoes/faturas") || path.startsWith("/vendas/funcionarios");
+    const soDoDono =
+      path.startsWith("/configuracoes/empresa") ||
+      path.startsWith("/configuracoes/faturas") ||
+      path.startsWith("/funcionarios") ||
+      /* Caixa e contas a receber são do dono — esconder do menu não basta. */
+      path.startsWith("/vendas/financeiro");
 
     if (soDoDono) return <Navigate to="/" replace />;
   }
@@ -107,6 +115,8 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
           {/* Dashboard é a home; o PDV passou a ter rota própria. */}
           <Route index element={<DashboardPage />} />
           <Route path="pdv" element={<Workflow />} />
+          {/* Orçamento é ato de balcão: mora ao lado do PDV, não em Vendas. */}
+          <Route path="pdv/orcamentos" element={<OrcamentosPage />} />
 
           <Route path="checkout" element={<CheckoutPage />} />
 
@@ -115,7 +125,12 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
 
           <Route path="estoque" element={<TableStock />} />
 
-          <Route path="financeiro" element={<FinanceiroPage />} />
+          {/* Vendas e Financeiro viraram uma tela só, em abas. A rota antiga
+              continua respondendo para não quebrar link salvo ou atalho. */}
+          <Route path="financeiro" element={<Navigate to="/vendas/financeiro" replace />} />
+          <Route path="vendas/orcamentos" element={<Navigate to="/pdv/orcamentos" replace />} />
+
+          <Route path="funcionarios" element={<FuncionariosPage />} />
           <Route path="correios" element={<CorreiosPage />}>
             <Route index element={<PrecosPrazosPage />} />
             <Route path="postagem" element={<PostagemPage />} />
@@ -123,6 +138,11 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
             <Route path="*" element={<NotFoundPage />} />
           </Route>
           <Route path="relatorios" element={<RelatoriosPage />} />
+          {/* Produção sai do ar por enquanto: a rota redireciona em vez de
+              sumir, para link salvo não cair em "página não encontrada". */}
+          <Route path="producao" element={<Navigate to="/" replace />} />
+          <Route path="planilhas" element={<PlanilhasPage />} />
+          <Route path="ajuda" element={<AjudaPage />} />
 
           <Route path="configuracoes" element={<ConfiguracoesPage />}>
             <Route index element={<Navigate to="perfil" replace />} />
@@ -137,9 +157,11 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
           </Route>
 
           <Route path="vendas" element={<SalesPage />}>
-            <Route index element={<SalesOverviewPage />} />
+            {/* Vendedor não tem visão geral da loja: entra direto nas próprias
+                vendas. Sem isso, abrir /vendas o levaria ao "geralzão". */}
+            <Route index element={ehGestor(user) ? <SalesOverviewPage /> : <Navigate to="/vendas/lista" replace />} />
             <Route path="lista" element={<SalesList />} />
-            <Route path="funcionarios" element={<FuncionariosPage />} />
+            <Route path="financeiro" element={<FinanceiroPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
 

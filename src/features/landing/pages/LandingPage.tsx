@@ -12,11 +12,9 @@ import AssinaturaService from "@/features/assinatura/services/assinatura.service
 import { CICLO_LABEL, type Plano } from "@/features/assinatura/types/assinatura.types";
 import { formatCurrencyFromCents } from "@/shared/utils/currency";
 import { formatNumber } from "@/shared/utils/format";
+import { useContatoSuporte, linkWhatsapp } from "@/shared/suporte/useContatoSuporte";
 
-/** Suporte da plataforma — o mesmo número das configurações. */
-const WHATSAPP = "5585988849894";
-
-const zap = (mensagem: string) => `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(mensagem)}`;
+/* O número vem do painel da plataforma — ver `useContatoSuporte`. */
 
 /* ---------------------------------------------------------------- */
 /* Conteúdo                                                          */
@@ -72,6 +70,10 @@ const LandingPage = () => {
 
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [grudado, setGrudado] = useState(false);
+
+  /* Cravar o número no código já colocou um telefone pessoal no ar. */
+  const { whatsapp } = useContatoSuporte();
+  const zap = (mensagem: string) => linkWhatsapp(whatsapp, mensagem);
 
   /* Os preços vêm da API. Fixá-los aqui garantiria que um dia ficariam
      diferentes do que o cliente paga de verdade. */

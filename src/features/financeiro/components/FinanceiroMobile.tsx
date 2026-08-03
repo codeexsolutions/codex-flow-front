@@ -30,7 +30,6 @@ type Props = {
   onAba: (a: AbaFinanceiro) => void;
   saldoCaixa: number;
   aReceber: number;
-  atrasado: number;
   entradas: number;
   saidas: number;
   notas: NotaItem[];
@@ -65,7 +64,6 @@ const FinanceiroMobile = ({
   onAba,
   saldoCaixa,
   aReceber,
-  atrasado,
   entradas,
   saidas,
   notas,
@@ -106,10 +104,6 @@ const FinanceiroMobile = ({
           <span className="mt-0.5 block truncate text-[16px] leading-tight text-warning">{dinheiro(aReceber)}</span>
         </div>
 
-        <div className={`min-w-0 flex-1 rounded-2xl border px-3.5 py-3 ${atrasado > 0 ? "border-danger/25 bg-danger/[0.06]" : "border-fg/[0.07]"}`}>
-          <span className="block text-[11px] text-faint">Atrasado</span>
-          <span className={`mt-0.5 block truncate text-[16px] leading-tight ${atrasado > 0 ? "text-danger" : "text-mist"}`}>{dinheiro(atrasado)}</span>
-        </div>
       </div>
 
       {/* ---------- Abas ---------- */}
