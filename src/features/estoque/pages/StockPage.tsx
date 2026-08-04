@@ -33,14 +33,16 @@ const FILTROS: { value: Filtro; label: string }[] = [
 ];
 
 /**
- * A última coluna é um vão flexível: sem ela o "1fr" do produto engolia toda a
- * largura e grudava preços e estoque na borda direita do monitor, com um
- * buraco no meio da linha. Assim as colunas ficam agrupadas à esquerda e a
- * sobra de tela fica do lado de fora dos dados.
+ * A última coluna é um vão: sem ela o "1fr" do produto engolia toda a largura
+ * e grudava preços e estoque na borda direita do monitor, com um buraco no
+ * meio da linha. Antes o vão era "1fr" — pegava TODO o espaço que sobrasse e
+ * deixava um deserto à direita dos dados em tela larga. Capado a um valor
+ * fixo, vira só o respiro que separa a lista da borda; o produto ganha um
+ * pouco mais de largura para nomes longos.
  */
-const COLS = "grid-cols-[minmax(200px,420px)_120px_120px_90px_130px_minmax(0,1fr)]";
+const COLS = "grid-cols-[minmax(200px,480px)_120px_120px_90px_130px_minmax(0,120px)]";
 /** Soma das colunas fixas + folga para a coluna flexível: abaixo disso a tabela rola. */
-const TABLE_MIN_WIDTH = 660;
+const TABLE_MIN_WIDTH = 700;
 
 type StockLevel = "disponivel" | "baixo" | "esgotado";
 function stockLevel(qtd?: number): StockLevel {
@@ -141,13 +143,23 @@ const Estoque = () => {
     fetchVendas(true);
   });
 
+  /*
+   * Criar NÃO fecha o modal.
+   *
+   * Cadastro de estoque acontece em série — chegou nota, são trinta itens de
+   * uma vez. Fechar a cada salvamento obrigava a procurar o botão e reabrir a
+   * tela por item. O formulário se limpa sozinho (`resetarAoSalvar`) e o
+   * cursor volta para o nome; quem terminou fecha pelo Cancelar ou pelo X.
+   */
   const handleCreateProduct = async (data: ProductFormData) => {
     setError(null);
     try {
       await ProductService.create(data);
-      fechar();
       await load();
-      alert.success("Produto cadastrado!", "O produto foi adicionado ao estoque.");
+      alert.success(
+        data.tipo === "SERVICO" ? "Serviço cadastrado!" : "Produto cadastrado!",
+        "Já pode cadastrar o próximo.",
+      );
     } catch (err) {
       alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível cadastrar o produto."));
     }
@@ -158,6 +170,8 @@ const Estoque = () => {
     setError(null);
     try {
       await ProductService.update({ id: selectedProduct.id, ...data });
+      // Editar SEGUE fechando: alterar um produto é ato pontual, e quem
+      // acabou de salvar quer ver a lista com a mudança aplicada.
       fechar();
       await load();
       alert.success("Produto atualizado!", "As alterações foram salvas.");
@@ -190,7 +204,10 @@ const Estoque = () => {
       const matchNome = p.nome?.toLowerCase().includes(q);
       const matchDesc = p.descricao?.toLowerCase().includes(q);
       const matchId = String(p.id ?? "").includes(q);
-      return matchNome || matchDesc || matchId;
+      /* Com o tamanho fora do nome, buscar "camiseta m" não acharia mais
+         nada — a busca precisa enxergar o campo novo. */
+      const matchTamanho = p.tamanho?.toLowerCase() === q;
+      return matchNome || matchDesc || matchId || matchTamanho;
     });
   }, [products, debouncedSearch, filtro]);
 
@@ -241,11 +258,11 @@ const Estoque = () => {
   /* Os mesmos formulários servem as duas versões — o que muda é a moldura. */
   const modais = (
     <>
-      <Modal open={modal === "registrar"} onClose={fechar} title="Novo produto" subtitle="Preencha os dados do produto a cadastrar">
-        <ProdutoForm submitText="Criar produto" onCancel={fechar} onSubmit={handleCreateProduct} />
+      <Modal open={modal === "registrar"} onClose={fechar} title="Novo item" subtitle="Produto ou serviço">
+        <ProdutoForm submitText="Cadastrar" onCancel={fechar} onSubmit={handleCreateProduct} resetarAoSalvar />
       </Modal>
 
-      <Modal open={modal === "editar"} onClose={fechar} title="Editar produto" subtitle="Atualize os dados do produto">
+      <Modal open={modal === "editar"} onClose={fechar} title="Editar item" subtitle="Atualize os dados do item">
         <ProdutoForm
           submitText="Salvar alterações"
           onCancel={fechar}
@@ -257,6 +274,9 @@ const Estoque = () => {
             quantidade: selectedProduct?.quantidade,
             descricao: selectedProduct?.descricao,
             imagem: selectedProduct?.imagem,
+            tipo: selectedProduct?.tipo ?? "PRODUTO",
+            grade: selectedProduct?.grade ?? "",
+            tamanho: selectedProduct?.tamanho ?? "",
           }}
           onSubmit={handleUpdateProduct}
         />
@@ -276,6 +296,8 @@ const Estoque = () => {
             valorVenda: p.valorVenda ?? 0,
             quantidade: p.quantidade ?? 0,
             nivel: stockLevel(p.quantidade),
+            tamanho: p.tamanho,
+            tipo: p.tipo,
           }))}
           valorEstoque={stats.valorEstoque}
           unidades={stats.unidades}
@@ -372,7 +394,10 @@ const Estoque = () => {
                 {/* Cabeçalho de colunas */}
                 <div className={`grid shrink-0 ${COLS} border-b border-fg/[0.06] bg-fg/[0.02] px-5 py-2.5 text-[10px] uppercase tracking-[0.12em] text-muted`}>
                   <p>Produto</p>
-                  <p className="text-right">Compra</p>
+                  {/* "Custo" e não "Compra": quem presta serviço não compra
+                      nada e mesmo assim tem custo — e mesmo na revenda o custo
+                      real inclui frete e imposto, não só a nota do fornecedor. */}
+                  <p className="text-right">Custo</p>
                   <p className="text-right">Venda</p>
                   <p className="text-right">Qtd.</p>
                   <p className="text-right">Estoque</p>
@@ -418,7 +443,19 @@ const Estoque = () => {
                               {product.imagem ? <img src={product.imagem} alt={product.nome} className="h-full w-full object-cover" /> : <Package className="h-4 w-4 text-accent-soft" />}
                             </div>
                             <div className="flex min-w-0 flex-col">
-                              <span className="truncate text-[13px] text-ink">{product.nome}</span>
+                              {/* Tamanho e tipo viram selo ao lado do nome.
+                                  Com o tamanho fora do nome, duas linhas de
+                                  "Camiseta preta" ficariam idênticas na lista
+                                  e ninguém saberia qual editar. */}
+                              <span className="flex min-w-0 items-center gap-1.5">
+                                <span className="truncate text-[13px] text-ink">{product.nome}</span>
+                                {product.tamanho && (
+                                  <span className="shrink-0 rounded bg-fg/[0.07] px-1.5 py-px text-[10px] leading-[15px] text-mist">{product.tamanho}</span>
+                                )}
+                                {product.tipo === "SERVICO" && (
+                                  <span className="shrink-0 rounded bg-accent/[0.12] px-1.5 py-px text-[10px] leading-[15px] text-accent-soft">serviço</span>
+                                )}
+                              </span>
                               <span className="truncate text-[11px] text-faint">{product.descricao || `#${product.id}`}</span>
                             </div>
                           </div>

@@ -14,14 +14,75 @@ export type Plano = {
   codigo: string;
   nome: string;
   descricao: string | null;
+  /** Frase escrita para quem o plano atende — o título da recomendação. */
+  chamada: string | null;
+  publicoAlvo: string | null;
   precoCentavos: number;
   ciclo: CicloPlano;
   limiteUsuarios: number | null;
+  /** Assentos de CRM. `null` = sem limite. */
+  limiteAtendentes: number | null;
   limiteClientes: number | null;
   limiteProdutos: number | null;
   limitePedidosMes: number | null;
   recursos: Record<string, unknown>;
   destaque: boolean;
+};
+
+/* ------------------------------------------------------------------ */
+/* Diagnóstico comercial */
+/* ------------------------------------------------------------------ */
+
+export type RespostaEquipe = "SO_EU" | "DOIS_A_CINCO" | "SEIS_A_QUINZE" | "MAIS_DE_QUINZE";
+export type RespostaNegocio = "LOJA" | "SERVICOS" | "ONLINE" | "INDUSTRIA";
+export type RespostaCorreios = "SEMPRE" | "AS_VEZES" | "NAO";
+
+export type RespostasDiagnostico = {
+  equipe: RespostaEquipe;
+  negocio: RespostaNegocio;
+  correios: RespostaCorreios;
+};
+
+/**
+ * O que volta de `/assinatura/recomendar`: um plano, não uma tabela.
+ * `alternativo` é o degrau vizinho, atrás de "ver outras opções".
+ */
+export type Recomendacao = {
+  plano: Plano;
+  alternativo: Plano | null;
+  motivos: string[];
+  /** Vazio quando o WhatsApp comercial ainda não foi configurado. */
+  linkWhatsapp: string;
+  mensagemWhatsapp: string;
+};
+
+export type LeadRegistrado = {
+  id: string;
+  linkWhatsapp: string;
+  mensagem: string;
+  /** `false` = sem número cadastrado; o fluxo cai no pagamento normal. */
+  whatsappConfigurado: boolean;
+};
+
+/* ------------------------------------------------------------------ */
+/* Plano vigente e limites */
+/* ------------------------------------------------------------------ */
+
+export type UsoLimite = { usado: number; limite: number | null };
+
+export type MeuPlano = {
+  plano: Plano | null;
+  /** Flags do plano. É o que decide menu visível e rota aberta. */
+  recursos: Record<string, boolean>;
+  uso: {
+    usuarios: UsoLimite;
+    clientes: UsoLimite;
+    produtos: UsoLimite;
+    pedidosMes: UsoLimite;
+    atendentes: UsoLimite;
+  };
+  /** Limites em 80% ou mais — aviso antes de travar. */
+  avisos: string[];
 };
 
 export type Fatura = {
@@ -110,10 +171,43 @@ export const CICLO_LABEL: Record<CicloPlano, string> = {
   ANUAL: "/ano",
 };
 
-/** Nome amigável das flags de `recursos` vindas do banco. */
+/**
+ * Nome amigável das flags de `recursos` vindas do banco.
+ *
+ * A ordem aqui é a ordem em que os recursos aparecem no cartão do plano: do
+ * que todo mundo entende (PDV, clientes) para o que só quem precisa procura
+ * (API, multi-loja). Flag sem rótulo simplesmente não é exibida.
+ */
 export const RECURSO_LABEL: Record<string, string> = {
-  financeiro: "Módulo financeiro",
+  pdv: "PDV e vendas",
+  clientes: "Cadastro de clientes",
+  produtos: "Estoque e produtos",
+  vendas: "Histórico de vendas",
+  financeiro: "Financeiro e caixa",
+  orcamentos: "Orçamentos",
+  planilhas: "Planilhas",
+  crm: "CRM com funil de vendas",
+  crmMultiAtendente: "CRM multi-atendente",
+  metas: "Metas por vendedor",
+  automacoes: "Automações de follow-up",
   relatorios: "Relatórios gerenciais",
+  correios: "Correios integrado",
+  whatsappIntegrado: "WhatsApp integrado",
+  multiLoja: "Multi-loja",
+  api: "API aberta",
   suporteWhatsapp: "Suporte por WhatsApp",
   suportePrioritario: "Suporte prioritário",
 };
+
+/** Rótulo dos limites, para a linha "o que cabe" do cartão. */
+export const LIMITE_LABEL = {
+  limiteUsuarios: "usuários",
+  limiteAtendentes: "atendentes no CRM",
+  limiteClientes: "clientes",
+  limiteProdutos: "produtos",
+  limitePedidosMes: "vendas/mês",
+} as const;
+
+/** `null` no limite é "sem teto" — e é assim que se escreve na tela. */
+export const formatarLimite = (valor: number | null): string =>
+  valor === null || valor === undefined ? "ilimitado" : valor.toLocaleString("pt-BR");

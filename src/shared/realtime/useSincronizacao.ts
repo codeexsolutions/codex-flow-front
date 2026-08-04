@@ -4,7 +4,7 @@ import { io, type Socket } from "socket.io-client";
 import { API_ORIGEM } from "@/shared/api/apiUrl";
 import useAuth from "@/features/auth/store/auth.store";
 
-export type Colecao = "clientes" | "produtos" | "pedidos";
+export type Colecao = "clientes" | "produtos" | "pedidos" | "producao" | "planilhas";
 
 type Aviso = { colecao: Colecao; porUsuarioId: string | null; em: string };
 

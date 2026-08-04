@@ -24,8 +24,9 @@ import {
   Sunset,
   Moon,
 } from "lucide-react";
-import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
+import { Rosca } from "@/shared/ui/Rosca";
 import { PageScreen } from "@/shared/ui/PageShell";
 import { SkeletonKpis, SkeletonGrafico, SkeletonListaPainel } from "@/shared/ui/skeleton";
 import DashboardMobile from "@/features/dashboard/components/DashboardMobile";
@@ -281,67 +282,6 @@ const Barras = ({
   </div>
 );
 
-/* Categórico: cada fatia é uma forma de pagamento diferente, então cada uma
-   precisa de matiz própria. A ordem é fixa — a maior fatia sempre pega a cor de
-   destaque, e trocar de mês não repinta o que sobreviveu. */
-const PALETA_FORMAS = ["rgb(var(--accent))", "rgb(var(--success))", "rgb(var(--warning))", "rgb(var(--danger))", "rgb(var(--accent) / 0.45)", "rgb(var(--fg) / 0.3)"];
-
-/**
- * Rosca das formas de pagamento, com o total no miolo.
- *
- * A legenda ao lado traz nome e valor de cada fatia: quem não distingue as
- * cores — daltonismo, monitor ruim, impressão em cinza — continua lendo o
- * gráfico inteiro pela legenda. Cor aqui é atalho, nunca o único caminho.
- */
-const Rosca = ({ dados }: { dados: { forma: string; total: number; notas: number }[] }) => {
-  const total = dados.reduce((acc, d) => acc + d.total, 0);
-
-  return (
-    <div className="flex flex-wrap items-center gap-2 px-3 py-3">
-      <div className="relative h-[168px] w-[168px] shrink-0">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={dados}
-              dataKey="total"
-              nameKey="forma"
-              innerRadius={52}
-              outerRadius={78}
-              paddingAngle={2}
-              /* O anel de fundo separa fatias vizinhas de cor parecida sem
-                 precisar de uma linha divisória visível. */
-              stroke="rgb(var(--surface))"
-              strokeWidth={2}
-              animationDuration={750}
-              animationEasing="ease-out"
-            >
-              {dados.map((d, i) => (
-                <Cell key={d.forma} fill={PALETA_FORMAS[i % PALETA_FORMAS.length]} />
-              ))}
-            </Pie>
-
-            <Tooltip contentStyle={BALAO} itemStyle={{ padding: 0 }} formatter={(v) => formatCurrency(Number(v ?? 0))} />
-          </PieChart>
-        </ResponsiveContainer>
-
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-[10px] uppercase tracking-[0.1em] text-faint">recebido</span>
-          <span className="nums mt-0.5 max-w-[92px] truncate text-[13px] text-ink">{formatCurrency(total)}</span>
-        </div>
-      </div>
-
-      <ul className="min-w-[130px] flex-1 flex-col gap-1.5">
-        {dados.map((d, i) => (
-          <li key={d.forma} className="flex items-center gap-2 py-1 text-[11.5px]">
-            <span className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: PALETA_FORMAS[i % PALETA_FORMAS.length] }} />
-            <span className="min-w-0 flex-1 truncate text-mist">{d.forma}</span>
-            <span className="nums shrink-0 text-ink">{formatCurrency(d.total)}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-};
 
 /* ──────────────────────────────── Página ────────────────────────────────── */
 
@@ -786,7 +726,7 @@ const DashboardPage = () => {
         </section>
 
         <Painel title="Como receberam" subtitle="última forma de cada nota quitada no mês" icon={<CreditCard size={15} />} action={<VerTudo onClick={() => navigate("/vendas/financeiro")} />}>
-          {carregando ? <SkeletonGrafico altura={176} /> : dados.formas.length === 0 ? <Vazio>Nenhuma nota quitada neste mês.</Vazio> : <Rosca dados={dados.formas} />}
+          {carregando ? <SkeletonGrafico altura={176} /> : dados.formas.length === 0 ? <Vazio>Nenhuma nota quitada neste mês.</Vazio> : <Rosca fatias={dados.formas.map((f) => ({ nome: f.forma, valor: f.total }))} formatar={formatCurrency} />}
         </Painel>
       </Bloco>
 

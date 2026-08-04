@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, ShoppingCart, DollarSign, Package, Users, Wallet, BarChart3, MoreHorizontal, Settings, LogOut, UserCircle } from "lucide-react";
+import { LayoutDashboard, ShoppingCart, DollarSign, Package, Users, Wallet, BarChart3, MoreHorizontal, Settings, LogOut, UserCircle, Truck, Lock, Table2 } from "lucide-react";
 
 import useAuth from "@/features/auth/store/auth.store";
 import { ehGestor } from "@/features/vendas/components/TabsVendas";
@@ -9,8 +9,17 @@ import useEquipeStore, { planoTemEquipe } from "@/features/funcionarios/store/eq
 import Sheet from "@/shared/ui/Sheet";
 import { tocarNavegacao } from "@/shared/session/somSessao";
 import { ABAS_SWIPE } from "@/shared/hooks/useSwipeAbas";
+import usePlano from "@/shared/plano/plano.store";
 
-type Item = { rota: string; label: string; icon: React.ReactNode };
+/**
+ * `familia` só vem preenchida no primeiro item de cada grupo — é ela que
+ * imprime o título na folha "Mais".
+ *
+ * `recurso` é a flag do plano que o item exige. Sem ela no plano, o item
+ * aparece apagado e não recebe toque: no celular o alvo é o dedo, e um
+ * destino que só leva a uma tela de venda é pior aqui do que no computador.
+ */
+type Item = { rota: string; label: string; icon: React.ReactNode; familia?: string; recurso?: string };
 
 /**
  * Navegação do celular — dock flutuante, com a aba ativa expandida.
@@ -54,6 +63,9 @@ const BottomNav = () => {
 
   const gestor = ehGestor(user);
 
+  /** Item fora do plano aparece apagado e sem toque. */
+  const temRecurso = usePlano((s) => s.recurso);
+
   /* No celular a sidebar não existe, então a busca precisa acontecer aqui —
      senão "Funcionários" nunca apareceria no menu "Mais". */
   const equipe = useEquipeStore((s) => s.equipe);
@@ -79,16 +91,41 @@ const BottomNav = () => {
 
   const principais: Item[] = ABAS_SWIPE.map((rota) => ({ rota, ...APARENCIA[rota] }));
 
-  /** O resto vai para a folha "Mais" — não cabe e não é de uso constante. */
+  /*
+   * O resto vai para a folha "Mais" — não cabe e não é de uso constante.
+   *
+   * Os grupos e a ordem acompanham a sidebar — Meu dia, Cadastros,
+   * Dinheiro, Entregas, Produção, Relacionamento. O que muda é a moldura: lá os dois
+   * grandes blocos são abas, aqui tudo desce numa lista. Numa folha que já
+   * custou um toque para abrir, esconder metade dos destinos atrás de uma
+   * segunda troca cobraria caro demais; os títulos separam o suficiente, e a
+   * sequência idêntica faz quem usou o computador achar o item no celular
+   * sem procurar.
+   *
+   * Clientes aparece uma vez só, e não duas como na sidebar: lá a repetição
+   * evita uma troca de aba, aqui não há aba nenhuma para evitar — o mesmo
+   * nome duas vezes numa lista corrida só pareceria engano.
+   */
   const secundarios: Item[] = [
-    { rota: "/clientes", label: "Clientes", icon: <Users size={18} /> },
-    { rota: "/estoque", label: "Estoque", icon: <Package size={18} /> },
-    // Financeiro virou aba de Vendas — deixou de ser destino próprio.
-    ...(gestor ? [{ rota: "/vendas/financeiro", label: "Financeiro", icon: <Wallet size={18} /> }] : []),
-    { rota: "/relatorios", label: "Relatórios", icon: <BarChart3 size={18} /> },
+    { rota: "/clientes", label: "Clientes", icon: <Users size={18} />, familia: "Cadastros" },
     // Equipe é do dono e só existe em plano que comporta mais de um usuário.
-    ...(gestor && planoTemEquipe(equipe) ? [{ rota: "/funcionarios", label: "Funcionários", icon: <UserCircle size={18} /> }] : []),
-    { rota: "/configuracoes", label: "Configurações", icon: <Settings size={18} /> },
+    ...(gestor && planoTemEquipe(equipe) ? [{ rota: "/funcionarios", label: "Minha equipe", icon: <UserCircle size={18} /> }] : []),
+    { rota: "/estoque", label: "Estoque e serviços", icon: <Package size={18} /> },
+
+    // Financeiro virou aba de Vendas — deixou de ser destino próprio.
+    ...(gestor ? [{ rota: "/vendas/financeiro", label: "Caixa e contas", icon: <Wallet size={18} />, recurso: "financeiro", familia: "Dinheiro" }] : []),
+    { rota: "/relatorios", label: "Relatórios", icon: <BarChart3 size={18} />, recurso: "relatorios" },
+
+    // Correios deixou de ser "em breve" e passou a ser módulo de plano. Fica
+    // na folha mesmo para quem não contratou — apagado, com o cadeado: some
+    // do menu e ninguém descobre que existe; clicável, vira convite que a
+    // pessoa não pediu.
+    { rota: "/correios", label: "Correios", icon: <Truck size={18} />, recurso: "correios", familia: "Entregas" },
+
+    // Uma ferramenta só para a produção — o quadro de etapas saiu.
+    { rota: "/planilhas", label: "Planilhas", icon: <Table2 size={18} />, familia: "Produção" },
+
+    { rota: "/configuracoes", label: "Configurações", icon: <Settings size={18} />, familia: "Conta" },
   ];
 
   const ativo = (rota: string) => (rota === "/" ? pathname === "/" : pathname === rota || pathname.startsWith(`${rota}/`));
@@ -204,15 +241,38 @@ const BottomNav = () => {
       <Sheet open={maisAberto} onClose={() => setMaisAberto(false)} title="Mais" subtitle={user?.nome ? `Conectado como ${user.nome}` : undefined}>
         <div className="flex flex-col gap-1 pb-2">
           {secundarios.map((it) => (
-            <button
-              key={it.rota}
-              type="button"
-              onClick={() => ir(it.rota)}
-              className="focus-ring flex min-h-[48px] items-center gap-3 rounded-xl px-3 text-left text-[14px] text-ink transition-colors hover:bg-fg/[0.05]"
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-fg/[0.05] text-mist">{it.icon}</span>
-              {it.label}
-            </button>
+            <div key={it.rota}>
+              {/* O mesmo corte da sidebar: Atendimento primeiro, Minha loja
+                  depois. Aqui os títulos são uma linha de 10px e não uma aba —
+                  numa folha que rola, trocar de aba esconderia metade dos
+                  destinos atrás de um toque, e no celular a folha "Mais" já é
+                  o segundo toque. Separar basta; dividir atrapalharia. */}
+              {it.familia && (
+                <p className="px-3 pb-1.5 pt-4 text-[10px] uppercase tracking-[0.18em] text-muted first:pt-1">
+                  {it.familia}
+                </p>
+              )}
+
+              {it.recurso && !temRecurso(it.recurso) ? (
+                <div className="flex min-h-[48px] w-full cursor-not-allowed items-center gap-3 rounded-xl px-3 text-left text-[14px] text-mist opacity-55">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-fg/[0.05] text-faint">{it.icon}</span>
+                  <span className="flex-1">{it.label}</span>
+                  <span className="flex items-center gap-1 rounded-full border border-accent/20 bg-accent/[0.08] px-2 py-0.5 text-[9px] uppercase tracking-wider text-accent-soft">
+                    <Lock size={9} />
+                    Plano
+                  </span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => ir(it.rota)}
+                  className="focus-ring flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 text-left text-[14px] text-ink transition-colors hover:bg-fg/[0.05]"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-fg/[0.05] text-mist">{it.icon}</span>
+                  {it.label}
+                </button>
+              )}
+            </div>
           ))}
 
           <button

@@ -18,6 +18,10 @@ import RelatoriosPage from "@/features/relatorios/pages/RelatoriosPage";
 
 import AuthPage from "@/features/auth/pages/LoginPage";
 import CadastroEmpresaPage from "@/features/auth/pages/SignUpPage";
+import BoasVindasPage from "@/features/auth/pages/BoasVindasPage";
+
+import usePlano from "@/shared/plano/plano.store";
+import RecursoDoPlano from "@/shared/plano/RecursoDoPlano";
 
 import Workflow from "@/features/vendas/pages/PDVPage";
 import SalesPage from "@/features/vendas/pages/SalesPage";
@@ -63,12 +67,34 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
   const path = location.pathname;
   const isPublic = PUBLIC_PATHS.includes(path);
 
+  const carregarPlano = usePlano((s) => s.carregar);
+  const limparPlano = usePlano((s) => s.limpar);
+
+  /*
+   * O plano é buscado uma vez, quando a empresa ativa entra.
+   *
+   * Não é controle de acesso — é o que decide menu visível e módulo aberto,
+   * para a pessoa não bater numa porta que o plano dela não abre. Enquanto
+   * não chega, a interface fica inteira: esconder primeiro e mostrar depois
+   * faria o menu piscar a cada navegação.
+   */
+  useEffect(() => {
+    if (isLogged && user?.ativo) carregarPlano();
+    else limparPlano();
+  }, [isLogged, user?.ativo, carregarPlano, limparPlano]);
+
   if (!isLogged && !isPublic) {
     return <Navigate to="/login" replace />;
   }
 
-  // Usuário inativo (sem pagamento) → só pode acessar /checkout
+  // Usuário inativo (sem pagamento) → só o checkout e a tela que o leva ao
+  // WhatsApp. `/bem-vindo` precisa estar aqui: ela aparece logo depois do
+  // cadastro, quando a empresa é, por definição, inativa — sem esta exceção
+  // o cadastro cairia direto no Pix, que é justamente o que ele deixou de
+  // fazer.
   if (isLogged && user && !user.ativo) {
+    if (path === "/bem-vindo") return <BoasVindasPage />;
+
     if (path !== "/checkout") {
       return <Navigate to="/checkout" replace />;
     }
@@ -108,6 +134,7 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
       <Route path="/login" element={<AuthPage />} />
       <Route path="/cadastro" element={<CadastroEmpresaPage />} />
       <Route path="/planos" element={<PlanosPage />} />
+      <Route path="/bem-vindo" element={<BoasVindasPage />} />
       <Route path="/page" element={<LandingPage />} />
 
       {isLogged && (
@@ -116,6 +143,10 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
           <Route index element={<DashboardPage />} />
           <Route path="pdv" element={<Workflow />} />
           {/* Orçamento é ato de balcão: mora ao lado do PDV, não em Vendas. */}
+          {/* Orçamento, produção e planilhas ficam SEM trava de plano por
+              enquanto: os três já são configuráveis e o pacote comercial
+              ainda vai ser reorganizado. Travar agora só criaria porta para
+              destrancar depois. */}
           <Route path="pdv/orcamentos" element={<OrcamentosPage />} />
 
           <Route path="checkout" element={<CheckoutPage />} />
@@ -131,16 +162,48 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
           <Route path="vendas/orcamentos" element={<Navigate to="/pdv/orcamentos" replace />} />
 
           <Route path="funcionarios" element={<FuncionariosPage />} />
-          <Route path="correios" element={<CorreiosPage />}>
+
+          {/* Módulos que dependem do plano. O `RecursoDoPlano` mostra a
+              oferta no lugar da tela — não redireciona: quem clicou em
+              "Correios" quer Correios, e voltar para a home não responde
+              nada. Quem barra de verdade é o `planoMiddleware` da API. */}
+          <Route
+            path="correios"
+            element={
+              <RecursoDoPlano
+                recurso="correios"
+                promessa="Calcule frete, gere etiqueta, poste e rastreie sem sair do sistema — e sem redigitar endereço no site dos Correios."
+              >
+                <CorreiosPage />
+              </RecursoDoPlano>
+            }
+          >
             <Route index element={<PrecosPrazosPage />} />
             <Route path="postagem" element={<PostagemPage />} />
             <Route path="rastrear" element={<RastrearPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
-          <Route path="relatorios" element={<RelatoriosPage />} />
-          {/* Produção sai do ar por enquanto: a rota redireciona em vez de
-              sumir, para link salvo não cair em "página não encontrada". */}
-          <Route path="producao" element={<Navigate to="/" replace />} />
+
+          <Route
+            path="relatorios"
+            element={
+              <RecursoDoPlano
+                recurso="relatorios"
+                promessa="Veja o que vende, quem vende e o que encalhou — com número, não com impressão."
+              >
+                <RelatoriosPage />
+              </RecursoDoPlano>
+            }
+          />
+          {/* O quadro de etapas volta ao ar como parte do CRM. No menu ele se
+              chama "Acompanhamento": o que anda de coluna em coluna ali é o
+              cliente, não o produto. A rota antiga fica de pé para não quebrar
+              link salvo. */}
+          {/* O quadro de etapas saiu do menu: a produção inteira é
+              controlada pela planilha. A rota redireciona em vez de sumir
+              para não quebrar link salvo — e o código da tela fica de pé,
+              caso a visão em quadro volte como opção da planilha. */}
+          <Route path="producao" element={<Navigate to="/planilhas" replace />} />
           <Route path="planilhas" element={<PlanilhasPage />} />
           <Route path="ajuda" element={<AjudaPage />} />
 
@@ -161,7 +224,14 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
                 vendas. Sem isso, abrir /vendas o levaria ao "geralzão". */}
             <Route index element={ehGestor(user) ? <SalesOverviewPage /> : <Navigate to="/vendas/lista" replace />} />
             <Route path="lista" element={<SalesList />} />
-            <Route path="financeiro" element={<FinanceiroPage />} />
+            <Route
+              path="financeiro"
+              element={
+                <RecursoDoPlano recurso="financeiro" promessa="Caixa, contas a receber e o resultado do mês no mesmo lugar em que a venda acontece.">
+                  <FinanceiroPage />
+                </RecursoDoPlano>
+              }
+            />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
 

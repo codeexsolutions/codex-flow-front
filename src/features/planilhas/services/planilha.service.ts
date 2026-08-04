@@ -2,6 +2,21 @@ import sysgrafix from "@/shared/api/sysgrafix";
 
 export type Periodicidade = "DIARIA" | "SEMANAL" | "MENSAL";
 
+/** Uma página da planilha: o começo do período e quantas linhas tem. */
+export type Periodo = { de: string; linhas: number; nome?: string | null };
+
+/** Uma linha do histórico: uma célula que mudou de valor. */
+export type Alteracao = {
+  id: string;
+  registro_id: string;
+  coluna_nome: string | null;
+  valor_antes: string | null;
+  valor_depois: string | null;
+  acao: string;
+  usuario_nome: string | null;
+  criado_em: string;
+};
+
 export type TipoColuna =
   | "TEXTO" | "TEXTO_LONGO" | "NUMERO" | "MOEDA" | "DATA"
   | "SELECAO" | "MULTIPLA" | "CHECKBOX" | "IMAGEM" | "USUARIO" | "CLIENTE";
@@ -56,8 +71,28 @@ const PlanilhaService = {
     await sysgrafix.patch(`/planilhas/${id}`, dados);
   },
 
+  /** Copia a ESTRUTURA da planilha — colunas, não registros. */
+  async duplicarModelo(id: string, nome?: string) {
+    return um<string>(await sysgrafix.post(`/planilhas/${id}/duplicar`, { nome }));
+  },
+
   async removerModelo(id: string) {
     await sysgrafix.delete(`/planilhas/${id}`);
+  },
+
+  /** As páginas já existentes desta planilha — Agosto, Setembro... */
+  async periodos(modeloId: string) {
+    return lista<Periodo>(await sysgrafix.get(`/planilhas/${modeloId}/periodos`));
+  },
+
+  /** Batiza uma página. Nome vazio devolve o rótulo pela data. */
+  async renomearPagina(modeloId: string, competencia: string, nome: string) {
+    await sysgrafix.patch(`/planilhas/${modeloId}/paginas`, { competencia, nome });
+  },
+
+  /** Quem mudou o quê. Sem `registroId`, a planilha inteira. */
+  async historico(modeloId: string, registroId?: string) {
+    return lista<Alteracao>(await sysgrafix.get(`/planilhas/${modeloId}/historico`, { params: registroId ? { registro: registroId } : undefined }));
   },
 
   async colunas(modeloId: string) {

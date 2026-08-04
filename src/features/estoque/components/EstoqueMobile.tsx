@@ -14,6 +14,9 @@ export type ProdutoItem = {
   valorVenda: number;
   quantidade: number;
   nivel: "disponivel" | "baixo" | "esgotado";
+  /** Selo ao lado do nome — sem ele, dois tamanhos do mesmo item se confundem. */
+  tamanho?: string;
+  tipo?: "PRODUTO" | "SERVICO";
 };
 
 type Props = {
@@ -195,7 +198,15 @@ const EstoqueMobile = ({
                   </span>
 
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[14.5px] text-ink">{p.nome}</span>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate text-[14.5px] text-ink">{p.nome}</span>
+                      {p.tamanho && (
+                        <span className="shrink-0 rounded bg-fg/[0.07] px-1.5 py-px text-[10px] leading-[16px] text-mist">{p.tamanho}</span>
+                      )}
+                      {p.tipo === "SERVICO" && (
+                        <span className="shrink-0 rounded bg-accent/[0.12] px-1.5 py-px text-[10px] leading-[16px] text-accent-soft">serviço</span>
+                      )}
+                    </span>
                     <span className={`flex items-center gap-1 truncate text-[12px] ${n.cls}`}>
                       {p.nivel !== "disponivel" && <AlertTriangle size={11} className="shrink-0" />}
                       {n.texto(p.quantidade)}

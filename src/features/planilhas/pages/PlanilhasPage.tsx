@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Table2, Plus, ChevronLeft, ChevronRight, Settings2, Trash2, X, Loader2, ArrowLeft } from "lucide-react";
 
-import PlanilhaService, { type Coluna, type Modelo, type Pagina, type Periodicidade, type TipoColuna } from "@/features/planilhas/services/planilha.service";
+import useSincronizacao from "@/shared/realtime/useSincronizacao";
+import { Table2, Plus, ChevronLeft, ChevronRight, Settings2, Trash2, X, Loader2, ArrowLeft, Copy, History } from "lucide-react";
+
+import PlanilhaService, { type Alteracao, type Coluna, type Modelo, type Pagina, type Periodicidade, type Periodo, type TipoColuna } from "@/features/planilhas/services/planilha.service";
 import { PageScreen } from "@/shared/ui/PageShell";
 import { Modal } from "@/shared/ui/Modal";
 import { useAlert } from "@/shared/ui/Alert";
@@ -22,6 +24,10 @@ const TIPOS: { id: TipoColuna; label: string }[] = [
   { id: "SELECAO", label: "Seleção" },
   { id: "CHECKBOX", label: "Sim/Não" },
   { id: "IMAGEM", label: "Imagem" },
+  /* Coluna que puxa o cadastro de clientes em vez de aceitar texto livre.
+     Digitado à mão, o mesmo cliente vira "Maria", "maria silva" e "Maria S." em
+     três linhas, e a planilha deixa de somar por cliente. */
+  { id: "CLIENTE", label: "Cliente" },
 ];
 
 const PERIODICIDADES: { id: Periodicidade; label: string }[] = [
@@ -32,8 +38,64 @@ const PERIODICIDADES: { id: Periodicidade; label: string }[] = [
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 
+/**
+ * Como cada evento do histórico se lê.
+ *
+ * O painel mostrava só "coluna: antes → depois", que serve para célula
+ * alterada e fica sem sentido em "linha excluída" (sem coluna, sem valores) ou
+ * "planilha renomeada" (sem linha). Cada ação ganha a frase que descreve o que
+ * de fato aconteceu.
+ */
+function descreverEvento(h: Alteracao): { titulo: string; detalhe: string | null } {
+  const de = h.valor_antes || "vazio";
+  const para = h.valor_depois || "vazio";
+
+  switch (h.acao) {
+    case "LINHA_CRIADA":
+      return { titulo: "Linha criada", detalhe: null };
+    case "LINHAS_CRIADAS":
+      return { titulo: `${h.valor_depois ?? ""} linhas criadas`.trim(), detalhe: null };
+    case "LINHA_EXCLUIDA":
+      return { titulo: "Linha excluída", detalhe: null };
+    case "COLUNA_CRIADA":
+      return { titulo: `Coluna criada: ${h.coluna_nome ?? ""}`.trim(), detalhe: h.valor_depois };
+    case "COLUNA_REMOVIDA":
+      return { titulo: `Coluna removida: ${h.coluna_nome ?? ""}`.trim(), detalhe: null };
+    case "PLANILHA_RENOMEADA":
+      return { titulo: "Planilha renomeada", detalhe: `${de} → ${para}` };
+    case "PAGINA_RENOMEADA":
+      return { titulo: "Página renomeada", detalhe: para };
+    default:
+      return { titulo: h.coluna_nome ?? "Alteração", detalhe: `${de} → ${para}` };
+  }
+}
+
+/** Rótulo curto para a aba do rodapé: "3/8", "3–9/8", "agosto". */
+function rotuloAba(de: string, periodicidade: Periodicidade | undefined): string {
+  const d = new Date(`${de}T12:00:00`);
+
+  if (periodicidade === "MENSAL") return MESES[d.getMonth()];
+  if (periodicidade === "SEMANAL") return `sem. ${d.getDate()}/${d.getMonth() + 1}`;
+
+  return `${d.getDate()}/${d.getMonth() + 1}`;
+}
+
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-const doIso = (s: string) => new Date(`${s}T12:00:00`);
+
+/**
+ * Texto do servidor vira Date.
+ *
+ * Corta em 10 caracteres antes de montar: se algum campo voltar com carimbo
+ * de hora ("2026-08-01T00:00:00.000Z"), concatenar "T12:00:00" produziria
+ * Invalid Date — e o `iso()` dessa data gera a string "NaN-NaN-NaN", que segue
+ * viagem até o banco e derruba a consulta com "invalid input syntax for type
+ * date". Foi exatamente esse o caminho do erro. O meio-dia continua ali para a
+ * data não escorregar um dia por causa de fuso.
+ */
+const doIso = (s: string) => new Date(`${String(s ?? "").slice(0, 10)}T12:00:00`);
+
+/** Data inválida não pode virar parâmetro: cai para hoje. */
+const isoSeguro = (d: Date) => (Number.isNaN(d.getTime()) ? iso(new Date()) : iso(d));
 
 /** "3 de agosto", "semana de 3 a 9 de agosto", "agosto de 2026". */
 function rotuloPeriodo(p: Pagina | null): string {
@@ -87,14 +149,9 @@ const PlanilhasPage = () => {
 
   const funcionarios = useMemo(() => (equipe?.funcionarios ?? []).filter((f) => f.status === "ATIVO"), [equipe]);
 
-  /**
-   * Planilhas são do plano de topo.
-   *
-   * A checagem sai do dado — plano sem teto de usuários é o Ilimitado —, e não
-   * de uma comparação de preço ou de nome. Reajuste de tabela ou renomeação do
-   * plano não deveriam derrubar o acesso de quem já paga por ele.
-   */
-  const temAcesso = equipe !== null && equipe.limiteUsuarios === null;
+  /* A trava de plano saiu daqui junto com a das rotas: a planilha é a
+     ferramenta de produção de todo mundo, e o pacote comercial ainda vai ser
+     reorganizado. */
 
   /** Quem pode editar a coluna. Lista vazia = todos; gestor sempre pode. */
   const podeEditar = (c: Coluna) => gestor || !c.permissoes?.length || c.permissoes.includes(String(user?.id));
@@ -177,6 +234,13 @@ const PlanilhasPage = () => {
     if (aberta) carregarPlanilha(aberta, dataAtual);
   }, [aberta, dataAtual, carregarPlanilha]);
 
+  /* Mesma fila do quadro de produção, em linhas: o que muda de um lado tem de
+     aparecer do outro sem ninguém apertar atualizar. Só com planilha aberta —
+     sem ela não há o que recarregar. */
+  useSincronizacao(["planilhas", "producao"], () => {
+    if (aberta) carregarPlanilha(aberta, dataAtual);
+  }, Boolean(aberta));
+
   /** Anda um período inteiro para frente ou para trás. */
   const navegar = (passo: 1 | -1) => {
     const d = doIso(dataAtual);
@@ -185,7 +249,7 @@ const PlanilhasPage = () => {
     else if (pagina?.periodicidade === "SEMANAL") d.setDate(d.getDate() + 7 * passo);
     else d.setDate(d.getDate() + passo);
 
-    setDataAtual(iso(d));
+    setDataAtual(isoSeguro(d));
   };
 
   const criarModelo = async () => {
@@ -280,29 +344,163 @@ const PlanilhasPage = () => {
     }
   };
 
+  /*
+   * As páginas desta planilha, para o rodapé.
+   *
+   * Recarrega junto com a planilha porque criar linhas num período novo faz
+   * uma página nascer — e a aba tem de aparecer sem exigir F5.
+   */
+  const [periodos, setPeriodos] = useState<Periodo[]>([]);
+
+  useEffect(() => {
+    if (!aberta) {
+      setPeriodos([]);
+      return;
+    }
+
+    let vivo = true;
+
+    PlanilhaService.periodos(aberta.id)
+      .then((lista) => vivo && setPeriodos(lista))
+      .catch(() => vivo && setPeriodos([]));
+
+    return () => {
+      vivo = false;
+    };
+  }, [aberta, pagina]);
+
+  /*
+   * Histórico de alterações.
+   *
+   * A planilha salva sozinha, célula a célula, sem botão nenhum — ótimo para
+   * o ritmo do trabalho e péssimo para a pergunta que vem depois: "esse prazo
+   * era dia 12, quem mudou para 20?". Sem trilha, o valor antigo simplesmente
+   * deixa de existir e a conversa vira a palavra de um contra a do outro.
+   *
+   * Carrega só quando o painel abre: é consulta de exceção, não custa nada
+   * ficar fora do carregamento da tela.
+   */
+  const [historicoAberto, setHistoricoAberto] = useState(false);
+  const [historico, setHistorico] = useState<Alteracao[]>([]);
+  const [carregandoHistorico, setCarregandoHistorico] = useState(false);
+
+  useEffect(() => {
+    if (!historicoAberto || !aberta) return;
+
+    let vivo = true;
+
+    setCarregandoHistorico(true);
+
+    PlanilhaService.historico(aberta.id)
+      .then((lista) => vivo && setHistorico(lista))
+      .catch(() => vivo && setHistorico([]))
+      .finally(() => vivo && setCarregandoHistorico(false));
+
+    return () => {
+      vivo = false;
+    };
+  }, [historicoAberto, aberta]);
+
+  /*
+   * Renomear por duplo clique, na própria célula do nome.
+   *
+   * Um lápis ao lado do título ocuparia espaço permanente para uma ação que
+   * se usa duas vezes por ano; um item em menu de contexto ninguém encontra.
+   * Duplo clique é o gesto que qualquer pessoa já tenta primeiro num nome de
+   * aba de planilha — não custa pixel nenhum e não precisa ser ensinado.
+   */
+  const [renomeando, setRenomeando] = useState<null | { alvo: "planilha" | "pagina"; chave: string; valor: string }>(null);
+
+  const confirmarRenome = async () => {
+    if (!renomeando || !aberta) return;
+
+    const { alvo, chave, valor } = renomeando;
+
+    setRenomeando(null);
+
+    try {
+      if (alvo === "planilha") {
+        const nome = valor.trim();
+        if (!nome || nome === aberta.nome) return;
+
+        /* Local primeiro: o nome está no cabeçalho e na lista, e esperar a
+           rede para ver a própria digitação é o tipo de atraso que faz a
+           pessoa clicar de novo achando que não salvou. */
+        setAberta({ ...aberta, nome });
+        setModelos((ms) => ms.map((m) => (m.id === aberta.id ? { ...m, nome } : m)));
+
+        await PlanilhaService.alterarModelo(aberta.id, { nome });
+        return;
+      }
+
+      setPeriodos((ps) => ps.map((p) => (p.de === chave ? { ...p, nome: valor.trim() || null } : p)));
+
+      await PlanilhaService.renomearPagina(aberta.id, chave, valor);
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível renomear."));
+      carregarModelos();
+      if (aberta) carregarPlanilha(aberta, dataAtual);
+    }
+  };
+
+  /** Campo de edição inline — mesmo comportamento nos dois lugares. */
+  const campoRenome = (largura: string) => (
+    <input
+      autoFocus
+      value={renomeando?.valor ?? ""}
+      onChange={(e) => setRenomeando((r) => (r ? { ...r, valor: e.target.value } : r))}
+      onBlur={confirmarRenome}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") confirmarRenome();
+        if (e.key === "Escape") setRenomeando(null);
+      }}
+      className={`${largura} rounded-lg border border-accent/60 bg-fg/[0.04] px-2 py-1 text-ink outline-none`}
+    />
+  );
+
+  /**
+   * Abre o período seguinte ao mais recente que já existe, em branco.
+   *
+   * Anda a partir da página MAIS NOVA, e não da que está aberta: quem está
+   * consultando agosto e clica em "+ Página" quer a próxima da planilha, não
+   * criar setembro de novo por cima do que já existe.
+   */
+  const proximaPagina = () => {
+    const maisRecente = periodos[0]?.de ?? pagina?.de ?? dataAtual;
+    const d = doIso(maisRecente);
+
+    if (pagina?.periodicidade === "MENSAL") d.setMonth(d.getMonth() + 1);
+    else if (pagina?.periodicidade === "SEMANAL") d.setDate(d.getDate() + 7);
+    else d.setDate(d.getDate() + 1);
+
+    setDataAtual(isoSeguro(d));
+  };
+
+  /** Copia a planilha aberta e já entra na cópia — é o que se quer em seguida. */
+  const duplicarAtual = async () => {
+    if (!aberta) return;
+
+    setSalvando(true);
+
+    try {
+      const novoId = await PlanilhaService.duplicarModelo(aberta.id);
+      const lista = await PlanilhaService.modelos();
+
+      setModelos(lista);
+
+      const nova = lista.find((m) => m.id === novoId);
+      if (nova) setAberta(nova);
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível duplicar a planilha."));
+    } finally {
+      setSalvando(false);
+    }
+  };
+
   const larguraTotal = useMemo(() => colunas.reduce((soma, c) => soma + (c.largura ?? 180), 56), [colunas]);
 
   /* ------------------------- Fora do plano ------------------------- */
 
-  if (equipe !== null && !temAcesso) {
-    return (
-      <PageScreen icon={<Table2 className="h-5 w-5" />} title="Planilhas" subtitle="Disponível no plano Ilimitado">
-        <div className="card glass-sheen flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-          <span className="grid h-14 w-14 place-items-center rounded-2xl border border-accent/25 bg-accent/[0.1] text-accent-soft">
-            <Table2 size={22} />
-          </span>
-
-          <p className="text-[15px] text-ink">Planilhas de produção</p>
-
-          <p className="max-w-md text-[12.5px] leading-relaxed text-mist">
-            Monte planilhas com as colunas que a sua operação usa — etapas, prazos, responsáveis, imagens — e acompanhe por dia, semana ou mês. Disponível no plano <span className="text-ink">Ilimitado</span>.
-          </p>
-
-          <p className="text-[11.5px] text-faint">Fale com o suporte para mudar de plano — você paga só a diferença.</p>
-        </div>
-      </PageScreen>
-    );
-  }
 
   /* ---------------------------- Lista ---------------------------- */
 
@@ -405,23 +603,53 @@ const PlanilhasPage = () => {
   /* -------------------------- Planilha aberta -------------------------- */
 
   return (
-    <PageScreen icon={<Table2 className="h-5 w-5" />} title={aberta.nome} subtitle={rotuloPeriodo(pagina)}>
+    <PageScreen icon={<Table2 className="h-5 w-5" />} title="Planilhas" subtitle={rotuloPeriodo(pagina)}>
       <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <button onClick={() => setAberta(null)} className="focus-ring flex items-center gap-1.5 rounded-xl border border-fg/[0.1] px-3 py-2 text-[12px] text-mist transition-colors hover:text-ink">
-          <ArrowLeft size={14} /> Planilhas
+        {/* O nome da planilha vive aqui, e não no título da tela: o título diz
+            em que módulo você está ("Planilhas"), o nome diz qual delas — e é
+            o nome que se renomeia, com duplo clique. */}
+        {renomeando?.alvo === "planilha" ? (
+          campoRenome("w-56 text-[15px]")
+        ) : (
+          <button
+            onDoubleClick={() => setRenomeando({ alvo: "planilha", chave: aberta.id, valor: aberta.nome })}
+            title="Clique duas vezes para renomear"
+            className="focus-ring flex items-center gap-2 rounded-lg px-2 py-1 text-[15px] text-ink transition-colors hover:bg-fg/[0.05]"
+          >
+            {aberta.nome}
+          </button>
+        )}
+
+        <button
+          onClick={() => setAberta(null)}
+          aria-label="Ver todas as planilhas"
+          title="Ver todas as planilhas"
+          className="focus-ring grid h-9 w-9 place-items-center rounded-lg border border-fg/[0.1] text-mist hover:text-ink"
+        >
+          <ArrowLeft size={14} />
         </button>
 
+        {/* "Voltar para Planilhas" e "Hoje" saíram daqui: o primeiro virou o
+            próprio cabeçalho da página, e o segundo era um atalho para um
+            período que o rodapé agora mostra por nome. Sobraram as setas, para
+            quem anda de um em um. */}
         <div className="flex items-center gap-1">
           <button onClick={() => navegar(-1)} aria-label="Período anterior" className="focus-ring grid h-9 w-9 place-items-center rounded-lg border border-fg/[0.1] text-mist hover:text-ink">
             <ChevronLeft size={15} />
-          </button>
-          <button onClick={() => setDataAtual(iso(new Date()))} className="focus-ring rounded-lg border border-fg/[0.1] px-3 py-2 text-[11.5px] text-mist hover:text-ink">
-            Hoje
           </button>
           <button onClick={() => navegar(1)} aria-label="Próximo período" className="focus-ring grid h-9 w-9 place-items-center rounded-lg border border-fg/[0.1] text-mist hover:text-ink">
             <ChevronRight size={15} />
           </button>
         </div>
+
+        <button
+          onClick={() => setHistoricoAberto(true)}
+          title="Quem mudou o quê nesta planilha"
+          className="focus-ring flex items-center gap-1.5 rounded-lg border border-fg/[0.1] px-3 py-2 text-[11.5px] text-mist transition-colors hover:text-ink"
+        >
+          <History size={14} />
+          Histórico
+        </button>
 
         <span className="text-[11.5px] text-faint">
           {pagina?.registros.length ?? 0} {(pagina?.registros.length ?? 0) === 1 ? "linha" : "linhas"}
@@ -515,6 +743,122 @@ const PlanilhasPage = () => {
           </table>
         )}
       </div>
+
+      {/*
+        * Rodapé: as PÁGINAS desta planilha — Agosto, Setembro, Outubro.
+        *
+        * Não são as outras planilhas: Camisaria e Estamparia são coisas
+        * separadas, e trocar entre elas é sair desta tela. O que se troca aqui
+        * é o período dentro da mesma planilha, que é exatamente o papel das
+        * abas de baixo em qualquer planilha do mundo.
+        *
+        * Antes só existiam as setas "← Hoje →", que respondem um passo por
+        * clique e às cegas: achar um mês de três atrás custava seis cliques
+        * sem saber se havia algo lá. A lista vem do banco já agrupada pela
+        * periodicidade do modelo — na Estamparia, que é diária, cada dia é uma
+        * aba; na Camisaria, mensal, cada mês é uma.
+        */}
+      <div className="mt-2 flex shrink-0 items-center gap-1 overflow-x-auto border-t border-fg/[0.07] pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <span className="shrink-0 pr-1 text-[10px] uppercase tracking-[0.12em] text-faint">Páginas</span>
+
+        {periodos.map((p) => {
+          const atual = pagina?.de === p.de;
+
+          if (renomeando?.alvo === "pagina" && renomeando.chave === p.de) {
+            return <span key={p.de}>{campoRenome("w-32 text-[12px]")}</span>;
+          }
+
+          return (
+            <button
+              key={p.de}
+              onClick={() => setDataAtual(p.de)}
+              /* Renomear a página só depois de abri-la seria um clique a mais
+                 para uma ação que já custa dois. O duplo clique funciona em
+                 qualquer aba, aberta ou não. */
+              onDoubleClick={() => setRenomeando({ alvo: "pagina", chave: p.de, valor: p.nome ?? "" })}
+              title={`${p.linhas} ${p.linhas === 1 ? "linha" : "linhas"} · clique duas vezes para renomear`}
+              className={`shrink-0 rounded-lg px-3 py-1.5 text-[12px] transition-colors ${p.nome ? "" : "capitalize"} ${
+                atual ? "bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/25" : "text-mist hover:bg-fg/[0.05] hover:text-ink"
+              }`}
+            >
+              {p.nome || rotuloAba(p.de, pagina?.periodicidade)}
+            </button>
+          );
+        })}
+
+        {/* O período aberto ainda sem nenhuma linha não está na lista do banco
+            — mas a pessoa está olhando para ele, então ele precisa de aba. */}
+        {pagina && !periodos.some((p) => p.de === pagina.de) && (
+          <span className="shrink-0 rounded-lg bg-accent/[0.14] px-3 py-1.5 text-[12px] capitalize text-accent-soft ring-1 ring-inset ring-accent/25">
+            {rotuloAba(pagina.de, pagina.periodicidade)}
+          </span>
+        )}
+
+        <span className="mx-1 h-4 w-px shrink-0 bg-fg/[0.1]" />
+
+        {/* "+" abre o período SEGUINTE ao mais recente, em branco. É como a
+            página de setembro nasce quando agosto acaba. */}
+        <button
+          onClick={proximaPagina}
+          title="Abrir o próximo período em branco"
+          className="focus-ring flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] text-mist transition-colors hover:text-ink"
+        >
+          <Plus size={13} />
+          Página
+        </button>
+
+        <button
+          onClick={duplicarAtual}
+          disabled={salvando}
+          title={`Criar outra planilha com as mesmas colunas de ${aberta.nome}`}
+          aria-label="Duplicar planilha"
+          className="focus-ring ml-auto grid h-7 w-7 shrink-0 place-items-center rounded-lg text-mist transition-colors hover:bg-fg/[0.05] hover:text-ink disabled:opacity-40"
+        >
+          <Copy size={13} />
+        </button>
+      </div>
+
+      {/* Histórico — leitura, sem ação: a planilha não desfaz mudança, ela
+          responde quem fez. Voltar o valor é digitar de novo, e isso a pessoa
+          já sabe fazer. */}
+      <Modal open={historicoAberto} onClose={() => setHistoricoAberto(false)} title="Histórico" subtitle={aberta.nome} size="lg">
+        {carregandoHistorico ? (
+          <div className="flex items-center justify-center gap-2 py-10 text-[13px] text-mist">
+            <Loader2 size={15} className="animate-spin text-accent" />
+            Carregando...
+          </div>
+        ) : historico.length === 0 ? (
+          <p className="py-10 text-center text-[13px] text-faint">Nenhuma alteração registrada ainda.</p>
+        ) : (
+          <div className="flex flex-col divide-y divide-fg/[0.06]">
+            {historico.map((h) => {
+              const { titulo, detalhe } = descreverEvento(h);
+              const celula = h.acao === "CELULA_ALTERADA";
+
+              return (
+                <div key={h.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 py-2.5">
+                  <span className="text-[12.5px] text-ink">{titulo}</span>
+
+                  {detalhe &&
+                    (celula ? (
+                      <span className="flex items-baseline gap-1.5 text-[12px]">
+                        <span className="text-mist line-through decoration-fg/25">{h.valor_antes || "vazio"}</span>
+                        <span className="text-faint">→</span>
+                        <span className="text-accent-soft">{h.valor_depois || "vazio"}</span>
+                      </span>
+                    ) : (
+                      <span className="text-[12px] text-mist">{detalhe}</span>
+                    ))}
+
+                  <span className="ml-auto text-[11px] text-faint">
+                    {h.usuario_nome ?? "—"} · {new Date(h.criado_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Modal>
 
       {/* Configuração das colunas */}
       <Modal open={configAberta} onClose={() => setConfigAberta(false)} title="Colunas da planilha" subtitle={aberta.nome}>

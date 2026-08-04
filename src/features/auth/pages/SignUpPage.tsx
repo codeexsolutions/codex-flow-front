@@ -10,7 +10,7 @@ import {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import RedeAnimada from "@/features/landing/components/RedeAnimada";
-import CarrosselPlanos from "@/features/auth/components/CarrosselPlanos";
+import DiagnosticoPlano from "@/features/assinatura/components/DiagnosticoPlano";
 
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -23,7 +23,7 @@ import { formatCurrencyFromCents } from "@/shared/utils/currency";
 import AuthService from "@/features/auth/services/auth.service";
 import useAuth from "@/features/auth/store/auth.store";
 import AssinaturaService from "@/features/assinatura/services/assinatura.service";
-import { CICLO_LABEL, type Plano } from "@/features/assinatura/types/assinatura.types";
+import { CICLO_LABEL, type Plano, type RespostasDiagnostico } from "@/features/assinatura/types/assinatura.types";
 
 const LANDING_ROUTE = "/";
 
@@ -95,7 +95,7 @@ type CadastroFormInputs = z.infer<typeof cadastroSchema>;
 /* Etapas */
 /* ------------------------------------------------------------------ */
 
-const STEPS = ["Plano", "Empresa", "Contato", "Endereço", "Acesso"] as const;
+const STEPS = ["Diagnóstico", "Empresa", "Contato", "Endereço", "Acesso"] as const;
 
 const STEP_FIELDS: Record<number, string[]> = {
   0: ["planoCodigo"],
@@ -138,6 +138,11 @@ const CadastroEmpresaPage = () => {
   const [planos, setPlanos] = useState<Plano[]>([]);
   const [planosLoading, setPlanosLoading] = useState(true);
   const [verSenha, setVerSenha] = useState(false);
+
+  /* O diagnóstico responde antes de existir conta. Guardamos as respostas
+     aqui porque elas seguem junto do cadastro para virar lead — é o que o
+     vendedor lê antes de responder a primeira mensagem. */
+  const [respostas, setRespostas] = useState<RespostasDiagnostico | null>(null);
 
   const {
     register,
@@ -257,9 +262,42 @@ const CadastroEmpresaPage = () => {
     };
 
     try {
-      await AssinaturaService.cadastrar(payload);
+      const cadastro = await AssinaturaService.cadastrar(payload);
 
       toast.update(toastId, { render: "Cadastro realizado! Entrando...", type: "success", isLoading: false, autoClose: 1500 });
+
+      /*
+       * O cadastro termina numa conversa, não numa tela de Pix.
+       *
+       * Quem acabou de responder o diagnóstico é o contato mais quente que
+       * existe: sabe o que precisa, já digitou os dados e está com a decisão
+       * na mão. Despejar essa pessoa numa tela de QR code desperdiça o único
+       * momento em que ela quer falar.
+       *
+       * O lead é gravado ANTES do redirecionamento e num `try` próprio: se
+       * a gravação falhar, o cadastro já existe e mandar a pessoa para o
+       * pagamento é melhor do que travá-la com um erro que não é dela.
+       */
+      let destinoWhatsapp = "";
+
+      try {
+        const lead = await AssinaturaService.registrarLead({
+          nome: data.nomeRepresentante,
+          empresa: data.nomeFantasia,
+          email: data.contato.email,
+          telefone: onlyDigits(data.contato.whatsapp || data.contato.celular),
+          cpfCnpj,
+          codigoEmpresa: cadastro?.codigoEmpresa ?? null,
+          planoRecomendado: data.planoCodigo,
+          respostas: respostas ?? undefined,
+          origem: "CADASTRO",
+        });
+
+        if (lead.whatsappConfigurado) destinoWhatsapp = lead.linkWhatsapp;
+
+      } catch {
+        // Sem lead a venda continua: o caminho de pagamento segue de pé.
+      }
 
       // Login automático com as credenciais que o cliente acabou de definir.
       // Sem isso ele cairia na tela de login logo depois de se cadastrar.
@@ -276,6 +314,16 @@ const CadastroEmpresaPage = () => {
       // `setAuth` direto (e não `login` da store): a empresa ainda está
       // inativa, então buscar os dados dela agora não traz nada de útil.
       useAuth.getState().setAuth(auth.accessToken, auth.refreshToken);
+
+      // Com WhatsApp configurado a pessoa vai para a conversa; sem número,
+      // o fluxo antigo continua valendo e ela vai pagar.
+      if (destinoWhatsapp) {
+        navigate("/bem-vindo", {
+          replace: true,
+          state: { linkWhatsapp: destinoWhatsapp, nome: data.nomeRepresentante, planoCodigo: data.planoCodigo },
+        });
+        return;
+      }
 
       navigate("/checkout", { replace: true });
 
@@ -510,7 +558,7 @@ const CadastroEmpresaPage = () => {
                 {planosLoading && (
                   <div className="flex items-center justify-center gap-2 py-10 text-[13px] text-mist">
                     <Loader2 size={15} className="animate-spin text-accent" />
-                    Carregando planos...
+                    Carregando...
                   </div>
                 )}
 
@@ -520,17 +568,19 @@ const CadastroEmpresaPage = () => {
                   </p>
                 )}
 
-                <CarrosselPlanos
-                  planos={planos}
-                  selecionado={planoCodigo}
-                  onSelecionar={(codigo) => setValue("planoCodigo", codigo, { shouldValidate: true })}
-                />
+                {/* Três perguntas no lugar da vitrine. A vitrine mostrava seis
+                    planos e deixava a escolha — e a escolha é justamente o que
+                    trava quem nunca usou um ERP. */}
+                {!planosLoading && planos.length > 0 && (
+                  <DiagnosticoPlano
+                    selecionado={planoCodigo}
+                    onSelecionar={(codigo) => setValue("planoCodigo", codigo, { shouldValidate: true })}
+                    onRespostas={setRespostas}
+                    onComparar={() => navigate("/planos")}
+                  />
+                )}
 
                 <p role="alert" className={errCls}>{errors.planoCodigo?.message}</p>
-
-                <button type="button" onClick={() => navigate("/planos")} className="self-start text-[11px] text-accent transition-colors hover:text-accent-soft">
-                  Comparar planos em detalhe
-                </button>
               </>
             )}
 
@@ -879,7 +929,7 @@ const CadastroEmpresaPage = () => {
                   className="group relative min-h-[48px] flex-1 overflow-hidden rounded-xl bg-gradient-to-r from-accent-soft via-accent to-accent-strong px-3 text-[14px] text-white sm:min-h-0 sm:rounded-lg sm:py-2.5 shadow-[0_10px_25px_-8px_rgba(108,92,231,0.7)] transition-all duration-200 hover:brightness-110 hover:shadow-[0_14px_35px_-8px_rgba(59,110,245,0.65)] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:brightness-100 sm:text-sm"
                 >
                   <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-fg/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-                  <span className="relative">{isLoading ? "Cadastrando..." : "Criar conta e ir para o pagamento"}</span>
+                  <span className="relative">{isLoading ? "Cadastrando..." : "Criar conta e falar com a gente"}</span>
                 </button>
               )}
             </div>

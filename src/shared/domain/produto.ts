@@ -1,12 +1,28 @@
+/** PRODUTO controla estoque; SERVICO não tem o que estocar. */
+export type TipoItem = "PRODUTO" | "SERVICO";
+
+/** Conjunto de tamanhos. Vazio = o item não se vende por tamanho. */
+export type GradeTamanho = "" | "ROUPA" | "CALCADO" | "VOLUME";
+
 type ProductType = {
   id: string;
   nome: string;
+  /**
+   * No banco a coluna ainda se chama `valor_compra`, mas na interface é
+   * "preço de custo": quem presta serviço não compra nada e mesmo assim tem
+   * custo, e mesmo na revenda o custo real inclui frete e imposto, não só o
+   * que saiu na nota do fornecedor.
+   */
   valorCompra: number;
   valorVenda: number;
   imagem: string;
   descricao: string;
   quantidade: number;
   codigoEmpresa: string;
+  tipo?: TipoItem;
+  grade?: GradeTamanho;
+  /** Valor dentro da grade: P, M, G, 42, 500ml... */
+  tamanho?: string;
 };
 
 /**

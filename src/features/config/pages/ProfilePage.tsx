@@ -6,16 +6,24 @@ import useAuth from "@/features/auth/store/auth.store";
 import { useAlert } from "@/shared/ui/Alert";
 import Field from "@/shared/ui/inputs/Field";
 
-import { formatNumber } from "@/shared/utils/format";
+import { maskPhone } from "@/shared/validation/masks";
 import { SettingsCard, SaveRow, PasswordField, useSaver } from "@/features/config/components/ConfigUI";
 import { profileSchema, type ProfileData, type ProfileInput, passwordSchema, type PasswordData } from "@/features/config/schema/profile.schema";
+import ProfileService from "@/features/config/services/profile.service";
 
 const MAX_PHOTO = 2 * 1024 * 1024;
 
 const ProfilePage = () => {
   const { user } = useAuth();
   const alert = useAlert();
-  const profileSaver = useSaver();
+  const profileSaver = useSaver(async () => {
+    const data = watchProfile();
+    await ProfileService.updateProfile({
+      nome: data.name,
+      cargo: data.role ?? "",
+      imagem: photo ?? undefined,
+    });
+  });
   const pwdSaver = useSaver();
   const fileRef = useRef<HTMLInputElement>(null);
   const [photo, setPhoto] = useState<string | null>(user?.image ?? null);
@@ -30,7 +38,7 @@ const ProfilePage = () => {
     defaultValues: {
       name: user?.nome ?? "",
       email: user?.email ?? "",
-      phone: formatNumber(String(user?.phone ?? "")),
+      phone: maskPhone(String(user?.phone ?? "")),
       role: user?.cargo ?? "",
     },
   });
@@ -118,9 +126,11 @@ const ProfilePage = () => {
               <Field
                 label="Telefone"
                 icon={<Phone size={15} />}
+                placeholder="(00) 00000-0000"
+                inputMode="tel"
                 {...regPhone}
                 onChange={(e) => {
-                  e.target.value = formatNumber(e.target.value);
+                  e.target.value = maskPhone(e.target.value);
                   regPhone.onChange(e);
                 }}
               />

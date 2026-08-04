@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+
+import useSincronizacao from "@/shared/realtime/useSincronizacao";
 import { Factory, Plus, Clock, User, AlertTriangle, Trash2, X, Loader2 } from "lucide-react";
 
 import ProducaoService, { type Etapa, type ItemProducao } from "@/features/producao/services/producao.service";
@@ -114,6 +116,20 @@ const ProducaoPage = () => {
   useEffect(() => {
     carregar();
   }, [carregar]);
+
+  /*
+   * O quadro se atualiza sozinho quando outra pessoa mexe.
+   *
+   * É a tela que a equipe inteira deixa aberta o dia todo — e o que ela
+   * responde ("em que etapa está este serviço?") tem validade de minutos.
+   * Sem isto, quem move um cartão vê a mudança e o resto do time continua
+   * olhando o estado de meia hora atrás, que é exatamente como dois
+   * atendentes acabam refazendo o mesmo serviço.
+   *
+   * `planilhas` entra junto porque é a mesma fila em outra vista: linha
+   * alterada lá pode ser a mesma coisa que anda de coluna aqui.
+   */
+  useSincronizacao(["producao", "planilhas"], carregar);
 
   const porEtapa = useMemo(() => {
     const mapa = new Map<string, ItemProducao[]>();

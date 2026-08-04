@@ -80,6 +80,66 @@ export const TextField = React.forwardRef<HTMLInputElement, TextFieldProps>(({ l
 });
 TextField.displayName = "TextField";
 
+type CurrencyFieldProps = {
+  label: string;
+  hint?: string;
+  error?: string;
+  value: number;
+  onValueChange: (valor: number) => void;
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type">;
+
+/**
+ * Campo de dinheiro que se escreve como dinheiro.
+ *
+ * `<input type="number">` é errado para preço: aceita "12.5" e "12,5" de
+ * formas diferentes conforme o teclado, mostra setinha de incremento que
+ * ninguém usa, e deixa o valor cru na tela — quem digita 1250 vê "1250" e não
+ * "R$ 12,50", que é o que ele queria dizer.
+ *
+ * Aqui só entram dígitos, lidos sempre como CENTAVOS, da direita para a
+ * esquerda — o mesmo comportamento de qualquer maquininha de cartão. Digitar
+ * 1, 2, 5, 0 mostra R$ 0,01 → R$ 0,12 → R$ 1,25 → R$ 12,50. Não existe estado
+ * inválido possível, então não há o que validar.
+ */
+export const CurrencyField = ({ label, hint, error, value, onValueChange, className = "", id, ...props }: CurrencyFieldProps) => {
+  const fieldId = id ?? props.name;
+
+  const formatar = (centavos: number) =>
+    (centavos / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // `Math.round` antes de exibir: o valor chega como reais em float e
+  // 0.1 + 0.2 basta para virar 30.000000000000004 centavos.
+  const centavos = Math.round((Number(value) || 0) * 100);
+
+  return (
+    <div className="flex flex-col">
+      <label htmlFor={fieldId} className={labelCls}>
+        {label}
+      </label>
+      <div className={shell(error)}>
+        <span className="shrink-0 text-[13px] text-muted">R$</span>
+        <input
+          id={fieldId}
+          inputMode="numeric"
+          aria-invalid={!!error}
+          {...props}
+          value={formatar(centavos)}
+          onChange={(e) => {
+            const digitos = e.target.value.replace(/\D/g, "").slice(0, 11);
+            onValueChange(Number(digitos) / 100);
+          }}
+          /* O cursor vai para o fim a cada foco: no meio do texto formatado,
+             digitar inseriria o dígito onde ele não pertence — o valor sempre
+             cresce pela direita. */
+          onFocus={(e) => e.currentTarget.setSelectionRange(e.currentTarget.value.length, e.currentTarget.value.length)}
+          className={`${inputCls} text-right tabular-nums ${className}`}
+        />
+      </div>
+      <FieldMessage error={error} hint={hint} />
+    </div>
+  );
+};
+
 type SelectFieldProps = {
   label: string;
   hint?: string;

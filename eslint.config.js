@@ -5,8 +5,6 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  // Ignores globais: precisam ficar num objeto próprio, sem `files`,
-  // senão valem apenas para o bloco em que estão declarados.
   { ignores: ["dist/**", "dev-dist/**", "graphify-out/**", "public/**"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

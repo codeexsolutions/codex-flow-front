@@ -1,14 +1,66 @@
 import sysgrafix from "@/shared/api/sysgrafix";
-import type { MinhaAssinatura, Plano, RetornoCadastro } from "../types/assinatura.types";
+import type {
+  LeadRegistrado, MeuPlano, MinhaAssinatura, Plano, Recomendacao, RespostasDiagnostico, RetornoCadastro,
+} from "../types/assinatura.types";
 
 /** A API responde sempre no formato { statusCode, message, data: [...] }. */
 type RetornoPadrao<T> = { statusCode: number; message: string; data: T[] };
 
 const AssinaturaService = {
-  /** Público — não exige token. */
-  listarPlanos: async (): Promise<Plano[]> => {
-    const res = await sysgrafix.get<RetornoPadrao<Plano>>("/assinatura/planos");
+  /**
+   * Público — não exige token.
+   *
+   * Por padrão traz só os planos da vitrine. `todos` é o que a comparação
+   * completa pede quando a pessoa clica em "ver outras opções" — a venda
+   * normal acontece com UM plano na tela, vindo de `recomendar`.
+   */
+  listarPlanos: async (todos = false): Promise<Plano[]> => {
+    const res = await sysgrafix.get<RetornoPadrao<Plano>>(`/assinatura/planos${todos ? "?todos=1" : ""}`);
     return res.data?.data ?? [];
+  },
+
+  /** Três respostas entram, um plano sai. Público. */
+  recomendar: async (respostas: RespostasDiagnostico): Promise<Recomendacao> => {
+    const res = await sysgrafix.post<RetornoPadrao<Recomendacao>>("/assinatura/recomendar", respostas);
+    const recomendacao = res.data?.data?.[0];
+
+    if (!recomendacao?.plano) throw new Error(res.data?.message || "Não foi possível recomendar um plano.");
+
+    return recomendacao;
+  },
+
+  /**
+   * Grava o contato e devolve para onde mandar a pessoa. Público de
+   * propósito: o lead nasce antes de existir conta.
+   */
+  registrarLead: async (dados: {
+    nome: string;
+    empresa?: string | null;
+    email?: string | null;
+    telefone?: string | null;
+    cpfCnpj?: string | null;
+    codigoEmpresa?: string | null;
+    planoRecomendado?: string | null;
+    planoAlternativo?: string | null;
+    respostas?: RespostasDiagnostico;
+    origem?: string;
+  }): Promise<LeadRegistrado> => {
+    const res = await sysgrafix.post<RetornoPadrao<LeadRegistrado>>("/assinatura/lead", dados);
+    const lead = res.data?.data?.[0];
+
+    if (!lead) throw new Error(res.data?.message || "Não foi possível registrar o contato.");
+
+    return lead;
+  },
+
+  /** Plano vigente, uso dos limites e avisos — alimenta os gates da interface. */
+  meuPlano: async (): Promise<MeuPlano> => {
+    const res = await sysgrafix.get<RetornoPadrao<MeuPlano>>("/assinatura/meu-plano");
+    const meu = res.data?.data?.[0];
+
+    if (!meu) throw new Error(res.data?.message || "Não foi possível carregar seu plano.");
+
+    return meu;
   },
 
   minha: async (): Promise<MinhaAssinatura> => {

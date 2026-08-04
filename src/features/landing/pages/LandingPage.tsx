@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ShoppingCart, Package, Users, Wallet, BarChart3, Bell, Smartphone, ShieldCheck,
   QrCode, ArrowRight, Zap, Palette, WifiOff, Store, UserRound, MessageCircle,
+  Target, Truck, Sparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -104,6 +105,27 @@ const LandingPage = () => {
   const menorPreco = planos.length ? Math.min(...planos.map((p) => p.precoCentavos)) : null;
 
   const limite = (v: number | null) => (v === null ? "Ilimitado" : formatNumber(v));
+
+  /*
+   * Três cartões, não seis.
+   *
+   * A escada tem seis degraus, e mostrar todos na página inicial devolve o
+   * problema que o diagnóstico existe para resolver: quem vende sozinho olha
+   * seis preços e conclui que o sistema é grande demais para ele. Aqui ficam
+   * as três âncoras — o mais barato, o mais escolhido e o teto — que é o que
+   * comunica a faixa. O resto está a um clique, em "ver todos os planos".
+   */
+  const vitrine = (() => {
+    if (planos.length <= 3) return planos;
+
+    const ordenados = [...planos].sort((a, b) => a.precoCentavos - b.precoCentavos);
+    const destaque = ordenados.find((p) => p.destaque) ?? ordenados[Math.floor(ordenados.length / 2)];
+
+    const escolhidos = [ordenados[0], destaque, ordenados[ordenados.length - 1]];
+
+    // Se o destaque for o primeiro ou o último, a lista repetiria um cartão.
+    return escolhidos.filter((p, i) => escolhidos.findIndex((o) => o.id === p.id) === i);
+  })();
 
   return (
     /* `vitrine` fixa a identidade da marca aqui dentro: o tema que o cliente
@@ -259,7 +281,7 @@ const LandingPage = () => {
             <p className="text-center text-[13px] text-faint">Carregando planos…</p>
           ) : (
             <div className="mx-auto grid max-w-5xl grid-cols-1 items-stretch gap-5 md:grid-cols-3">
-              {planos.map((p) => (
+              {vitrine.map((p) => (
                 <article
                   key={p.id}
                   data-reveal
@@ -290,8 +312,13 @@ const LandingPage = () => {
                         [`${limite(p.limiteUsuarios)} ${p.limiteUsuarios === 1 ? "usuário" : "usuários"}`, true, Users],
                         [`${limite(p.limiteClientes)} clientes`, true, UserRound],
                         [`${limite(p.limiteProdutos)} produtos`, true, Package],
-                        [`${limite(p.limitePedidosMes)} pedidos por mês`, true, ShoppingCart],
+                        [`${limite(p.limitePedidosMes)} vendas por mês`, true, ShoppingCart],
                         ["Módulo financeiro", Boolean(p.recursos?.financeiro), Wallet],
+                        // CRM e Correios são o que separa um degrau do outro
+                        // hoje. Fora desta lista, os três cartões pareciam o
+                        // mesmo plano com preços diferentes.
+                        ["CRM com funil de vendas", Boolean(p.recursos?.crm), Target],
+                        ["Correios integrado", Boolean(p.recursos?.correios), Truck],
                         ["Relatórios gerenciais", Boolean(p.recursos?.relatorios), BarChart3],
                         ["Suporte por WhatsApp", Boolean(p.recursos?.suporteWhatsapp), MessageCircle],
                       ] as [string, boolean, LucideIcon][]
@@ -316,6 +343,30 @@ const LandingPage = () => {
                   </button>
                 </article>
               ))}
+            </div>
+          )}
+
+          {/* Os outros degraus e o caminho curto para quem não quer escolher.
+              Fica embaixo dos cartões de propósito: quem já se decidiu num
+              deles não precisa ler isto. */}
+          {planos.length > vitrine.length && (
+            <div data-reveal className="mt-9 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+              <button
+                type="button"
+                onClick={() => navigate("/cadastro")}
+                className="focus-ring group inline-flex items-center gap-2 rounded-full bg-accent px-5 py-3 text-[14px] text-white shadow-[0_10px_28px_-10px_rgb(var(--accent))] transition-all hover:brightness-110 active:scale-[0.99]"
+              >
+                <Sparkles size={15} />
+                Descobrir meu plano em 3 perguntas
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate("/planos")}
+                className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-fg/[0.12] px-5 py-3 text-[14px] text-ink transition-all hover:border-accent/40"
+              >
+                Ver os {planos.length} planos
+              </button>
             </div>
           )}
         </section>

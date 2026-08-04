@@ -3,6 +3,7 @@ import { Check, ImagePlus } from "lucide-react";
 
 import type { Coluna } from "@/features/planilhas/services/planilha.service";
 import { formatCurrency } from "@/shared/utils/currency";
+import useClienteStore from "@/features/clientes/store/cliente.store";
 
 type Props = {
   coluna: Coluna;
@@ -28,6 +29,15 @@ const base = "h-full w-full bg-transparent px-3 py-2 text-[12.5px] text-ink outl
 const Celula = ({ coluna, valor, onSalvar, editavel = true }: Props) => {
   const [rascunho, setRascunho] = useState(() => (valor == null ? "" : String(valor)));
   const original = useRef(rascunho);
+
+  /* A lista vem da store, que só busca uma vez por sessão — sem isso, uma
+     planilha de cem linhas dispararia cem buscas de clientes iguais. */
+  const clientes = useClienteStore((s) => s.clientes);
+  const buscarClientes = useClienteStore((s) => s.fetchClientes);
+
+  useEffect(() => {
+    if (coluna.tipo === "CLIENTE") buscarClientes();
+  }, [coluna.tipo, buscarClientes]);
 
   /* Valor mudou por fora (recarga, outra pessoa editando): acompanha, desde
      que o usuário não esteja no meio de uma edição. */
@@ -96,6 +106,42 @@ const Celula = ({ coluna, valor, onSalvar, editavel = true }: Props) => {
           ))}
         </select>
       </div>
+    );
+  }
+
+  /*
+   * Coluna de cliente: escolhe do cadastro, não digita.
+   *
+   * Em texto livre o mesmo cliente entra como "Maria", "maria silva" e
+   * "Maria S." em três linhas diferentes, e a planilha perde a capacidade de
+   * agrupar por cliente — que costuma ser a única pergunta que se faz a ela
+   * no fim do mês.
+   *
+   * Guardamos o NOME e não o id: a planilha é lida por gente, e uma célula
+   * que mostra um UUID quando o cadastro some não ajuda ninguém. O vínculo
+   * forte fica para quando existir relatório cruzando as duas coisas.
+   */
+  if (coluna.tipo === "CLIENTE") {
+    return (
+      <select
+        data-celula={coluna.id}
+        value={rascunho}
+        onChange={(e) => {
+          setRascunho(e.target.value);
+          confirmar(e.target.value);
+        }}
+        className={`${base} cursor-pointer`}
+      >
+        <option value="">—</option>
+        {/* Nome já gravado que não está mais no cadastro continua aparecendo:
+            cliente excluído não pode apagar o histórico da planilha. */}
+        {rascunho && !clientes.some((c) => c.nome === rascunho) && <option value={rascunho}>{rascunho}</option>}
+        {clientes.map((c) => (
+          <option key={c.id} value={c.nome}>
+            {c.nome}
+          </option>
+        ))}
+      </select>
     );
   }
 

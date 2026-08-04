@@ -14,11 +14,10 @@ import { formatDate, MONTHS as MESES } from "@/shared/utils/date";
 import { useIsMobile } from "@/shared/hooks/useIsMobile";
 import FinanceiroMobile from "@/features/financeiro/components/FinanceiroMobile";
 import PagamentoForm from "@/shared/ui/PagamentoForm";
+import { Rosca } from "@/shared/ui/Rosca";
 
 const brDate = (v?: string | null) => (v ? formatDate(v, "-") : "-");
 const money = (v?: number) => brl(v ?? 0);
-
-
 
 const ResumoCard = ({ icon, label, value, tone }: { icon: ReactNode; label: string; value: string; tone: "accent" | "success" | "warning" | "danger" }) => {
   const tones = {
@@ -136,6 +135,27 @@ export default function FinanceiroPage() {
     const [ano, m] = v.split("-");
     return `${MESES[Number(m) - 1]}/${ano}`;
   };
+
+  /**
+   * Formas de pagamento do mês escolhido — calculado das notas,
+   * não do resumo geral. O resumo vem do backend somando tudo;
+   * o mês é o que o usuário selecionou no seletor.
+   */
+  const formasDoMes = useMemo(() => {
+    const mapa = new Map<string, number>();
+
+    for (const n of notas) {
+      if (n.status_pagamento !== "PAGO") continue;
+      const d = new Date(n.data_pedido);
+      if (Number.isNaN(+d)) continue;
+      if (`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` !== mes) continue;
+
+      const f = n.forma_pagamento?.trim() || "Não informado";
+      mapa.set(f, (mapa.get(f) ?? 0) + Number(n.valor_pago ?? 0));
+    }
+
+    return Array.from(mapa, ([formaPagamento, valor]) => ({ formaPagamento, valor })).sort((a, b) => b.valor - a.valor);
+  }, [notas, mes]);
 
   /* Recebe o valor do formulário em vez de quitar tudo: metade agora e o resto
      depois é o caso mais comum do balcão, e antes não havia como registrar. */
@@ -349,83 +369,73 @@ export default function FinanceiroPage() {
           <ResumoCard icon={<Wallet size={17} />} label="Saldo em caixa" value={money(resumo?.saldoCaixa)} tone="accent" />
         </div>
 
-        {!!resumo?.recebidoPorFormaPagamento?.length && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <span className="text-[11px] text-faint">Recebido por forma de pagamento:</span>
-            {resumo.recebidoPorFormaPagamento.map((f) => (
-              <span key={f.formaPagamento} className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-[11px] text-success">
-                {f.formaPagamento}
-                <span className="nums text-ink">{money(f.valor)}</span>
-              </span>
-            ))}
-          </div>
-        )}
+        {/* Uma tela, um assunto: o caixa da loja. As duas listas convivem lado
+            a lado em telas largas — antes empilhavam e disputavam altura. À
+            esquerda o que falta receber e o que já entrou por forma de
+            pagamento; à direita o caixa do mês escolhido. */}
+        <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-2">
+          {/* Coluna esquerda — recebimento */}
+          <div className="flex min-h-0 flex-col gap-3">
+            {formasDoMes.length > 0 && <Rosca fatias={formasDoMes.map((f) => ({ nome: f.formaPagamento, valor: f.valor }))} formatar={money} />}
 
-        {/*
-         * Uma tela, um assunto: o caixa da loja.
-         *
-         * Eram duas abas, e a de Notas repetia a lista de Vendas com outras
-         * colunas — a mesma nota em dois menus, somada de dois jeitos. O que
-         * Vendas não faz é cobrar: por isso aqui sobrou o que está EM ABERTO,
-         * com a baixa ao lado. Nota quitada não tem ação nesta tela.
-         */}
-        {pendentes.length > 0 && (
-          <section className="card glass-sheen shrink-0 overflow-hidden">
-            <header className="flex flex-wrap items-center gap-2.5 border-b border-fg/[0.07] px-4 py-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-warning/[0.14] text-warning ring-1 ring-inset ring-warning/20">
-                <Receipt size={15} />
-              </span>
+            {pendentes.length > 0 && (
+              <section className="card glass-sheen flex min-h-0 flex-1 flex-col overflow-hidden">
+                <header className="flex flex-wrap items-center gap-2.5 border-b border-fg/[0.07] px-4 py-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-warning/[0.14] text-warning ring-1 ring-inset ring-warning/20">
+                    <Receipt size={15} />
+                  </span>
 
-              <div className="min-w-0 flex-1">
-                <h2 className="text-[13.5px] leading-none text-ink">A receber</h2>
-                <p className="mt-1 text-[11.5px] text-faint">
-                  {pendentes.length} {pendentes.length === 1 ? "nota aberta" : "notas abertas"} · {money(resumo?.totalAReceber)}
-                </p>
-              </div>
-
-              <button onClick={carregar} title="Atualizar" className="focus-ring glass-subtle shrink-0 rounded-lg p-2 text-faint transition-colors hover:text-ink">
-                <RotateCw size={14} className={loading ? "animate-spin" : ""} />
-              </button>
-            </header>
-
-            {/* Linhas que quebram em vez de tabela: em tela estreita a nota vira
-                bloco, sem colunas espremidas nem rolagem lateral. */}
-            <div className="max-h-[220px] overflow-y-auto">
-              {pendentes.map((n) => {
-                const restante = Number(n.total) - Number(n.valor_pago ?? 0);
-
-                return (
-                  <div key={n.pedido_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-fg/[0.04] px-4 py-2.5 last:border-0">
-                    <span className="min-w-0 flex-1 basis-[160px]">
-                      <span className="block truncate text-[13px] text-ink">{n.cliente_nome}</span>
-                      <span className="block truncate text-[11px] text-faint">
-                        #{n.codigo_pedido} · {brDate(n.data_pedido)}
-                        {Number(n.valor_pago) > 0 ? ` · pago ${brl(n.valor_pago)}` : ""}
-                      </span>
-                    </span>
-
-                    <span className="shrink-0 text-right">
-                      <span className="block text-[13px] tabular-nums text-warning">{brl(restante)}</span>
-                      <span className="block text-[10.5px] text-faint">falta</span>
-                    </span>
-
-                    <button
-                      onClick={() => setNotaParaPagar(n)}
-                      title="Registrar pagamento"
-                      className="focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/[0.1] text-success ring-1 ring-inset ring-success/20 transition-colors hover:bg-success/20"
-                    >
-                      <CheckCircle2 size={16} />
-                    </button>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-[13.5px] leading-none text-ink">A receber</h2>
+                    <p className="mt-1 text-[11.5px] text-faint">
+                      {pendentes.length} {pendentes.length === 1 ? "nota aberta" : "notas abertas"} · {money(resumo?.totalAReceber)}
+                    </p>
                   </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
 
-        {/* Fluxo de caixa — o conteúdo principal da tela. */}
-        <TabelaCard
-          title="Fluxo de caixa"
+                  <button onClick={carregar} title="Atualizar" className="focus-ring glass-subtle shrink-0 rounded-lg p-2 text-faint transition-colors hover:text-ink">
+                    <RotateCw size={14} className={loading ? "animate-spin" : ""} />
+                  </button>
+                </header>
+
+                {/* Linhas que quebram em vez de tabela: em tela estreita a nota
+                    vira bloco, sem colunas espremidas nem rolagem lateral. */}
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  {pendentes.map((n) => {
+                    const restante = Number(n.total) - Number(n.valor_pago ?? 0);
+
+                    return (
+                      <div key={n.pedido_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-fg/[0.04] px-4 py-2.5 last:border-0">
+                        <span className="min-w-0 flex-1 basis-[160px]">
+                          <span className="block truncate text-[13px] text-ink">{n.cliente_nome}</span>
+                          <span className="block truncate text-[11px] text-faint">
+                            #{n.codigo_pedido} · {brDate(n.data_pedido)}
+                            {Number(n.valor_pago) > 0 ? ` · pago ${brl(n.valor_pago)}` : ""}
+                          </span>
+                        </span>
+
+                        <span className="shrink-0 text-right">
+                          <span className="block text-[13px] tabular-nums text-warning">{brl(restante)}</span>
+                          <span className="block text-[10.5px] text-faint">falta</span>
+                        </span>
+
+                        <button
+                          onClick={() => setNotaParaPagar(n)}
+                          title="Registrar pagamento"
+                          className="focus-ring flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/[0.1] text-success ring-1 ring-inset ring-success/20 transition-colors hover:bg-success/20"
+                        >
+                          <CheckCircle2 size={16} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+          </div>
+
+          {/* Coluna direita — o caixa do mês escolhido. */}
+          <TabelaCard
+            title="Fluxo de caixa"
           icon={<ArrowLeftRight size={15} />}
           count={movimentacoesDoMes.length}
           countLabel={movimentacoesDoMes.length === 1 ? "lançamento" : "lançamentos"}
@@ -450,7 +460,8 @@ export default function FinanceiroPage() {
           ) : (
             movimentacoesDoMes.map((m) => <TabelaRow key={m.id} colunas={colCaixa} cols={COLS_CAIXA} row={m} />)
           )}
-        </TabelaCard>
+          </TabelaCard>
+        </div>
 
         {modais}
     </div>
