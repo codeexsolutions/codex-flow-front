@@ -72,12 +72,15 @@ const AssinaturaService = {
     return assinatura;
   },
 
-  /** Token novo com o status atual da empresa — é o que destrava o checkout. */
-  revalidar: async (): Promise<{ accessToken: string; ativo: boolean }> => {
-    const res = await sysgrafix.post<RetornoPadrao<{ accessToken: string; ativo: boolean }>>("/assinatura/revalidar", {});
+  /**
+   * Gira o cookie com o status atual da empresa — é o que destrava o checkout.
+   * O servidor regrava o cookie httpOnly; aqui só chega o `ativo`.
+   */
+  revalidar: async (): Promise<{ ativo: boolean }> => {
+    const res = await sysgrafix.post<RetornoPadrao<{ ativo: boolean }>>("/assinatura/revalidar", {});
     const dados = res.data?.data?.[0];
 
-    if (!dados?.accessToken) throw new Error(res.data?.message || "Não foi possível revalidar a sessão.");
+    if (!dados) throw new Error(res.data?.message || "Não foi possível revalidar a sessão.");
 
     return dados;
   },

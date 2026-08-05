@@ -25,6 +25,7 @@ type EnterpriseLike = {
   inscMunicipal?: string;
   urlLogo?: string;
   urlImagem?: string;
+  notaBackground?: string;
   contato?: { email?: string; celular?: string | number; telefone?: string | number; whatsapp?: string | number };
   endereco?: {
     cep?: string;
@@ -70,6 +71,7 @@ const EmpresaPage = () => {
       inscMunicipal: ent.inscMunicipal ?? "",
       urlLogo: ent.urlLogo ?? "",
       urlImagem: ent.urlImagem ?? "",
+      notaBackground: ent.notaBackground ?? "",
       email: ent.contato?.email ?? "",
       celular: maskPhone(String(ent.contato?.celular ?? "")),
       telefone: maskPhone(String(ent.contato?.telefone ?? "")),
@@ -139,6 +141,7 @@ const EmpresaPage = () => {
       inscMunicipal: data.inscMunicipal,
       urlLogo: data.urlLogo,
       urlImagem: data.urlImagem,
+      notaBackground: data.notaBackground,
     });
   };
 

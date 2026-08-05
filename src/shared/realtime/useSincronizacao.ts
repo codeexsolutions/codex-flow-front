@@ -41,14 +41,26 @@ export function useSincronizacao(colecoes: Colecao[], aoMudar: () => void, ativo
   useEffect(() => {
     if (!ativo) return;
 
-    const token = localStorage.getItem("token");
-    if (!token || token === "undefined") return;
-
     let socket: Socket | null = null;
     let agendado: number | undefined;
 
     try {
-      socket = io(API_ORIGEM, { auth: { token }, transports: ["websocket"], reconnectionAttempts: 5 });
+      // O token é um cookie httpOnly: o navegador o envia no handshake sozinho,
+      // com `withCredentials` (cross-origin: site ↔ API em domínios diferentes).
+      // `polling` no fallback: rede que bloqueia websocket (proxy, 3G) ainda
+      // sincroniza — sem ele o socket morre em silêncio.
+      socket = io(API_ORIGEM, {
+        withCredentials: true,
+        transports: ["websocket", "polling"],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+      });
+
+      socket.on("connect_error", (erro) => {
+        console.warn("Realtime indisponível:", erro.message);
+      });
 
       socket.on("dados:alterados", (aviso: Aviso) => {
         if (!colecoesRef.current.includes(aviso.colecao)) return;

@@ -1,4 +1,4 @@
-import { Search, ChevronRight, Eye, EyeOff, X } from "lucide-react";
+import { Search, ChevronRight, Eye, EyeOff, X, Download } from "lucide-react";
 import { useState } from "react";
 
 import { formatCurrency } from "@/shared/utils/currency";
@@ -26,6 +26,8 @@ type Props = {
   status: StatusFiltro;
   onStatus: (s: StatusFiltro) => void;
   onAbrirNota: (v: VendaItem) => void;
+  /** Download rápido da nota, direto da linha — não abre a tela da nota. */
+  onBaixarNota: (v: VendaItem) => void;
 };
 
 const FILTROS: { id: StatusFiltro; label: string }[] = [
@@ -52,7 +54,7 @@ const STATUS: Record<VendaItem["status"], { label: string; cls: string }> = {
  *   quatro opções com nomes longos: em 390px elas não cabem lado a lado sem
  *   virar abreviação ilegível.
  */
-const VendasMobile = ({ vendas, totalVendas, totalEmAberto, busca, onBusca, status, onStatus, onAbrirNota }: Props) => {
+const VendasMobile = ({ vendas, totalVendas, totalEmAberto, busca, onBusca, status, onStatus, onAbrirNota, onBaixarNota }: Props) => {
   const [mostrar, setMostrar] = useState(true);
 
   const dinheiro = (v: number) => (mostrar ? formatCurrency(v) : "•••••");
@@ -162,6 +164,19 @@ const VendasMobile = ({ vendas, totalVendas, totalEmAberto, busca, onBusca, stat
                     <span className={`block text-[14.5px] tabular-nums ${v.status === "cancelado" ? "text-muted line-through" : "text-ink"}`}>{dinheiro(v.total)}</span>
                     <span className={`block text-[11.5px] ${st.cls}`}>{st.label}</span>
                   </span>
+
+                  <button
+                    type="button"
+                    title="Baixar nota"
+                    aria-label={`Baixar nota de ${v.nomeCliente || "cliente"}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onBaixarNota(v);
+                    }}
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-accent/[0.12] hover:text-accent-soft active:bg-accent/20"
+                  >
+                    <Download size={16} />
+                  </button>
 
                   <ChevronRight size={16} className="shrink-0 text-muted" />
                 </button>

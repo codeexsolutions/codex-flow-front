@@ -11,6 +11,8 @@ export const empresaSchema = z.object({
   inscMunicipal: z.string().optional().default(""),
   urlLogo: optionalUrl,
   urlImagem: optionalUrl,
+  /** Imagem de fundo (wallpaper) que entra na nota de venda e no orçamento. */
+  notaBackground: optionalUrl,
 
   // Contato
   email: requiredEmail,
@@ -48,4 +50,5 @@ export const identificacaoSchema = empresaSchema.pick({
   inscMunicipal: true,
   urlLogo: true,
   urlImagem: true,
+  notaBackground: true,
 });

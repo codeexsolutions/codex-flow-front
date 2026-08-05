@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { ShoppingCart, Plus, Receipt, BarChart3, UserCheck, DollarSign, Wallet, AlertCircle, Hash, TrendingUp, CalendarDays, ChevronRight, Search, UserPlus, PackagePlus, FileText } from "lucide-react";
+import { ShoppingCart, Plus, Receipt, UserCheck, DollarSign, Wallet, AlertCircle, Hash, TrendingUp, CalendarDays, ChevronRight, Search, UserPlus, PackagePlus, FileText } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
 
@@ -31,7 +31,7 @@ import { TabsPdv } from "@/features/vendas/components/TabsPdv";
 
 // Só o essencial: quem é o cliente e (se existir) qual pedido.
 /* `clienteId` opcional: orçamento é montado para nome livre, sem cadastro. */
-type NotaAberta = { id?: string; clienteId?: string; nome?: string };
+type NotaAberta = { id?: string; clienteId?: string; nome?: string; orcamento?: boolean };
 
 /* --------------------------- Componentes locais --------------------------- */
 
@@ -120,7 +120,6 @@ const PontoDeVenda = () => {
   const fetchClientes = useClienteStore((s) => s.fetchClientes);
 
   const [novaVendaOpen, setNovaVendaOpen] = useState(false);
-  const [relatorioOpen, setRelatorioOpen] = useState(false);
   const [nomeCliente, setNomeCliente] = useState("");
   const [busca, setBusca] = useState("");
   const [somenteHoje, setSomenteHoje] = useState(true);
@@ -131,8 +130,8 @@ const PontoDeVenda = () => {
   const [novoClienteOpen, setNovoClienteOpen] = useState(false);
   const [novoProdutoOpen, setNovoProdutoOpen] = useState(false);
 
-  /* Orçamento aceita nome livre: a proposta costuma ser para quem ainda não é
-     cliente. Exigir cadastro antes de cotar inverte a ordem da conversa. */
+  /* Orçamento volta a abrir pela nota (mesma tela, modo orçamento): um modal
+     só de nome do cliente e a nota abre com título "ORÇAMENTO", sem pagamento. */
   const [orcamentoOpen, setOrcamentoOpen] = useState(false);
   const [nomeOrcamento, setNomeOrcamento] = useState("");
   const [salvandoCadastro, setSalvandoCadastro] = useState(false);
@@ -141,21 +140,6 @@ const PontoDeVenda = () => {
   const criarCliente = useClienteStore((s) => s.criarCliente);
 
   const hoje = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
-
-  /** Abre a nota em modo proposta, com o nome digitado — sem cadastrar ninguém. */
-  const abrirOrcamento = () => {
-    const nomeLimpo = nomeOrcamento.trim();
-
-    if (!nomeLimpo) {
-      alert.warning("Informe o nome", "O orçamento precisa saber para quem é.");
-      return;
-    }
-
-    setOrcamentoOpen(false);
-    setNomeOrcamento("");
-    // Sem `clienteId`: é proposta, não venda de cliente cadastrado.
-    abrirNota({ nome: nomeLimpo });
-  };
 
   /** Cadastra e já abre a venda para o cliente novo — é o motivo de ter cadastrado. */
   const handleNovoCliente = async (dados: ClienteFormData) => {
@@ -277,6 +261,20 @@ const PontoDeVenda = () => {
     setNomeCliente("");
   };
 
+  /** Abre a nota em modo orçamento, com o nome digitado — sem cadastrar. */
+  const abrirOrcamento = () => {
+    const nomeLimpo = nomeOrcamento.trim();
+
+    if (!nomeLimpo) {
+      alert.warning("Informe o nome", "O orçamento precisa saber para quem é.");
+      return;
+    }
+
+    setOrcamentoOpen(false);
+    setNomeOrcamento("");
+    abrirNota({ nome: nomeLimpo, orcamento: true });
+  };
+
   const fecharNota = () => {
     setNotaAberta(null);
     carregarVendas();
@@ -312,8 +310,26 @@ const PontoDeVenda = () => {
           onBusca={setBusca}
           onAbrirNota={(v) => abrirNota({ id: v.pedidoId, clienteId: v.clienteId, nome: v.nomeCliente })}
           onNovaVenda={() => setNovaVendaOpen(true)}
-          onRelatorio={() => setRelatorioOpen(true)}
+          onNovoOrcamento={() => setOrcamentoOpen(true)}
         />
+
+        {/* Modal de nome do orçamento no mobile — folha. */}
+        <Sheet open={orcamentoOpen} onClose={() => setOrcamentoOpen(false)} title="Novo orçamento" subtitle="Para quem é a proposta?">
+          <div className="flex flex-col gap-3 pt-1">
+            <input
+              autoFocus
+              value={nomeOrcamento}
+              onChange={(e) => setNomeOrcamento(e.target.value)}
+              placeholder="Nome do cliente"
+              onKeyDown={(e) => e.key === "Enter" && abrirOrcamento()}
+              className="w-full rounded-xl border border-fg/[0.08] bg-fg/[0.03] px-3.5 py-3 text-[14px] text-ink outline-none focus:border-accent/60"
+            />
+            <p className="text-[11.5px] leading-relaxed text-faint">Não precisa ter cadastro. A nota abre em modo orçamento — sem pagamento.</p>
+            <button type="button" onClick={abrirOrcamento} className="min-h-[42px] rounded-xl bg-accent px-5 text-[13px] text-white transition-all hover:brightness-110 active:scale-[0.99]">
+              Montar orçamento
+            </button>
+          </div>
+        </Sheet>
 
         {/* Escolher cliente — folha, não modal centralizado. */}
         <Sheet open={novaVendaOpen} onClose={() => setNovaVendaOpen(false)} title="Iniciar venda" subtitle="Escolha o cliente" altura="cheia">
@@ -357,28 +373,9 @@ const PontoDeVenda = () => {
           </div>
         </Sheet>
 
-        {/* A nota ocupa a tela inteira: é onde a venda acontece. */}
-        <Sheet open={!!notaAberta} onClose={fecharNota} title={notaAberta?.id ? "Venda" : "Nova venda"} subtitle={notaAberta?.nome} altura="cheia">
-          {notaAberta && <Invoice id={notaAberta.id} clienteId={notaAberta.clienteId} nome={notaAberta.nome} onSaved={fecharNota} />}
-        </Sheet>
-
-        <Sheet open={relatorioOpen} onClose={() => setRelatorioOpen(false)} title={somenteHoje ? "Relatório do dia" : "Relatório geral"}>
-          <div className="flex flex-col gap-2 pb-2 pt-1">
-            {[
-              ["Faturamento", formatCurrency(faturamento)],
-              ["Recebido", formatCurrency(recebido)],
-              ["A receber", formatCurrency(pendente)],
-              ["Vendas", String(vendasVisiveis.length)],
-              ["Ticket médio", formatCurrency(ticketMedio)],
-              ["Vendas pagas", String(vendasVisiveis.filter((v) => !estaAberta(v)).length)],
-              ["Vendas abertas", String(vendasVisiveis.filter(estaAberta).length)],
-            ].map(([rotulo, valor]) => (
-              <div key={rotulo} className="flex min-h-[48px] items-center justify-between border-b border-fg/[0.05] text-[14px]">
-                <span className="text-mist">{rotulo}</span>
-                <span className="tabular-nums text-ink">{valor}</span>
-              </div>
-            ))}
-          </div>
+        {/* A nota ocupa a tela inteira: é onde a venda (ou o orçamento) acontece. */}
+        <Sheet open={!!notaAberta} onClose={fecharNota} title={notaAberta?.orcamento ? "Novo orçamento" : notaAberta?.id ? "Venda" : "Nova venda"} subtitle={notaAberta?.nome} altura="cheia">
+          {notaAberta && <Invoice id={notaAberta.id} clienteId={notaAberta.clienteId} nome={notaAberta.nome} onSaved={fecharNota} modoOrcamento={notaAberta.orcamento} />}
         </Sheet>
       </div>
     );
@@ -400,9 +397,6 @@ const PontoDeVenda = () => {
           </GhostAction>
           <GhostAction icon={<PackagePlus size={15} />} onClick={() => setNovoProdutoOpen(true)}>
             Novo produto
-          </GhostAction>
-          <GhostAction icon={<BarChart3 size={15} />} onClick={() => setRelatorioOpen(true)}>
-            Relatório do dia
           </GhostAction>
           {/* Cor diferente de propósito: orçamento não é venda, e dois botões
               iguais lado a lado fariam o operador clicar no errado com pressa. */}
@@ -597,69 +591,42 @@ const PontoDeVenda = () => {
         </div>
       </Modal>
 
-      {/* Modal — nota do PDV */}
-      <Modal open={!!notaAberta} onClose={fecharNota} title={notaAberta?.id ? "Venda" : "Nova venda"} subtitle={notaAberta?.nome} size="full">
-        {notaAberta && <Invoice id={notaAberta.id} clienteId={notaAberta.clienteId} nome={notaAberta.nome} onSaved={fecharNota} />}
+      {/* Modal — nota do PDV (venda ou orçamento). */}
+      <Modal open={!!notaAberta} onClose={fecharNota} title={notaAberta?.orcamento ? "Novo orçamento" : notaAberta?.id ? "Venda" : "Nova venda"} subtitle={notaAberta?.nome} size="full">
+        {notaAberta && <Invoice id={notaAberta.id} clienteId={notaAberta.clienteId} nome={notaAberta.nome} onSaved={fecharNota} modoOrcamento={notaAberta.orcamento} />}
       </Modal>
 
-      {/* Modal — relatório */}
-      <Modal open={relatorioOpen} onClose={() => setRelatorioOpen(false)} title={somenteHoje ? "Relatório do dia" : "Relatório geral"} subtitle={somenteHoje ? "Resumo das vendas de hoje" : "Resumo de todas as vendas"} size="lg">
-        <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-3">
-            <Kpi icon={<DollarSign size={16} />} label="Faturamento" value={formatCurrency(faturamento)} tone="accent" />
-            <Kpi icon={<Wallet size={16} />} label="Recebido" value={formatCurrency(recebido)} tone="success" />
-            <Kpi icon={<AlertCircle size={16} />} label="Pendente" value={formatCurrency(pendente)} tone="warning" />
-            <Kpi icon={<Hash size={16} />} label="Vendas" value={String(vendasVisiveis.length)} tone="neutral" />
+      {/* Modal de nome do orçamento no desktop. */}
+      <Modal open={orcamentoOpen} onClose={() => setOrcamentoOpen(false)} title="Novo orçamento" subtitle="Para quem é a proposta?" size="sm">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            abrirOrcamento();
+          }}
+          className="flex flex-col gap-4"
+        >
+          <div>
+            <label className="mb-1.5 block text-[11px] uppercase tracking-[0.08em] text-faint">Nome do cliente</label>
+            <input
+              autoFocus
+              value={nomeOrcamento}
+              onChange={(e) => setNomeOrcamento(e.target.value)}
+              placeholder="Digite qualquer nome"
+              className="w-full rounded-xl border border-fg/[0.08] bg-fg/[0.03] px-3.5 py-3 text-[14px] text-ink outline-none focus:border-accent/60"
+            />
+            <p className="mt-1.5 text-[11.5px] leading-relaxed text-faint">Não precisa ter cadastro. A nota abre em modo orçamento — sem pagamento.</p>
           </div>
 
-          <div className="flex flex-col gap-2 border-t border-fg/[0.06] pt-3 text-[13px]">
-            <div className="flex items-center justify-between">
-              <span className="text-mist">Ticket médio</span>
-              <span className="tabular-nums text-ink">{formatCurrency(ticketMedio)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-mist">Vendas pagas</span>
-              <span className="tabular-nums text-ink">{vendasVisiveis.filter((v) => !estaAberta(v)).length}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-mist">Vendas abertas</span>
-              <span className="tabular-nums text-ink">{vendasVisiveis.filter((v) => estaAberta(v)).length}</span>
-            </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setOrcamentoOpen(false)} className="min-h-[42px] rounded-xl border border-fg/[0.1] px-4 text-[13px] text-mist transition-colors hover:text-ink">
+              Cancelar
+            </button>
+            <button type="submit" className="min-h-[42px] rounded-xl bg-accent px-5 text-[13px] text-white transition-all hover:brightness-110 active:scale-[0.99]">
+              Montar orçamento
+            </button>
           </div>
-        </div>
+        </form>
       </Modal>
-
-        {/* Orçamento: só o nome, e a nota abre para montar a proposta. */}
-        <Modal open={orcamentoOpen} onClose={() => setOrcamentoOpen(false)} title="Novo orçamento" subtitle="Para quem é a proposta?">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              abrirOrcamento();
-            }}
-            className="flex flex-col gap-4"
-          >
-            <div>
-              <label className="mb-1.5 block text-[11px] uppercase tracking-[0.08em] text-faint">Nome do cliente</label>
-              <input
-                autoFocus
-                value={nomeOrcamento}
-                onChange={(e) => setNomeOrcamento(e.target.value)}
-                placeholder="Digite qualquer nome"
-                className="w-full rounded-xl border border-fg/[0.08] bg-fg/[0.03] px-3.5 py-3 text-[14px] text-ink outline-none focus:border-accent/60"
-              />
-              <p className="mt-1.5 text-[11.5px] leading-relaxed text-faint">Não precisa ter cadastro. Na próxima tela você lança os produtos e clica em “Orçamento”.</p>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setOrcamentoOpen(false)} className="min-h-[42px] rounded-xl border border-fg/[0.1] px-4 text-[13px] text-mist transition-colors hover:text-ink">
-                Cancelar
-              </button>
-              <button type="submit" className="min-h-[42px] rounded-xl bg-accent px-5 text-[13px] text-white transition-all hover:brightness-110 active:scale-[0.99]">
-                Montar orçamento
-              </button>
-            </div>
-          </form>
-        </Modal>
 
         {/* Cadastros sem sair da tela — as rotas são as mesmas de Clientes e Estoque. */}
         {/* Sem `Modal` em volta: o `ClienteForm` já traz o próprio overlay de

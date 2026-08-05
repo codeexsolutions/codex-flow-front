@@ -1,4 +1,4 @@
-import { Search, Plus, ChevronRight, BarChart3, Eye, EyeOff } from "lucide-react";
+import { Search, Plus, ChevronRight, Eye, EyeOff, FileText } from "lucide-react";
 import { useState } from "react";
 
 import { formatCurrency } from "@/shared/utils/currency";
@@ -27,7 +27,7 @@ type Props = {
   onBusca: (v: string) => void;
   onAbrirNota: (v: VendaResumo) => void;
   onNovaVenda: () => void;
-  onRelatorio: () => void;
+  onNovoOrcamento: () => void;
 };
 
 const saudacao = () => {
@@ -71,7 +71,7 @@ const PDVMobile = ({
   onBusca,
   onAbrirNota,
   onNovaVenda,
-  onRelatorio,
+  onNovoOrcamento,
 }: Props) => {
   const [mostrarValores, setMostrarValores] = useState(true);
 
@@ -123,10 +123,10 @@ const PDVMobile = ({
       <div className="mt-5 flex gap-2 px-5">
         <button
           type="button"
-          onClick={onRelatorio}
-          className="focus-ring flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-2xl border border-fg/[0.08] text-[13px] text-mist transition-colors active:bg-fg/[0.05]"
+          onClick={onNovoOrcamento}
+          className="focus-ring flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-2xl border border-warning/40 bg-warning/[0.12] text-[13px] text-warning transition-colors active:bg-warning/20"
         >
-          <BarChart3 size={16} /> Relatório
+          <FileText size={16} /> Orçamento
         </button>
 
         <div className="flex rounded-2xl border border-fg/[0.08] p-1">

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import { ShoppingCart, Search, XCircle, UserRound } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type LegacyRef } from "react";
+import { ShoppingCart, Search, XCircle, UserRound, Download, Loader2 } from "lucide-react";
 import { Modal } from "@/shared/ui/Modal";
 import Invoice from "@/features/vendas/components/Invoice";
+import NotaResumo from "@/features/vendas/components/NotaResumo";
 import { formatCurrency } from "@/shared/utils/currency";
 import { type PedidoClienteType, estaAberto, estaCancelado, estaFechado, totalDoPedido, valorPagoDoPedido, valorPendenteDoPedido } from "@/shared/domain/pedido";
 import { formatDateShort } from "@/shared/utils/date";
@@ -12,6 +13,9 @@ import useVendaStore from "@/features/vendas/store/venda.store";
 import VendasMobile, { type VendaItem } from "@/features/vendas/components/VendasMobile";
 import Sheet from "@/shared/ui/Sheet";
 import { useIsMobile } from "@/shared/hooks/useIsMobile";
+import { gerarBlobNota } from "@/shared/ui/DownloadButton";
+import { baixarNotaPdf } from "@/shared/ui/downloadNota";
+import useEnterprise from "@/features/empresa/store/enterprise.store";
 
 type StatusFiltro = "todos" | "pago" | "pendente" | "cancelado";
 type NotaAberta = { id?: string; clienteId: string; nome?: string };
@@ -21,11 +25,49 @@ const SalesList = () => {
   const mobile = useIsMobile();
   const vendas = useVendaStore((s) => s.vendas);
   const fetchVendas = useVendaStore((s) => s.fetchVendas);
+  const enterprise = useEnterprise((s) => s.enterprise);
 
   const [notaAberta, setNotaAberta] = useState<NotaAberta | null>(null);
   const [search, setSearch] = useState("");
   const { user } = useAuth();
   const gestor = ehGestor(user);
+
+  /* Download rápido na linha: um único nó de nota fora da tela, cujo conteúdo
+     é preenchido com a venda escolhida antes de rasterizar. Assim não há N
+     notas escondidas e o modal não precisa abrir. */
+  const [notaDownload, setNotaDownload] = useState<PedidoClienteType | null>(null);
+  const [baixandoNota, setBaixandoNota] = useState(false);
+  const refNotaDownload = useRef<HTMLDivElement>(null);
+
+  const baixarNota = async (v: PedidoClienteType, formato: "png" | "pdf" = "png") => {
+    if (baixandoNota) return;
+
+    setBaixandoNota(true);
+    setNotaDownload(v);
+
+    try {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+      const blob = await gerarBlobNota(refNotaDownload);
+
+      if (formato === "pdf") {
+        await baixarNotaPdf(blob, enterprise?.nomeFantasia ?? "nota");
+      } else {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.download = `nota-${v.pedido.pedidoId}.png`;
+        link.href = url;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+    } catch {
+      /* Falha de download não trava a tabela — o usuário tenta de novo. */
+    } finally {
+      setBaixandoNota(false);
+      setNotaDownload(null);
+    }
+  };
 
   const [status, setStatus] = useState<StatusFiltro>("todos");
   /** "" = todos. Só o gestor vê este filtro — o vendedor já recebe só as dele. */
@@ -103,12 +145,19 @@ const totalEmAberto = useMemo(() => {
           status={status}
           onStatus={setStatus}
           onAbrirNota={(v) => abrirNota({ id: v.pedidoId, clienteId: v.clienteId, nome: v.nomeCliente })}
+          onBaixarNota={(v) => {
+            const original = vendasFiltradas.find((x) => x.pedido.pedidoId === v.pedidoId);
+            if (original) void baixarNota(original);
+          }}
         />
 
         {/* A nota ocupa a tela toda: é onde a venda é editada e recebida. */}
         <Sheet open={!!notaAberta} onClose={fecharNota} title={notaAberta?.id ? "Venda" : "Nova venda"} subtitle={notaAberta?.nome} altura="cheia">
           {notaAberta && <Invoice id={notaAberta.id} clienteId={notaAberta.clienteId} nome={notaAberta.nome} onSaved={fecharNota} />}
         </Sheet>
+
+        {/* Nó de nota fora da tela para o download rápido. */}
+        <NotaEscondida venda={notaDownload} refNota={refNotaDownload} />
       </div>
     );
   }
@@ -135,15 +184,30 @@ const totalEmAberto = useMemo(() => {
               nome: v.nomeCliente,
             })
           }
+          onBaixarNota={baixarNota}
+          baixandoId={baixandoNota ? notaDownload?.pedido.pedidoId ?? null : null}
         />
       </div>
 
       <Modal open={!!notaAberta} onClose={fecharNota} title={notaAberta?.id ? "Venda" : "Nova venda"} subtitle={notaAberta?.nome} size="full">
         {notaAberta && <Invoice id={notaAberta.id} clienteId={notaAberta.clienteId} nome={notaAberta.nome} />}
       </Modal>
+
+      {/* Nó de nota fora da tela para o download rápido. */}
+      <NotaEscondida venda={notaDownload} refNota={refNotaDownload} />
     </div>
   );
 };
+
+/** Nó de nota escondido à esquerda — `html-to-image` precisa que ele exista
+    no DOM, então fica fora do viewport em vez de `display:none`. */
+function NotaEscondida({ venda, refNota }: { venda: PedidoClienteType | null; refNota: LegacyRef<HTMLDivElement> }) {
+  return (
+    <div className="fixed -left-[9999px] top-0 w-[900px]" aria-hidden>
+      {venda && <NotaResumo venda={venda} refNota={refNota} />}
+    </div>
+  );
+}
 
 /* ======================= Tabela ======================= */
 function TabSales({
@@ -158,6 +222,8 @@ function TabSales({
   setVendedor,
   vendedores,
   onAbrir,
+  onBaixarNota,
+  baixandoId,
 }: {
   vendas: PedidoClienteType[];
   todasCount: number;
@@ -170,6 +236,8 @@ function TabSales({
   setVendedor: (v: string) => void;
   vendedores: { id: string; nome: string }[];
   onAbrir: (v: PedidoClienteType) => void;
+  onBaixarNota: (v: PedidoClienteType) => void;
+  baixandoId: string | null;
 }) {
   return (
     <div className="grid h-full min-h-0 grid-rows-[auto_1fr] gap-3">
@@ -227,8 +295,8 @@ function TabSales({
         </div>
 
         <div className="min-h-0 flex-1 overflow-x-auto">
-          <div className="min-w-[700px]">
-            <div className="grid grid-cols-7 border-b border-fg/[0.06] bg-fg/[0.03] py-2 text-center text-[10px] uppercase tracking-wide text-muted">
+          <div className="min-w-[760px]">
+            <div className="grid grid-cols-8 border-b border-fg/[0.06] bg-fg/[0.03] py-2 text-center text-[10px] uppercase tracking-wide text-muted">
               <p>ID</p>
               <p>Cliente</p>
               <p>Data</p>
@@ -236,6 +304,7 @@ function TabSales({
               <p>Total</p>
               <p className="text-success">Pago</p>
               <p className="text-danger">Pendente</p>
+              <p>Nota</p>
             </div>
 
             {vendas.length > 0 ? (
@@ -245,17 +314,29 @@ function TabSales({
                   const pago = valorPagoDoPedido(v);
                   const pendente = valorPendenteDoPedido(v);
                   const idCurto = v.pedido.pedidoId?.slice(-6).toUpperCase() ?? "—";
+                  const baixandoEsta = baixandoId === v.pedido.pedidoId;
 
                   return (
-                    <button key={v.pedido.pedidoId} onClick={() => onAbrir(v)} className="grid w-full grid-cols-7 items-center gap-2 px-2 py-2.5 text-center text-[11px] text-ink transition-colors hover:bg-fg/[0.04]">
-                      <p className="truncate font-mono text-[10px] text-mist">#{idCurto}</p>
-                      <p className="truncate text-left text-[11px]">{v.nomeCliente}</p>
-                      <p className="text-mist">{formatDateShort(v.pedido.dataPedido)}</p>
-                      <p className="flex justify-center">{<PedidoStatusBadge status={v.pedido.pedidoStatus} />}</p>
-                      <p>{formatCurrency(total)}</p>
-                      <p className={pago > 0 ? "text-success" : "text-muted"}>{formatCurrency(pago)}</p>
-                      <p className={pendente > 0 ? "text-danger" : "text-muted"}>{formatCurrency(pendente)}</p>
-                    </button>
+                    <div key={v.pedido.pedidoId} className="grid w-full grid-cols-8 items-center gap-2 px-2 py-2.5 text-center text-[11px] text-ink transition-colors hover:bg-fg/[0.04]">
+                      <button onClick={() => onAbrir(v)} className="contents">
+                        <p className="truncate font-mono text-[10px] text-mist">#{idCurto}</p>
+                        <p className="truncate text-left text-[11px]">{v.nomeCliente}</p>
+                        <p className="text-mist">{formatDateShort(v.pedido.dataPedido)}</p>
+                        <p className="flex justify-center">{<PedidoStatusBadge status={v.pedido.pedidoStatus} />}</p>
+                        <p>{formatCurrency(total)}</p>
+                        <p className={pago > 0 ? "text-success" : "text-muted"}>{formatCurrency(pago)}</p>
+                        <p className={pendente > 0 ? "text-danger" : "text-muted"}>{formatCurrency(pendente)}</p>
+                      </button>
+                      <button
+                        title="Baixar nota"
+                        aria-label={`Baixar nota de ${v.nomeCliente}`}
+                        disabled={baixandoEsta}
+                        onClick={() => onBaixarNota(v)}
+                        className="grid h-8 w-8 place-items-center justify-self-center rounded-lg text-faint transition-colors hover:bg-accent/[0.12] hover:text-accent-soft disabled:opacity-50"
+                      >
+                        {baixandoEsta ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                      </button>
+                    </div>
                   );
                 })}
               </div>

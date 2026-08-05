@@ -17,6 +17,14 @@ const EmpresaIdentificacao = ({ register, errors }: EmpresaIdentificacaoProps) =
     <Field label="Inscrição municipal" icon={<Hash size={15} />} placeholder="Opcional" error={fieldError(errors.inscMunicipal)} {...register("inscMunicipal")} />
     <Field label="URL do logo" icon={<ImageIcon size={15} />} placeholder="https://..." error={fieldError(errors.urlLogo)} {...register("urlLogo")} />
     <Field label="URL da imagem" icon={<ImageIcon size={15} />} placeholder="https://..." error={fieldError(errors.urlImagem)} {...register("urlImagem")} />
+    <Field
+      label="Fundo da nota (wallpaper)"
+      icon={<ImageIcon size={15} />}
+      placeholder="https://... (aparece transparente na nota e no download)"
+      hint="Imagem de fundo da nota de venda e do orçamento — fica suave, com o conteúdo por cima."
+      error={fieldError(errors.notaBackground)}
+      {...register("notaBackground")}
+    />
   </div>
 );
 

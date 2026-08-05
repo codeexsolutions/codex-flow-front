@@ -9,18 +9,19 @@ import { API_ORIGEM } from "@/shared/api/apiUrl";
  * Escuta a liberação da empresa e destrava o cliente sozinho.
  *
  * O problema que isto resolve: quando o dono confirma o pagamento, a empresa
- * é ativada no banco — mas o cliente continua com um token assinado com
- * `ativo: false` e ficaria preso no checkout até a sessão expirar. Não adianta
- * só recarregar a página: o token é o mesmo.
+ * é ativada no banco — mas o cliente continua com uma sessão montada com
+ * `ativo: false` e ficaria preso no checkout até refazer o login. Não adianta
+ * só recarregar a página: o cookie é o mesmo.
  *
- * Então, ao receber o aviso, pedimos um token novo (`/assinatura/revalidar`) e
- * regravamos a sessão — aí o roteador já deixa entrar no sistema.
+ * Então, ao receber o aviso, pedimos a revalidação (`/assinatura/revalidar`),
+ * que gira o cookie com `ativo: true` no servidor, e atualizamos o estado
+ * local — aí o roteador já deixa entrar no sistema.
  *
  * O socket é o caminho normal. O `focus` é a rede de proteção para o caso de o
  * socket cair (aba dormindo, wi-fi trocando, proxy sem websocket).
  */
 export function useLiberacaoEmpresa(aoLiberar: (dados: { planoNome?: string | null }) => void) {
-  const { user, setAuth } = useAuth();
+  const { user, atualizarAtivo } = useAuth();
 
   const codigoEmpresa = user?.codigoEmpresa;
   const inativo = Boolean(user) && !user?.ativo;
@@ -31,16 +32,16 @@ export function useLiberacaoEmpresa(aoLiberar: (dados: { planoNome?: string | nu
 
     let vivo = true;
 
-    /** Pede o token novo; só avisa a tela se a empresa realmente foi liberada. */
+    /** Pede a revalidação; só avisa a tela se a empresa realmente foi liberada. */
     const revalidar = async () => {
       if (!vivo) return;
 
       try {
-        const { accessToken, ativo } = await AssinaturaService.revalidar();
+        const { ativo } = await AssinaturaService.revalidar();
 
         if (!vivo || !ativo) return;
 
-        setAuth(accessToken);
+        atualizarAtivo(true);
         aoLiberar({});
       } catch {
         /* Silencioso: é uma verificação de fundo, não uma ação do usuário. */
@@ -54,9 +55,16 @@ export function useLiberacaoEmpresa(aoLiberar: (dados: { planoNome?: string | nu
 
     try {
       socket = io(origem, {
-        auth: { token: localStorage.getItem("token") },
+        withCredentials: true,
         transports: ["websocket", "polling"],
+        reconnection: true,
+        reconnectionAttempts: 5,
         reconnectionDelay: 2000,
+        reconnectionDelayMax: 5000,
+      });
+
+      socket.on("connect_error", (erro) => {
+        console.warn("Canal de liberação indisponível:", erro.message);
       });
 
       socket.on("empresa:liberada", revalidar);
@@ -72,5 +80,5 @@ export function useLiberacaoEmpresa(aoLiberar: (dados: { planoNome?: string | nu
       socket?.off("empresa:liberada", revalidar);
       socket?.disconnect();
     };
-  }, [inativo, codigoEmpresa, setAuth, aoLiberar]);
+  }, [inativo, codigoEmpresa, atualizarAtivo, aoLiberar]);
 }

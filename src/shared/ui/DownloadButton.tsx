@@ -46,17 +46,16 @@ async function embutir(img: HTMLImageElement): Promise<boolean> {
 }
 
 /**
- * Baixa a nota como PNG.
+ * Rasteriza o nó da nota para um blob PNG.
  *
- * Antes daqui saía uma nota sem QR e sem logo: o código escondia **todas** as
- * `<img>` antes de rasterizar, para o download parar de falhar. O problema real
- * nunca foi a imagem existir — era ser de outro domínio. Agora cada imagem é
- * embutida como data URI e só é escondida a que não puder ser trazida, em vez
- * de sacrificar todas.
+ * Fica separado do download: quem precisa do PNG (download) e quem precisa
+ * dele para gerar um PDF usam o mesmo blob. Toda a preparação — rolar ao
+ * topo, embutir imagens cross-origin, esconder `data-sem-foto` — e a limpeza
+ * acontecem aqui.
  */
-export const handleDownload = async (ref: RefObject<HTMLDivElement>, filename = `nota-${Date.now()}.png`) => {
+export const gerarBlobNota = async (ref: RefObject<HTMLDivElement>): Promise<Blob> => {
   const node = ref.current;
-  if (!node) return;
+  if (!node) throw new Error("Nota não encontrada.");
 
   /* Qualquer elemento rolado — o container da nota ou um scroller aninhado —
      mostra só um pedaço do conteúdo, e é esse pedaço que vai para o PNG. Zeramos
@@ -115,50 +114,7 @@ export const handleDownload = async (ref: RefObject<HTMLDivElement>, filename = 
 
     if (!blob) throw new Error("Falha ao gerar a imagem da nota.");
 
-    /**
-     * App instalado (tela de início / standalone) é o único caso em que
-     * `<a download>` está provadamente quebrado: essa janela roda numa
-     * WKWebView (iOS) ou equivalente sem o gerenciador de downloads do
-     * navegador — o clique simplesmente não tem pra onde salvar o arquivo.
-     * No Safari/Chrome normais (aba de navegador), o link com blob URL abaixo
-     * já baixa direto, então só entramos aqui no caso que exige outro caminho.
-     *
-     * A Web Share API entrega o arquivo pro sistema operacional, que mostra o
-     * menu nativo de salvar/compartilhar — funciona dentro do app instalado
-     * tanto no iOS quanto no Android.
-     */
-    if (appInstalado()) {
-      const file = new File([blob], filename, { type: "image/png" });
-
-      if (navigator.canShare?.({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file] });
-          return;
-        } catch (err) {
-          // Usuário cancelou o menu de compartilhamento: não é um erro de
-          // download, então não cai no fallback nem loga nada.
-          if (err instanceof Error && err.name === "AbortError") return;
-          throw err;
-        }
-      }
-    }
-
-    /* Navegador comum (não instalado): blob URL em vez de data URI. Além de
-       mais leve pra notas grandes, evita o limite de tamanho que o Safari
-       impõe a data URIs — o link com blob URL baixa normalmente em qualquer
-       navegador de aba, incluindo Safari iOS/macOS desde a versão 13. */
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.download = filename;
-    link.href = url;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-
-  } catch (err) {
-    console.error("Erro ao gerar imagem da nota:", err);
-    throw err;
+    return blob;
 
   } finally {
     escondidas.forEach(({ el, display }) => {
@@ -179,5 +135,68 @@ export const handleDownload = async (ref: RefObject<HTMLDivElement>, filename = 
       el.scrollTop = top;
       el.scrollLeft = left;
     });
+  }
+};
+
+/** Baixa o blob como PNG (nome padrão `nota-...png`). */
+const baixarBlob = async (blob: Blob, filename: string) => {
+  /**
+   * App instalado (tela de início / standalone) é o único caso em que
+   * `<a download>` está provadamente quebrado: essa janela roda numa
+   * WKWebView (iOS) ou equivalente sem o gerenciador de downloads do
+   * navegador — o clique simplesmente não tem pra onde salvar o arquivo.
+   * No Safari/Chrome normais (aba de navegador), o link com blob URL abaixo
+   * já baixa direto, então só entramos aqui no caso que exige outro caminho.
+   *
+   * A Web Share API entrega o arquivo pro sistema operacional, que mostra o
+   * menu nativo de salvar/compartilhar — funciona dentro do app instalado
+   * tanto no iOS quanto no Android.
+   */
+  if (appInstalado()) {
+    const file = new File([blob], filename, { type: "image/png" });
+
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file] });
+        return;
+      } catch (err) {
+        // Usuário cancelou o menu de compartilhamento: não é um erro de
+        // download, então não cai no fallback nem loga nada.
+        if (err instanceof Error && err.name === "AbortError") return;
+        throw err;
+      }
+    }
+  }
+
+  /* Navegador comum (não instalado): blob URL em vez de data URI. Além de
+     mais leve pra notas grandes, evita o limite de tamanho que o Safari
+     impõe a data URIs — o link com blob URL baixa normalmente em qualquer
+     navegador de aba, incluindo Safari iOS/macOS desde a versão 13. */
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.download = filename;
+  link.href = url;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
+/**
+ * Baixa a nota como PNG (o fluxo de sempre).
+ *
+ * Antes daqui saía uma nota sem QR e sem logo: o código escondia **todas** as
+ * `<img>` antes de rasterizar, para o download parar de falhar. O problema real
+ * nunca foi a imagem existir — era ser de outro domínio. Agora cada imagem é
+ * embutida como data URI e só é escondida a que não puder ser trazida, em vez
+ * de sacrificar todas.
+ */
+export const handleDownload = async (ref: RefObject<HTMLDivElement>, filename = `nota-${Date.now()}.png`) => {
+  try {
+    const blob = await gerarBlobNota(ref);
+    await baixarBlob(blob, filename);
+  } catch (err) {
+    console.error("Erro ao gerar imagem da nota:", err);
+    throw err;
   }
 };

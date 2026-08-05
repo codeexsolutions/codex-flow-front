@@ -301,19 +301,22 @@ const CadastroEmpresaPage = () => {
 
       // Login automático com as credenciais que o cliente acabou de definir.
       // Sem isso ele cairia na tela de login logo depois de se cadastrar.
-      const login = await AuthService.login({
-        cpfCnpjEmpresa: cpfCnpj,
-        email: data.contato.email,
-        senha: data.senha,
-      });
+      // O servidor seta o cookie httpOnly e devolve o usuário da sessão.
+      let usuario: Awaited<ReturnType<typeof AuthService.login>>;
 
-      const auth = login?.data?.data?.[0];
-
-      if (!auth?.accessToken) throw new Error("login-falhou");
+      try {
+        usuario = await AuthService.login({
+          cpfCnpjEmpresa: cpfCnpj,
+          email: data.contato.email,
+          senha: data.senha,
+        });
+      } catch {
+        throw new Error("login-falhou");
+      }
 
       // `setAuth` direto (e não `login` da store): a empresa ainda está
       // inativa, então buscar os dados dela agora não traz nada de útil.
-      useAuth.getState().setAuth(auth.accessToken, auth.refreshToken);
+      useAuth.getState().setAuth(usuario);
 
       // Com WhatsApp configurado a pessoa vai para a conversa; sem número,
       // o fluxo antigo continua valendo e ela vai pagar.

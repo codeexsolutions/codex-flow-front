@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { FileText, Search, Check, X, Trash2, Loader2, ChevronDown, Info, ShoppingCart } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FileText, Search, Check, X, Trash2, Loader2, Info, ShoppingCart, Download } from "lucide-react";
 
 import OrcamentoService, { type Orcamento, type StatusOrcamento } from "@/features/orcamentos/services/orcamento.service";
 import { useAlert } from "@/shared/ui/Alert";
@@ -9,6 +9,11 @@ import { formatDate } from "@/shared/utils/date";
 import { SkeletonListaPainel } from "@/shared/ui/skeleton";
 import { PageScreen } from "@/shared/ui/PageShell";
 import { TabsPdv } from "@/features/vendas/components/TabsPdv";
+import { handleDownload } from "@/shared/ui/DownloadButton";
+import MenuDownloadNota from "@/shared/ui/MenuDownloadNota";
+import { Modal } from "@/shared/ui/Modal";
+import useEnterprise from "@/features/empresa/store/enterprise.store";
+import OrcamentoNota from "@/features/orcamentos/components/OrcamentoNota";
 
 const SITUACAO: Record<StatusOrcamento, { label: string; cls: string }> = {
   ABERTO: { label: "Aguardando", cls: "border-warning/40 bg-warning/15 text-warning" },
@@ -35,13 +40,15 @@ const FILTROS: { id: "todos" | StatusOrcamento; label: string }[] = [
  */
 const OrcamentosPage = () => {
   const alert = useAlert();
+  const enterprise = useEnterprise((s) => s.enterprise);
 
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<"todos" | StatusOrcamento>("todos");
-  const [aberto, setAberto] = useState<string | null>(null);
   const [salvando, setSalvando] = useState<string | null>(null);
+  const [visualizando, setVisualizando] = useState<Orcamento | null>(null);
+  const refNotaVisualizacao = useRef<HTMLDivElement>(null);
 
   const carregar = async () => {
     setCarregando(true);
@@ -58,7 +65,6 @@ const OrcamentosPage = () => {
   useEffect(() => {
     carregar();
     // Só na montagem.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtrados = useMemo(() => {
@@ -73,6 +79,28 @@ const OrcamentosPage = () => {
   }, [orcamentos, busca, filtro]);
 
   const aguardando = orcamentos.filter((o) => o.status === "ABERTO").length;
+
+  const [baixandoId, setBaixandoId] = useState<string | null>(null);
+
+  /* Um único nó de orçamento fora da tela: seu conteúdo é trocado para o
+     orçamento escolhido antes de rasterizar. Evita N nós escondidos na lista. */
+  const refNotaBaixada = useRef<HTMLDivElement>(null);
+
+  const orcamentoAlvo = filtrados.find((o) => o.id === baixandoId) ?? null;
+
+  const baixar = async (o: Orcamento) => {
+    setBaixandoId(o.id);
+
+    try {
+      /* Espera o render do nó com o orçamento certo antes de fotografar. */
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+      await handleDownload(refNotaBaixada, `orcamento-${o.codigo}.png`);
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível baixar o orçamento."));
+    } finally {
+      setBaixandoId(null);
+    }
+  };
 
   const mudarStatus = async (o: Orcamento, status: StatusOrcamento) => {
     setSalvando(o.id);
@@ -154,71 +182,119 @@ const OrcamentosPage = () => {
         ) : (
           filtrados.map((o) => {
             const s = SITUACAO[o.status] ?? SITUACAO.ABERTO;
-            const expandido = aberto === o.id;
-            const ocupado = salvando === o.id;
 
             return (
               <div key={o.id} className="border-b border-fg/[0.04] last:border-0">
-                <button onClick={() => setAberto(expandido ? null : o.id)} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-fg/[0.03]">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-fg/[0.05] text-[11px] tabular-nums text-mist">#{o.codigo}</span>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setVisualizando(o)} className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-fg/[0.03]">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-fg/[0.05] text-[11px] tabular-nums text-mist">#{o.codigo}</span>
 
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] text-ink">{o.clienteNome}</span>
-                    <span className="block truncate text-[11px] text-faint">
-                      {formatDate(o.criadoEm)}
-                      {o.vendedorNome ? ` · ${o.vendedorNome}` : ""}
-                      {o.itens.length ? ` · ${o.itens.length} ${o.itens.length === 1 ? "item" : "itens"}` : ""}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] text-ink">{o.clienteNome}</span>
+                      <span className="block truncate text-[11px] text-faint">
+                        {formatDate(o.criadoEm)}
+                        {o.vendedorNome ? ` · ${o.vendedorNome}` : ""}
+                        {o.itens.length ? ` · ${o.itens.length} ${o.itens.length === 1 ? "item" : "itens"}` : ""}
+                      </span>
                     </span>
-                  </span>
 
-                  <span className={`hidden shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] sm:inline-flex ${s.cls}`}>{s.label}</span>
+                    <span className={`hidden shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] sm:inline-flex ${s.cls}`}>{s.label}</span>
 
-                  <span className="shrink-0 text-right text-[13px] tabular-nums text-ink">{formatCurrency(o.total)}</span>
+                    <span className="shrink-0 text-right text-[13px] tabular-nums text-ink">{formatCurrency(o.total)}</span>
+                  </button>
 
-                  <ChevronDown size={15} className={`shrink-0 text-muted transition-transform ${expandido ? "rotate-180" : ""}`} />
-                </button>
-
-                {expandido && (
-                  <div className="border-t border-fg/[0.04] bg-fg/[0.02] px-4 py-3">
-                    <ul className="mb-3 flex flex-col gap-1.5">
-                      {o.itens.map((i, n) => (
-                        <li key={i.id ?? n} className="flex items-center justify-between gap-3 text-[12px]">
-                          <span className="min-w-0 truncate text-mist">
-                            {Number(i.quantidade)}× {i.nomeProduto}
-                          </span>
-                          <span className="shrink-0 tabular-nums text-ink">{formatCurrency(Number(i.subtotal ?? Number(i.valorUnitario) * Number(i.quantidade)))}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    {o.observacao && <p className="mb-3 text-[12px] leading-relaxed text-faint">{o.observacao}</p>}
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      {o.status !== "APROVADO" && (
-                        <button disabled={ocupado} onClick={() => mudarStatus(o, "APROVADO")} className="flex min-h-[36px] items-center gap-1.5 rounded-lg border border-success/30 bg-success/[0.1] px-3 text-[12px] text-success transition-colors hover:bg-success/20 disabled:opacity-50">
-                          {ocupado ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
-                          Cliente aprovou
-                        </button>
-                      )}
-
-                      {o.status !== "RECUSADO" && (
-                        <button disabled={ocupado} onClick={() => mudarStatus(o, "RECUSADO")} className="flex min-h-[36px] items-center gap-1.5 rounded-lg border border-fg/[0.1] px-3 text-[12px] text-mist transition-colors hover:text-ink disabled:opacity-50">
-                          <X size={13} />
-                          Recusou
-                        </button>
-                      )}
-
-                      <button disabled={ocupado} onClick={() => excluir(o)} className="ml-auto flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 text-[12px] text-muted transition-colors hover:text-danger disabled:opacity-50">
-                        <Trash2 size={13} />
-                        Excluir
-                      </button>
-                    </div>
-                  </div>
-                )}
+                  <button
+                    title="Baixar orçamento"
+                    aria-label={`Baixar orçamento ${o.codigo}`}
+                    disabled={baixandoId === o.id}
+                    onClick={() => baixar(o)}
+                    className="mr-2 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-faint transition-colors hover:bg-accent/[0.12] hover:text-accent-soft disabled:opacity-50"
+                  >
+                    {baixandoId === o.id ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                  </button>
+                </div>
               </div>
             );
           })
         )}
+      </div>
+
+      {/* Modal de visualização do orçamento — clicar na linha abre aqui. */}
+      <Modal
+        open={!!visualizando}
+        onClose={() => setVisualizando(null)}
+        title="Orçamento"
+        subtitle={visualizando ? `#${visualizando.codigo} · ${visualizando.clienteNome}` : ""}
+        size="full"
+      >
+        {visualizando && (
+          <div className="flex h-full flex-col">
+            {/* O orçamento em si — visual de leitura, sem pagamento e sem QR. */}
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="mx-auto w-full max-w-[900px]">
+                <OrcamentoNota orcamento={visualizando} refNota={refNotaVisualizacao} />
+              </div>
+            </div>
+
+            {/* Rodapé de ações */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-fg/[0.06] bg-surface px-4 py-3">
+              <MenuDownloadNota refNota={refNotaVisualizacao} nomeEmpresa={enterprise?.nomeFantasia ?? "orcamento"} prefixo="orcamento" titulo="Baixar orçamento" />
+
+              <div className="flex flex-wrap items-center gap-2">
+                {visualizando.status !== "APROVADO" && (
+                  <button
+                    disabled={salvando === visualizando.id}
+                    onClick={() => {
+                      mudarStatus(visualizando, "APROVADO");
+                      setVisualizando((v) => (v ? { ...v, status: "APROVADO" } : v));
+                    }}
+                    className="flex min-h-[36px] items-center gap-1.5 rounded-lg border border-success/30 bg-success/[0.1] px-3 text-[12px] text-success transition-colors hover:bg-success/20 disabled:opacity-50"
+                  >
+                    {salvando === visualizando.id ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                    Cliente aprovou
+                  </button>
+                )}
+
+                {visualizando.status !== "RECUSADO" && (
+                  <button
+                    disabled={salvando === visualizando.id}
+                    onClick={() => {
+                      mudarStatus(visualizando, "RECUSADO");
+                      setVisualizando((v) => (v ? { ...v, status: "RECUSADO" } : v));
+                    }}
+                    className="flex min-h-[36px] items-center gap-1.5 rounded-lg border border-fg/[0.1] px-3 text-[12px] text-mist transition-colors hover:text-ink disabled:opacity-50"
+                  >
+                    <X size={13} />
+                    Recusou
+                  </button>
+                )}
+
+                <button
+                  disabled={salvando === visualizando.id}
+                  onClick={() => excluir(visualizando).then(() => setVisualizando(null))}
+                  className="flex min-h-[36px] items-center gap-1.5 rounded-lg px-3 text-[12px] text-muted transition-colors hover:text-danger disabled:opacity-50"
+                >
+                  <Trash2 size={13} />
+                  Excluir
+                </button>
+
+                <button
+                  onClick={() => setVisualizando(null)}
+                  className="flex min-h-[36px] items-center gap-1.5 rounded-lg bg-fg/[0.06] px-4 text-[12px] text-ink transition-colors hover:bg-fg/[0.1]"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Nó de orçamento fora da tela, para o download rápido da linha.
+          `html-to-image` precisa que o nó exista no DOM — escondido à esquerda,
+          não `display:none`. */}
+      <div className="fixed -left-[9999px] top-0 w-[900px]" aria-hidden>
+        {orcamentoAlvo && <OrcamentoNota orcamento={orcamentoAlvo} refNota={refNotaBaixada} />}
       </div>
     </div>
     </PageScreen>

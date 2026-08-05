@@ -96,27 +96,34 @@ feature — só de `shared/`.
 
 Tudo começa em `features/auth/store/auth.store.ts` (a store `useAuth`).
 
+O JWT vive num **cookie httpOnly** (`codex_token`/`codex_refresh`): o navegador
+o envia sozinho e o JS **nunca** o lê. Nada de `localStorage` para token — quem
+valida a sessão é a API.
+
 **Ao carregar o app** (`AppRoutes`):
-1. `useAuth.initialize()` lê o token do `localStorage`.
-2. Se expirado → `clearAuth()` + aviso "Sessão expirada".
-3. Se válido → decodifica (`decodeToken`), marca logado, busca a empresa.
+1. `useAuth.initialize()` chama `GET /usuarios/me` (o cookie diz quem é).
+2. Sucesso → marca logado, busca a empresa.
+3. Sem sessão ou cookie vencido → `clearAuth()` (aviso só se a sessão existia).
 4. Só depois `loading` cai para `false` e o roteador decide a tela.
 
 **Ao logar** (`login()`):
-1. Chama `AuthService.login`.
-2. Grava o token **antes** de a sessão valer — para a busca da empresa já sair
-   autorizada, **em paralelo** com a animação de boas-vindas.
+1. Chama `AuthService.login` → o servidor seta os cookies e devolve **só o
+   usuário** no corpo.
+2. Como o cookie já está setado quando o login responde, a busca da empresa sai
+   **em paralelo** com a animação de boas-vindas.
 3. `Promise.all([animação, fetchEnterprise])` e só então `set({ isLogged })`.
 
 **Ao sair** (`logout()`):
 1. Toca a animação de transição (sobrevive ao desmonte da tela).
-2. `clearAuth()` → `resetarLojas()` (ver adiante) + limpa o token.
+2. `clearAuth()` → chama `POST /auth/logout` (apaga o cookie, melhor esforço) +
+   `resetarLojas()` (ver adiante).
 
-> ⚠️ **Refresh token é um fio solto.** O `refreshToken` é salvo no
-> `localStorage` mas **nunca usado** — o interceptor do Axios não renova. Se o
-> access token expira, o usuário toma 401 e precisa logar de novo. A coluna
-> `root` do token é **opcional** no front (`root?: boolean`): tokens antigos não
-> trazem. Sempre tratar com `Boolean(...)`.
+> 🔒 **Deploy juntos:** o login não devolve mais token no corpo. API e frontend
+> precisam ir ao ar no mesmo release — senão o frontend antigo não inicia a
+> sessão.
+>
+> ⚠️ A coluna `root` do usuário é **opcional** no front (`root?: boolean`):
+> usuários antigos não trazem. Sempre tratar com `Boolean(...)`.
 
 ---
 
@@ -193,8 +200,10 @@ que impede chave suja sobreviver ao reset. `auth` não entra aqui de propósito
 `src/shared/api/sysgrafix.ts` é a **única** instância de axios do app. Toda
 chamada passa por ela.
 
-- **Request**: injeta `Authorization: Bearer <token>` do `localStorage`.
-- **Response**: loga 401 (ainda não renova o token — ver armadilha 11.2).
+- **Credenciais**: `withCredentials: true` — o cookie httpOnly acompanha as
+  chamadas cross-origin (site na Vercel, API na Railway).
+- **Request**: não injeta nada; o cookie vai sozinho.
+- **Response**: loga 401 (o refresh ainda não é automático — ver armadilha 11.1).
 - **Envelope**: a API responde sempre `{ statusCode, message, data: [...] }`.
   O tipo `ApiEnvelope<T>` está em `shared/api/types.ts`.
 
@@ -289,9 +298,11 @@ vez de hex na mão — é o que mantém os 9 acentos funcionando de graça.
 
 ## 11. Armadilhas conhecidas
 
-1. **Refresh token morto.** O access token expira e o interceptor não renova —
-   usuário toma 401 e volta ao login. Falta implementar o refresh no interceptor
-   de `sysgrafix`.
+1. **Refresh token morto.** O `codex_refresh` é setado no login mas nunca é
+   usado: quando o access (12h) expira, o usuário toma 401 e volta ao login.
+   Falta implementar o refresh (chamar o endpoint de refresh para girar o cookie
+   `codex_token`). Com o cookie httpOnly o usuário nem percebe o 401 no meio — a
+   sessão simplesmente morre no refresh da página.
 2. **`react-is@19.2.7` com React 18.** Versões descasadas. Se mexer em deps,
    alinhe.
 3. **`zustand@5.0.0-rc.2`.** É release candidate. Suba para a estável quando

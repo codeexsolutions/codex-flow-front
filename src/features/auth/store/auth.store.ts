@@ -1,57 +1,37 @@
 import { create } from "zustand";
 
-import AuthService from "@/features/auth/services/auth.service";
+import AuthService, { type UsuarioSessao } from "@/features/auth/services/auth.service";
 import AuthFormInputs from "@/features/auth/schema/auth.schema";
 import useAuthProps from "@/features/auth/types/auth.types";
-import { decodeToken, isTokenExpired } from "@/shared/utils/decodeToken";
 import { alert } from "@/shared/ui/Alert"; // ajuste o caminho se necessário
 import useEnterprise from "@/features/empresa/store/enterprise.store";
 import { toCodigoEmpresaBase } from "@/shared/domain/empresa";
 import useTransicao from "@/shared/session/transicao.store";
 import { resetarLojas } from "@/shared/session/resetarLojas";
 
-const TOKEN_KEY = "token";
-const REFRESH_TOKEN_KEY = "refreshToken";
+/*
+ * A sessão NÃO mora mais aqui em token: o JWT vive num cookie httpOnly, que o
+ * navegador envia sozinho e o JS não lê. A store guarda só o usuário
+ * (devolvido pela API) e o estado de navegação.
+ */
 
-const tokenStorage = {
-  getAccessToken: () => localStorage.getItem(TOKEN_KEY),
-
-  getRefreshToken: () => localStorage.getItem(REFRESH_TOKEN_KEY),
-
-  save(accessToken: string, refreshToken?: string) {
-    localStorage.setItem(TOKEN_KEY, accessToken);
-
-    if (refreshToken) {
-      localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-    }
-  },
-
-  clear() {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
-  },
-};
-
-const getUserFromToken = (token: string) => {
-  const payload = decodeToken(token);
-
-  return {
-    id: payload.id,
-    nome: payload.nome,
-    email: payload.email,
-    cargo: payload.cargo,
-    permissao: payload.permissao,
-    root: Boolean(payload.root),
-    ativo: payload.ativo,
-    codigoEmpresa: payload.codigoEmpresa,
-  };
-};
+const deSessaoParaUsuario = (sessao: UsuarioSessao) => ({
+  id: sessao.id,
+  nome: sessao.nome ?? undefined,
+  email: sessao.email,
+  cargo: sessao.cargo,
+  permissao: sessao.permissao ?? "",
+  root: Boolean(sessao.root),
+  codigoEmpresa: sessao.codigoEmpresa,
+  ativo: sessao.ativo,
+});
 
 type AuthStore = useAuthProps & {
   loading: boolean;
   initialize: () => void;
-  setAuth: (accessToken: string, refreshToken?: string) => void;
+  setAuth: (usuario: UsuarioSessao) => void;
   clearAuth: () => void;
+  atualizarAtivo: (ativo: boolean) => void;
 };
 
 const useAuth = create<AuthStore>((set, get) => ({
@@ -61,18 +41,18 @@ const useAuth = create<AuthStore>((set, get) => ({
 
   loading: true,
 
-  setAuth(accessToken, refreshToken) {
-    tokenStorage.save(accessToken, refreshToken);
-
+  setAuth(usuario: UsuarioSessao) {
     set({
-      user: getUserFromToken(accessToken),
+      user: deSessaoParaUsuario(usuario),
       isLogged: true,
       loading: false,
     });
   },
 
   clearAuth() {
-    tokenStorage.clear();
+    // Avisa a API para apagar os cookies httpOnly. Melhor esforço: se a rede
+    // falhar, o cookie expira sozinho em 12h — o logout local não pode travar.
+    AuthService.logout().catch(() => {});
 
     // Zera clientes, produtos, vendas, financeiro e empresa: sem isso os dados
     // de quem saiu ficariam visíveis para quem entrar em seguida.
@@ -87,24 +67,14 @@ const useAuth = create<AuthStore>((set, get) => ({
 
   async login(data: AuthFormInputs, aoAutenticar) {
     try {
-      const response = await AuthService.login(data);
-
-      const auth = response?.data?.data?.[0];
-
-      if (!auth?.accessToken) {
-        throw new Error("Resposta inválida da API.");
-      }
-
-      const usuario = getUserFromToken(auth.accessToken);
+      const usuario = await AuthService.login(data);
 
       /*
-       * O token é gravado ANTES de a sessão valer para que a busca da empresa
-       * já saia autorizada. É o que permite carregar os dados EM PARALELO com
-       * a animação: quando ela termina, o sistema entra pronto — sem a tela de
-       * "Carregando" que aparecia no meio e cortava o efeito.
+       * O cookie já está setado quando o login responde, então a busca da
+       * empresa já sai autorizada — em paralelo com a animação. A sessão só
+       * vale depois do `Promise.all`: sem isso o roteador trocaria a tela com
+       * a empresa ainda carregando e o sistema abriria numa tela de espera.
        */
-      tokenStorage.save(auth.accessToken, auth.refreshToken);
-
       const carregarEmpresa = usuario.codigoEmpresa
         ? useEnterprise.getState().fetchEnterprise(toCodigoEmpresaBase(usuario.codigoEmpresa))
         : Promise.resolve();
@@ -112,7 +82,7 @@ const useAuth = create<AuthStore>((set, get) => ({
       await Promise.all([aoAutenticar ? aoAutenticar(usuario.nome ?? "") : Promise.resolve(), carregarEmpresa]);
 
       // Só agora a sessão vale — e o roteador troca de tela com tudo carregado.
-      set({ user: usuario, isLogged: true, loading: false });
+      set({ user: deSessaoParaUsuario(usuario), isLogged: true, loading: false });
 
       // Com o sistema montado atrás, o overlay dissolve revelando-o.
       useTransicao.getState().fechar();
@@ -129,40 +99,46 @@ const useAuth = create<AuthStore>((set, get) => ({
   },
 
   initialize: async () => {
-    const token = tokenStorage.getAccessToken();
-
-    if (!token) {
-      set({
-        loading: false,
-      });
-      return;
-    }
-
     try {
-      if (isTokenExpired(token)) {
-        throw new Error("Token expirado");
-      }
-
-      const user = getUserFromToken(token);
+      // O navegador não consegue ler o token; quem diz se existe sessão é a
+      // API, validando o cookie que ela mesma setou no login.
+      const usuario = await AuthService.me();
 
       set({
-        user,
+        user: deSessaoParaUsuario(usuario),
         isLogged: true,
         loading: true,
       });
 
-      if (user.codigoEmpresa) {
-        await useEnterprise.getState().fetchEnterprise(toCodigoEmpresaBase(user.codigoEmpresa));
+      if (usuario.codigoEmpresa) {
+        await useEnterprise.getState().fetchEnterprise(toCodigoEmpresaBase(usuario.codigoEmpresa));
       }
 
       set({
         loading: false,
       });
-    } catch {
+    } catch (error) {
       get().clearAuth();
 
-      alert.warning("Sessão expirada", "Sua sessão expirou. Faça login novamente.");
+      // Quem nunca logou (sem cookie) cai aqui também: a API responde "Token
+      // não informado", e mostrar aviso seria assustar a visita da tela de
+      // login. Aviso é só quando a sessão EXISTIA e morreu (cookie vencido).
+      const err = error as { response?: { data?: { message?: string } } };
+      const mensagem = String(err?.response?.data?.message ?? "").toLowerCase();
+
+      if (mensagem.includes("inválido") || mensagem.includes("expirad")) {
+        alert.warning("Sessão expirada", "Sua sessão expirou. Faça login novamente.");
+      }
     }
+  },
+
+  /** Empresa liberada (pagamento confirmado): o checkout passa a entrar. */
+  atualizarAtivo(ativo: boolean) {
+    const usuario = get().user;
+
+    if (!usuario) return;
+
+    set({ user: { ...usuario, ativo } });
   },
 
   async logout() {

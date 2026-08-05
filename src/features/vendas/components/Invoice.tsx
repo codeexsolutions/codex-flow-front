@@ -14,14 +14,16 @@ import FinanceiroService from "@/features/financeiro/services/financeiro.service
 
 import MoneyInput from "@/shared/ui/inputs/MoneyInput";
 import { Modal } from "@/shared/ui/Modal";
-import { handleDownload } from "@/shared/ui/DownloadButton";
 import { useAlert } from "@/shared/ui/Alert";
+import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
+import BuscaProduto from "@/features/vendas/components/BuscaProduto";
+import MenuDownloadNota from "@/shared/ui/MenuDownloadNota";
+import FundoNota from "@/shared/ui/FundoNota";
+import useEnterprise from "@/features/empresa/store/enterprise.store";
 import OrcamentoService from "@/features/orcamentos/services/orcamento.service";
 
-import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
-
-import { Download, PackageSearch, Plus, Save, Trash2, X, QrCode, Check, Loader2, FileText } from "lucide-react";
-import { Skeleton, SkeletonInvoiceCard, SkeletonInvoiceHeader, SkeletonInvoiceRow, SkeletonProductList, SkeletonSummary } from "@/shared/ui/skeleton";
+import { Save, Trash2, X, QrCode, Check, Loader2, FileText } from "lucide-react";
+import { Skeleton, SkeletonInvoiceCard, SkeletonInvoiceHeader, SkeletonInvoiceRow, SkeletonSummary } from "@/shared/ui/skeleton";
 
 import { generatePixPayload, getQrCodeDataUrl } from "@/shared/utils/pix";
 import PixService, { pixConfigurado, type ConfigPix } from "@/features/config/services/pix.service";
@@ -38,6 +40,9 @@ type InvoiceProps = {
   clienteId?: string;
   nome?: string;
   onSaved?: () => void;
+  /** Modo orçamento: a mesma nota, mas com título "Orçamento", sem pagamento
+      e com "Gerar orçamento" no lugar de "Gerar Nota". */
+  modoOrcamento?: boolean;
 };
 
 
@@ -57,13 +62,20 @@ type PagamentoType = {
   dataPagamento: string;
 };
 
-const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
+const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = false }: InvoiceProps) => {
   const alert = useAlert();
   const notaRef = useRef<HTMLDivElement>(null);
+
+  /* O id começa na prop (nota existente) e pode nascer aqui dentro: ao criar
+     uma nota nova, o `setPedidoId` é preenchido com o id devolvido pela API —
+     a nota continua aberta para o pagamento sem recarregar a tela. */
+  const [pedidoId, setPedidoId] = useState<string | undefined>(idInicial);
+  const id = pedidoId;
 
   /* ─── Quem vende e para quem ─── */
   const { user } = useAuth();
   const clientes = useClientes((s) => s.clientes);
+  const enterprise = useEnterprise((s) => s.enterprise);
 
   /** O vendedor da nota é quem está logado emitindo-a. */
   const vendedor = user?.nome || user?.email || "—";
@@ -88,7 +100,7 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
 
   /* ─── Loading states ─── */
   const [loadingProdutos, setLoadingProdutos] = useState(true);
-  const [loadingPedido, setLoadingPedido] = useState(!!id);
+  const [loadingPedido, setLoadingPedido] = useState(!!idInicial);
   const [savingNote, setSavingNote] = useState(false);
 
   /* ─── Dados ─── */
@@ -105,11 +117,13 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
 
 
   /* ─── UI state ─── */
-  const [busca, setBusca] = useState("");
   const [tipoPagamento, setTipoPagamento] = useState("");
   const [valorPagamento, setValorPagamento] = useState(0);
-  const [modalProdutos, setModalProdutos] = useState(false);
-  const [gerandoOrcamento, setGerandoOrcamento] = useState(false);
+
+  /* Logo depois de salvar, o pagamento é o próximo passo: o aside ganha um
+     anel de destaque para quem paga "depois de salvar" saber que a nota está
+     pronta e o que falta é receber. */
+  const [focarPagamento, setFocarPagamento] = useState(false);
 
   /* Quanto do total o QR vai cobrar. 100 = tudo. Serve para entrada/sinal:
      o cliente paga metade agora e o resto na entrega. */
@@ -190,8 +204,6 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
 
   const removerProduto = (uid: string) => setItens((prev) => prev.filter((l) => l.itemPedidoId !== uid));
 
-  const produtosFiltrados = useMemo(() => products.filter((p) => p.nome?.toLowerCase().includes(busca.toLowerCase())), [products, busca]);
-
   /* ─── Totais ─── */
   const totalLiquido = useMemo(() => itens.reduce((acc, l) => acc + l.valorVendaItem * l.quantidadeItem, 0), [itens]);
   const totalBruto = useMemo(() => itens.reduce((acc, l) => acc + l.produto.valorProduto * l.quantidadeItem, 0), [itens]);
@@ -246,28 +258,20 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
       valorVenda: item.valorVendaItem
     }));
 
-  /**
-   * Gera o orçamento a partir do que já está montado na nota.
-   *
-   * Reaproveita a mesma tela: o operador escolhe cliente e produtos do jeito
-   * que já conhece e, em vez de fechar a venda, manda a proposta. Nada é
-   * baixado do estoque e nada entra no faturamento — vira uma linha na aba
-   * Orçamentos, esperando a resposta do cliente.
-   */
   const handleGerarOrcamento = async () => {
     const nomeCliente = (nome ?? "").trim();
 
     if (!nomeCliente) {
-      alert.warning("Escolha o cliente", "O orçamento precisa saber para quem é.");
+      alert.warning("Informe o cliente", "O orçamento precisa saber para quem é.");
       return;
     }
 
     if (itens.length === 0) {
-      alert.warning("Nota vazia", "Adicione ao menos um produto antes de gerar o orçamento.");
+      alert.warning("Sem produtos", "Adicione ao menos um produto ao orçamento.");
       return;
     }
 
-    setGerandoOrcamento(true);
+    setSavingNote(true);
 
     try {
       await OrcamentoService.criar({
@@ -282,11 +286,12 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
         })),
       });
 
-      alert.success("Orçamento gerado!", "Ele está em Vendas → Orçamentos, aguardando a resposta do cliente.");
+      alert.success("Orçamento gerado!", "Ele está na aba Orçamentos, aguardando a resposta do cliente.");
+      onSaved?.();
     } catch (err) {
       alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível gerar o orçamento."));
     } finally {
-      setGerandoOrcamento(false);
+      setSavingNote(false);
     }
   };
 
@@ -327,12 +332,22 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
 
         alert.success("Nota alterada!", "As alterações foram salvas com sucesso.");
       } else {
-        // CREATE — usa NovoPedidoDto
+        // CREATE — usa NovoPedidoDto. A nota criada NÃO fecha a tela: quem
+        // paga "depois de salvar" precisa da nota aberta para registrar o
+        // pagamento na sequência. O id novo mantém a nota em modo edição.
         const payload: NovoPedidoDto = { clienteId, itensPedido: montarItens() };
-        await NoteService.create(payload);
-        alert.success("Nota criada!", "A venda foi registrada com sucesso.");
+        const criada = await NoteService.create(payload);
+
+        const novoId = criada?.data?.data?.[0] as string | undefined;
+
+        if (novoId) setPedidoId(novoId);
+        setFocarPagamento(true);
+        alert.success("Nota criada!", "A venda foi registrada. Agora registre o pagamento.");
       }
-      onSaved?.();
+
+      // Pagamentos acumulados seguem gravados (update) ou prontos (create).
+      // Só fecha a tela quando o usuário decide fechar — não ao salvar.
+      if (id) onSaved?.();
     } catch (err) {
       alert.error(getErrorTitle(err), extractErrorMessage(err, "Erro ao salvar a nota. Tente novamente."));
     } finally {
@@ -378,6 +393,8 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
     setPagamentos((prev) => [...prev, novoPagamento]);
     setTipoPagamento("");
     setValorPagamento(0);
+    /* O destaque "nota salva — registre o pagamento" já cumpriu o papel. */
+    setFocarPagamento(false);
     alert.toast("success", "Pagamento registrado!", undefined, { position: "bottom-right", timer: 2000 });
   };
 
@@ -417,54 +434,12 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
   const salvarDesabilitado = !clienteId || itens.length === 0;
 
   /* ─── Classes repetidas ─── */
-  const btnToolbar = "grid h-10 w-10 place-items-center rounded-xl ring-1 transition-colors duration-200 active:scale-95";
   const lblResumo = "block text-[11px] uppercase tracking-[0.08em] text-faint";
   const valResumo = "mt-1 block truncate text-sm text-ink";
-  const campoBase = "h-11 w-full rounded-xl border border-fg/[0.08] bg-fg/[0.04] px-3 text-sm text-ink placeholder-mist outline-none transition-colors focus:border-accent/60 focus:bg-fg/[0.06]";
 
   return (
     <div className="flex h-full flex-col">
 
-
-      {/* ════════════ MODAL: PRODUTOS ════════════ */}
-      <Modal
-        open={modalProdutos}
-        onClose={() => {
-          setModalProdutos(false);
-          setBusca("");
-        }}
-        title="Adicionar produto"
-        subtitle="Toque para incluir na nota"
-        accent="rgb(var(--success))"
-      >
-        <div className="space-y-3">
-          <div className="relative">
-            <input autoFocus value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar produto..." className={`${campoBase} pl-9 focus:border-success/60`} />
-            <PackageSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-mist" />
-          </div>
-          <div className="max-h-72 overflow-y-auto">
-            {loadingProdutos ? (
-              <SkeletonProductList rows={6} />
-            ) : produtosFiltrados.length === 0 ? (
-              <p className="py-10 text-center text-sm text-mist">Nenhum produto encontrado</p>
-            ) : (
-              <ul className="space-y-1">
-                {produtosFiltrados.map((p) => (
-                  <li key={String(p.id)}>
-                    <button onClick={() => adicionarProduto(p)} className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-fg/[0.06]">
-                      <span className="min-w-0 truncate text-sm text-ink">{p.nome}</span>
-                      <span className="flex items-center gap-2">
-                        <span className="text-xs tabular-nums text-mist">{formatCurrency(Number(p.valorVenda) || 0)}</span>
-                        <Plus size={14} className="text-success" />
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-      </Modal>
 
       {/* ════════════ MODAL: PAGAMENTOS ════════════ */}
 
@@ -491,29 +466,14 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
               <Skeleton className="h-5 w-24 rounded-full" />
             ) : statusPedido ? (
               <span className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] tracking-wide ring-1 ${STATUS_STYLE[statusPedido] ?? "bg-fg/[0.05] text-mist"}`}>{statusPedido}</span>
+            ) : modoOrcamento ? (
+              <span className="inline-flex items-center rounded-full bg-warning/[0.15] px-3 py-1 text-[11px] text-warning ring-1 ring-warning/30">PROPOSTA</span>
             ) : (
               <span className="inline-flex items-center rounded-full bg-accent/[0.12] px-3 py-1 text-[11px] text-accent-soft ring-1 ring-accent/25">NOVA NOTA</span>
             )}
           </div>
-          <div className="flex items-center gap-1.5">
-            {/* Só indica; configurar é em Configurações → Empresa, e só o
-                usuário master vê o formulário. Chave Pix não é assunto de nota. */}
-            <span
-              title={pixConfig ? "Pix configurado — o QR sai na nota" : "Pix não configurado (Configurações → Empresa)"}
-              className={`${btnToolbar} ${pixConfig ? "bg-success/[0.1] text-success ring-success/20" : "bg-fg/[0.05] text-faint ring-fg/10"}`}
-            >
-              {pixConfig ? <Check size={19} /> : <QrCode size={19} />}
-            </span>
-            <button title="Adicionar produto" onClick={() => setModalProdutos(true)} className={`${btnToolbar} bg-success/[0.1] text-success ring-success/20 hover:bg-success hover:text-success`}>
-              <PackageSearch size={19} />
-            </button>
-            <button title="Baixar nota" onClick={() => handleDownload(notaRef)} className={`${btnToolbar} bg-accent-soft/[0.1] text-accent-soft ring-accent-soft/20 hover:bg-accent-soft hover:text-accent`}>
-              <Download size={19} />
-            </button>
-            <button title="Excluir" onClick={() => (id ? setModalExcluir(true) : alert.warning("Nota não salva", "Essa nota não foi salva."))} className={`${btnToolbar} bg-danger/[0.1] text-danger ring-danger/20 hover:bg-danger hover:text-white`}>
-              <Trash2 size={19} />
-            </button>
-          </div>
+          {/* Ações de documento (baixar/excluir) moram no rodapé, junto ao
+              salvar — o topo fica só com o status da nota. */}
         </div>
 
         {/* Conteúdo da nota (capturado no PNG) */}
@@ -523,7 +483,13 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
               cliente ficava a meia tela do valor, e a tabela de itens virava
               linhas com um vão enorme no meio. 900px é o suficiente para as
               cinco colunas de item sem espalhar. */}
-          <div ref={notaRef} className="mx-auto flex w-full max-w-[900px] flex-col bg-surface">
+          <div ref={notaRef} className="relative mx-auto flex w-full max-w-[900px] flex-col overflow-hidden bg-surface">
+            {/* Wallpaper da nota: imagem de fundo com overlay translúcido —
+                bonito e transparente, com o conteúdo legível por cima. Entra
+                no PNG/PDF porque faz parte do nó rasterizado. */}
+            <FundoNota imagem={enterprise?.notaBackground} />
+
+            <div className="relative flex flex-col">
             {/* Cabeçalho */}
             <div className="border-b border-fg/[0.05] p-6">
               {loadingPedido ? (
@@ -532,7 +498,7 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
                 <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                   <HeaderInterprise />
                   <div className="md:text-right">
-                    <h2 className="text-xl leading-none text-ink md:text-2xl">Nota de Venda</h2>
+                    <h2 className="text-xl leading-none text-ink md:text-2xl">{modoOrcamento ? "ORÇAMENTO" : "Nota de Venda"}</h2>
                     <p className="mt-1.5 text-sm text-mist">Data: {formatDate(pedido?.pedido?.dataPedido ?? new Date())}</p>
                   </div>
                 </div>
@@ -583,6 +549,10 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
                 ))}
               </dl>
 
+              {/* Orçamento não cobra: a coluna do QR (e os controles de Pix)
+                  só existe na nota de venda. */}
+              {!modoOrcamento && (
+              <>
               {/*
                * A coluna do QR existe sempre.
                *
@@ -670,6 +640,14 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
                   </div>
                 )}
               </div>
+              </>
+              )}
+            </div>
+
+            {/* Busca de produtos no corpo da nota. `data-sem-foto`: é ferramenta
+                de quem atende, não informação do cliente — não sai no PNG. */}
+            <div data-sem-foto className="px-6 pt-5">
+              <BuscaProduto produtos={products} carregando={loadingProdutos} onAdicionar={adicionarProduto} />
             </div>
 
             {/* Tabela de itens */}
@@ -731,9 +709,7 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
                         <tr>
                           <td colSpan={5} className="py-12 text-center text-mist">
                             <p className="text-sm">Nenhum produto na nota</p>
-                            <button onClick={() => setModalProdutos(true)} className="mt-3 inline-flex items-center gap-2 rounded-xl border border-dashed border-fg/[0.12] px-4 py-2 text-sm text-mist hover:border-success/60 hover:text-success">
-                              <Plus size={16} /> Adicionar produto
-                            </button>
+                            <p className="mt-2 text-[12px] text-faint">Use a busca acima para adicionar produtos.</p>
                           </td>
                         </tr>
                       )}
@@ -741,6 +717,11 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
                   </table>
                 </div>
               </div>
+            </div>
+
+            {/* Mobile — busca de produtos, fora da foto da nota */}
+            <div data-sem-foto className="px-6 pt-5 md:hidden">
+              <BuscaProduto produtos={products} carregando={loadingProdutos} onAdicionar={adicionarProduto} />
             </div>
 
             {/* Mobile */}
@@ -785,10 +766,8 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
               ) : (
                 <div className="rounded-xl border border-dashed border-fg/[0.12] py-10 text-center text-sm text-mist">Nenhum produto</div>
               )}
-              {!loadingPedido && (
-                <button onClick={() => setModalProdutos(true)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-fg/[0.12] py-3 text-sm text-mist hover:border-success hover:text-success">
-                  <Plus size={16} /> Adicionar produto
-                </button>
+              {!loadingPedido && itens.length === 0 && (
+                <p className="py-2 text-center text-[12px] text-faint">Use a busca acima para adicionar produtos.</p>
               )}
             </div>
 
@@ -797,7 +776,7 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
               {loadingPedido ? (
                 <SkeletonSummary />
               ) : (
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                <div className={`grid grid-cols-2 gap-2 sm:grid-cols-3 ${modoOrcamento ? "" : "lg:grid-cols-6"}`}>
                   <div className="rounded-xl border border-fg/[0.06] bg-fg/[0.03] p-3">
                     <span className={lblResumo}>T. Bruto</span>
                     <span className={`${valResumo} tabular-nums`}>{formatCurrency(totalBruto)}</span>
@@ -810,20 +789,26 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
                     <span className={lblResumo}>T. Líquido</span>
                     <span className={`${valResumo} tabular-nums`}>{formatCurrency(totalLiquido)}</span>
                   </div>
-                  <div className="rounded-xl border border-fg/[0.06] bg-fg/[0.03] p-3">
-                    <span className={lblResumo}>T. Pago</span>
-                    <span className={`${valResumo} tabular-nums`}>{formatCurrency(totalPago)}</span>
-                  </div>
-                  {/* Virou informação, não botão: o pagamento agora está sempre
-                      visível na coluna ao lado — não há mais o que abrir. */}
-                  <div className={`rounded-xl border p-3 ${pendente > 0 ? "border-warning/20 bg-warning/[0.12]" : "border-success/20 bg-success/[0.12]"}`}>
-                    <span className={`${lblResumo} ${pendente > 0 ? "text-warning" : "text-success"}`}>Pendente</span>
-                    <span className={`mt-1 block truncate text-sm tabular-nums ${pendente > 0 ? "text-warning" : "text-success"}`}>{formatCurrency(pendente)}</span>
-                  </div>
-                  <div className="rounded-xl border border-fg/[0.06] bg-fg/[0.03] p-3">
-                    <span className={lblResumo}>F. Pagamento</span>
-                    <span className={valResumo}>{formaPagamento}</span>
-                  </div>
+
+                  {/* Pagamento não existe em orçamento — só na nota de venda. */}
+                  {!modoOrcamento && (
+                    <>
+                      <div className="rounded-xl border border-fg/[0.06] bg-fg/[0.03] p-3">
+                        <span className={lblResumo}>T. Pago</span>
+                        <span className={`${valResumo} tabular-nums`}>{formatCurrency(totalPago)}</span>
+                      </div>
+                      {/* Virou informação, não botão: o pagamento agora está sempre
+                          visível na coluna ao lado — não há mais o que abrir. */}
+                      <div className={`rounded-xl border p-3 ${pendente > 0 ? "border-warning/20 bg-warning/[0.12]" : "border-success/20 bg-success/[0.12]"}`}>
+                        <span className={`${lblResumo} ${pendente > 0 ? "text-warning" : "text-success"}`}>Pendente</span>
+                        <span className={`mt-1 block truncate text-sm tabular-nums ${pendente > 0 ? "text-warning" : "text-success"}`}>{formatCurrency(pendente)}</span>
+                      </div>
+                      <div className="rounded-xl border border-fg/[0.06] bg-fg/[0.03] p-3">
+                        <span className={lblResumo}>F. Pagamento</span>
+                        <span className={valResumo}>{formaPagamento}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -834,6 +819,7 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
                 ação que quase ninguém usa: no balcão, o cliente aponta a câmera
                 para o QR. Quem paga pelo computador escaneia pelo celular
                 assim mesmo. */}
+            </div>
           </div>
         </div>
 
@@ -852,26 +838,52 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Sai antes do Pagamento de propósito: orçamento é a decisão de
-                NÃO faturar agora, e vem antes de qualquer coisa de dinheiro. */}
-            <button
-              onClick={handleGerarOrcamento}
-              disabled={gerandoOrcamento || loadingPedido || itens.length === 0}
-              title="Gerar orçamento com estes itens"
-              className="flex h-12 shrink-0 items-center gap-2 rounded-xl border border-fg/[0.1] px-4 text-sm text-mist transition-colors hover:border-accent/40 hover:text-ink disabled:opacity-40"
-            >
-              {gerandoOrcamento ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
-              <span className="hidden sm:inline">Orçamento</span>
-            </button>
+            {/* Download da nota (PNG ou PDF), com o nome da empresa no arquivo. */}
+            <MenuDownloadNota refNota={notaRef} nomeEmpresa={enterprise?.nomeFantasia ?? "nota"} prefixo={modoOrcamento ? "orcamento" : "nota"} titulo={modoOrcamento ? "Baixar orçamento" : "Baixar nota"} />
 
-            <button
-              onClick={handleSalvar}
-              disabled={salvarDesabilitado || savingNote || loadingPedido}
-              className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-accent px-5 text-sm text-white transition-all hover:bg-accent-soft active:scale-[0.98] disabled:opacity-40 sm:flex-none"
-            >
-              {savingNote ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-              {savingNote ? "Salvando..." : !id ? "Gerar Nota" : "Salvar"}
-            </button>
+            {!modoOrcamento && id && (
+              <button
+                title="Excluir nota"
+                aria-label="Excluir nota"
+                onClick={() => setModalExcluir(true)}
+                className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-fg/[0.1] text-mist transition-colors hover:border-danger/50 hover:text-danger"
+              >
+                <Trash2 size={18} />
+              </button>
+            )}
+
+            {/* Fechar sai sem obrigar a pagar — pagamento é sempre opcional.
+                Só aparece depois de salvar (nota existente). */}
+            {!modoOrcamento && id && (
+              <button
+                title="Fechar nota"
+                aria-label="Fechar nota"
+                onClick={() => onSaved?.()}
+                className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-fg/[0.1] text-mist transition-colors hover:border-accent/40 hover:text-ink"
+              >
+                <X size={18} />
+              </button>
+            )}
+
+            {modoOrcamento ? (
+              <button
+                onClick={handleGerarOrcamento}
+                disabled={salvarDesabilitado || savingNote || loadingPedido}
+                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-warning px-5 text-sm text-white transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-40 sm:flex-none"
+              >
+                {savingNote ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
+                {savingNote ? "Gerando..." : "Gerar orçamento"}
+              </button>
+            ) : (
+              <button
+                onClick={handleSalvar}
+                disabled={salvarDesabilitado || savingNote || loadingPedido}
+                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-accent px-5 text-sm text-white transition-all hover:bg-accent-soft active:scale-[0.98] disabled:opacity-40 sm:flex-none"
+              >
+                {savingNote ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                {savingNote ? "Salvando..." : !id ? "Gerar Nota" : "Salvar"}
+              </button>
+            )}
           </div>
         </footer>
         </div>
@@ -891,7 +903,9 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
          * Some abaixo de `lg`: em tela estreita não há largura para duas
          * colunas, e lá o rodapé continua sendo o caminho.
          */}
-        <aside className="order-first hidden w-[320px] shrink-0 flex-col border-r border-fg/[0.06] bg-fg/[0.02] lg:flex">
+        {/* Pagamento não existe em orçamento — a proposta não recebe. */}
+        {!modoOrcamento && (
+        <aside id="painel-pagamento" className={`order-first hidden w-[320px] shrink-0 flex-col border-r border-fg/[0.06] bg-fg/[0.02] lg:flex ${focarPagamento ? "ring-2 ring-inset ring-accent/50" : ""}`}>
           {/*
            * O cabeçalho mostra o que falta, em corpo grande.
            *
@@ -924,12 +938,20 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
                 Salve a nota antes de registrar pagamentos.
               </p>
             ) : (
-              <PagamentoForm
-                total={total}
-                jaPago={totalPago}
-                textoConfirmar="Adicionar pagamento"
-                onConfirmar={(valor, forma) => handleAdicionarPagamento(valor, forma)}
-              />
+              <>
+                {focarPagamento && (
+                  <p className="mb-3 rounded-xl border border-accent/30 bg-accent/[0.1] px-3.5 py-2.5 text-[12px] leading-relaxed text-accent-soft">
+                    Nota salva! Informe como o cliente pagou para quitar.
+                  </p>
+                )}
+
+                <PagamentoForm
+                  total={total}
+                  jaPago={totalPago}
+                  textoConfirmar="Adicionar pagamento"
+                  onConfirmar={(valor, forma) => handleAdicionarPagamento(valor, forma)}
+                />
+              </>
             )}
 
             {pagamentos.length > 0 && (
@@ -1000,6 +1022,7 @@ const Invoice = ({ id, clienteId, nome, onSaved }: InvoiceProps) => {
             )}
           </div>
         </aside>
+        )}
       </div>
     </div>
   );

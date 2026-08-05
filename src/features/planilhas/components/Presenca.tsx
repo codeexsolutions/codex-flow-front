@@ -22,14 +22,26 @@ const Presenca = ({ planilhaId }: { planilhaId: string }) => {
   const meuId = useAuth((s) => s.user?.id);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-
-    if (!token || token === "undefined" || !planilhaId) return;
+    if (!planilhaId) return;
 
     let socket: Socket | null = null;
 
     try {
-      socket = io(API_ORIGEM, { auth: { token }, transports: ["websocket"], reconnectionAttempts: 5 });
+      // Token em cookie httpOnly — o navegador o envia no handshake sozinho.
+      // `polling` no fallback: presença é estado de agora, mas numa rede que
+      // bloqueia websocket ainda vale mostrar quem está junto.
+      socket = io(API_ORIGEM, {
+        withCredentials: true,
+        transports: ["websocket", "polling"],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+      });
+
+      socket.on("connect_error", (erro) => {
+        console.warn("Presença indisponível:", erro.message);
+      });
 
       socket.on("connect", () => socket?.emit("planilha:entrar", planilhaId));
       socket.on("planilha:presenca", (lista: Pessoa[]) => setPessoas(Array.isArray(lista) ? lista : []));

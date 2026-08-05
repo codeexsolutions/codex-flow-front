@@ -66,9 +66,16 @@ const SinoNotificacoes = () => {
 
     try {
       socket = io(origem, {
-        auth: { token: localStorage.getItem("token") },
+        withCredentials: true,
         transports: ["websocket", "polling"],
+        reconnection: true,
+        reconnectionAttempts: 5,
         reconnectionDelay: 2000,
+        reconnectionDelayMax: 5000,
+      });
+
+      socket.on("connect_error", (erro) => {
+        console.warn("Mural de notificações indisponível:", erro.message);
       });
 
       socket.on("notificacao:nova", (nova: Notificacao) => {
