@@ -60,6 +60,7 @@ const EmpresaPage = () => {
     register,
     control,
     setValue,
+    watch,
     getValues,
     formState: { errors },
   } = useForm<EmpresaInput, unknown, EmpresaData>({
@@ -226,7 +227,7 @@ const EmpresaPage = () => {
 
         {tab === "identificacao" && (
           <SettingsCard icon={<Building2 className="h-4 w-4" />} title="Identificação" desc="Dados principais da empresa" footer={<SaveBtn tabId="identificacao" onClick={() => doSave("identificacao", salvarIdentificacao)} />}>
-            <EmpresaIdentificacao register={register} errors={errors} />
+            <EmpresaIdentificacao register={register} errors={errors} setValue={setValue} watch={watch} />
           </SettingsCard>
         )}
 

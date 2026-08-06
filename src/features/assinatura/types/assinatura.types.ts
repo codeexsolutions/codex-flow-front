@@ -25,6 +25,10 @@ export type Plano = {
   limiteClientes: number | null;
   limiteProdutos: number | null;
   limitePedidosMes: number | null;
+  /** `null` = sem limite, `0` = módulo não incluído no plano. */
+  limitePlanilhas: number | null;
+  /** Atendimentos por IA inclusos no mês. `0` = plano sem IA. */
+  limiteIaMes: number | null;
   recursos: Record<string, unknown>;
   destaque: boolean;
 };
@@ -115,6 +119,22 @@ export type Suporte = {
   mensagem: string;
 };
 
+/**
+ * Cobrança Pix identificada, gerada pelo Mercado Pago para uma fatura.
+ *
+ * Diferente do Pix estático da chave da empresa: esta cobrança tem dono e
+ * valor, e o pagamento é confirmado por webhook — sem comprovante.
+ */
+export type CobrancaPix = {
+  /** Pix copia e cola. */
+  qrCode: string;
+  /** PNG do QR em base64, já pronto para `src`. */
+  qrCodeBase64: string;
+  ticketUrl: string | null;
+  /** ISO — passou disso, uma nova cobrança é gerada. */
+  expiraEm: string | null;
+};
+
 export type MinhaAssinatura = {
   empresa: {
     codigoEmpresa: string;
@@ -129,6 +149,26 @@ export type MinhaAssinatura = {
   proximoVencimento: string | null;
   faturas: Fatura[];
   faturaEmAberto: Fatura | null;
+  /**
+   * Se a troca de plano está liberada agora — e quando volta a estar.
+   *
+   * A regra (uma troca por ciclo) mora no servidor; a tela só obedece.
+   * Opcional porque uma API antiga ainda não manda o campo: sem ele, a tela
+   * assume liberada, que é o comportamento de antes.
+   */
+  trocaDePlano?: { liberada: boolean; liberaEm: string | null };
+  /**
+   * Cobrança automática pelo Mercado Pago.
+   *
+   * `disponivel` é o interruptor da plataforma; `ativo` é desta empresa.
+   * Opcional para não quebrar contra uma API que ainda não manda o campo.
+   */
+  pagamentoAutomatico?: {
+    disponivel: boolean;
+    ativo: boolean;
+    status: string | null;
+    proximaCobranca: string | null;
+  };
   pix: PixCobranca | null;
   suporte: Suporte;
 };

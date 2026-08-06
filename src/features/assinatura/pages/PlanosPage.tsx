@@ -1,53 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, ArrowRight, Loader2, Users, Package, ShoppingCart, UserRound,
-  Wallet, BarChart3, MessageCircle, Zap, Sparkles, Check, Infinity as InfinityIcon,
-  ShieldCheck, Smartphone, WifiOff, Store, Truck, Target, Workflow, Table2,
-  FileText, Code2, Building2, Headset,
+  ArrowLeft, ArrowRight, Loader2, Sparkles, ShieldCheck, Smartphone, WifiOff,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 
 import AssinaturaService from "@/features/assinatura/services/assinatura.service";
-import { CICLO_LABEL, RECURSO_LABEL, type Plano } from "@/features/assinatura/types/assinatura.types";
-import { formatCurrencyFromCents } from "@/shared/utils/currency";
-import { formatNumber } from "@/shared/utils/format";
-
-/**
- * Cada recurso tem cara própria. Uma coluna de check verdes repetidos não diz
- * nada — o olho passa reto. Com o ícone do que a linha significa, dá para
- * comparar dois planos de relance, sem ler palavra por palavra.
- */
-const RECURSO_ICONE: Record<string, LucideIcon> = {
-  pdv: Store,
-  clientes: UserRound,
-  produtos: Package,
-  vendas: ShoppingCart,
-  financeiro: Wallet,
-  orcamentos: FileText,
-  planilhas: Table2,
-  crm: Target,
-  crmMultiAtendente: Headset,
-  metas: Target,
-  automacoes: Workflow,
-  relatorios: BarChart3,
-  correios: Truck,
-  whatsappIntegrado: MessageCircle,
-  multiLoja: Building2,
-  api: Code2,
-  suporteWhatsapp: MessageCircle,
-  suportePrioritario: Zap,
-};
-
-/** Ordem fixa das linhas — a mesma em todo cartão, para comparar de relance. */
-const ORDEM_RECURSOS = Object.keys(RECURSO_LABEL);
-
-const LIMITES: { chave: keyof Plano; label: string; icone: LucideIcon }[] = [
-  { chave: "limiteUsuarios", label: "Usuários", icone: Users },
-  { chave: "limiteClientes", label: "Clientes", icone: UserRound },
-  { chave: "limiteProdutos", label: "Produtos", icone: Package },
-  { chave: "limitePedidosMes", label: "Vendas/mês", icone: ShoppingCart },
-];
+import CardPlano from "@/features/assinatura/components/CardPlano";
+import { type Plano } from "@/features/assinatura/types/assinatura.types";
 
 /** O que vale para todo plano — dito uma vez, embaixo, em vez de repetido em cada cartão. */
 const INCLUSO = [
@@ -56,109 +15,6 @@ const INCLUSO = [
   { icone: ShieldCheck, texto: "Seus dados isolados dos de outras lojas" },
   { icone: Sparkles, texto: "Seis temas e nove cores de destaque" },
 ];
-
-/** Limite nulo no banco significa "sem teto". */
-const LimiteValor = ({ valor }: { valor: number | null }) =>
-  valor === null ? (
-    <span className="flex items-center justify-center text-accent-soft" title="Sem limite">
-      <InfinityIcon size={18} strokeWidth={2.4} />
-    </span>
-  ) : (
-    <span className="text-[17px] leading-none tabular-nums text-ink">{formatNumber(valor)}</span>
-  );
-
-function CardPlano({ plano, onEscolher }: { plano: Plano; onEscolher: (p: Plano) => void }) {
-
-  /*
-   * Só o que o plano TEM.
-   *
-   * A versão anterior listava os recursos todos e riscava os ausentes, para
-   * as linhas se alinharem entre os cartões. Isso funcionava com três planos
-   * e sete recursos. Com seis planos e dezoito, o cartão do Solo virava uma
-   * lista de quinze coisas riscadas — que é o argumento do concorrente, não o
-   * nosso. Quem quer o Solo precisa ver o Solo resolvendo o problema dele.
-   */
-  const inclusos = ORDEM_RECURSOS.filter((chave) => plano.recursos?.[chave] === true);
-
-  return (
-    <div
-      className={`card glass-sheen relative flex flex-col overflow-hidden transition-all duration-300 hover:-translate-y-1 ${
-        plano.destaque ? "border-accent/40 shadow-[0_24px_70px_-32px_rgb(var(--accent))]" : "hover:border-fg/[0.16]"
-      }`}
-    >
-      {/* Fio de luz no topo: marca o plano em destaque sem gritar. */}
-      {plano.destaque && <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent-soft to-transparent" />}
-
-      <div className="p-6 pb-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-[16px] text-ink">{plano.nome}</h2>
-            {/* Para quem é, antes do que faz: é assim que a pessoa se
-                reconhece num cartão em vez de comparar dezoito linhas. */}
-            {plano.publicoAlvo && <p className="mt-0.5 text-[11px] text-accent-soft">{plano.publicoAlvo}</p>}
-            <p className="mt-1.5 min-h-[34px] text-[12px] leading-relaxed text-mist">{plano.descricao}</p>
-          </div>
-
-          {plano.destaque && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent/15 px-2.5 py-1 text-[10px] uppercase tracking-[0.6px] text-accent-soft ring-1 ring-accent/25">
-              <Sparkles size={10} />
-              Mais escolhido
-            </span>
-          )}
-        </div>
-
-        <div className="mt-5 flex items-baseline gap-1.5">
-          <span className="text-[34px] leading-none tracking-tight text-ink">{formatCurrencyFromCents(plano.precoCentavos)}</span>
-          <span className="text-[12px] text-faint">{CICLO_LABEL[plano.ciclo]}</span>
-        </div>
-      </div>
-
-      {/* Limites — as divisórias são os vãos de 1px do próprio grid. */}
-      <div className="grid grid-cols-4 gap-px bg-fg/[0.06] py-px">
-        {LIMITES.map(({ chave, label, icone: Icone }) => (
-          <div key={label} className="flex flex-col items-center gap-1.5 bg-canvas px-2 py-3">
-            <LimiteValor valor={plano[chave] as number | null} />
-            <span className="flex items-center gap-1 text-center text-[9.5px] leading-none text-faint">
-              <Icone size={10} className="shrink-0 text-muted" />
-              {label}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      <div className="flex flex-1 flex-col justify-between gap-6 p-6">
-        <ul className="flex flex-col gap-2">
-          {inclusos.map((chave) => {
-            const Icone = RECURSO_ICONE[chave] ?? Check;
-
-            return (
-              <li key={chave} className="flex items-center gap-2.5 text-[12.5px] text-mist">
-                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-accent/[0.12] text-accent-soft ring-1 ring-inset ring-accent/20">
-                  <Icone size={13} />
-                </span>
-                {RECURSO_LABEL[chave] ?? chave}
-              </li>
-            );
-          })}
-        </ul>
-
-        <button
-          type="button"
-          onClick={() => onEscolher(plano)}
-          className={`focus-ring group inline-flex min-h-[46px] w-full items-center justify-center gap-1.5 rounded-xl text-[13.5px] transition-all active:scale-[0.99] ${
-            plano.destaque
-              ? "bg-accent text-white shadow-[0_12px_32px_-12px_rgb(var(--accent))] hover:brightness-110"
-              : "border border-fg/[0.12] text-ink hover:border-accent/40 hover:bg-fg/[0.04]"
-          }`}
-        >
-          Escolher {plano.nome}
-          <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
 const PlanosPage = () => {
   const navigate = useNavigate();
 
@@ -245,11 +101,21 @@ const PlanosPage = () => {
 
         {!carregando && planos.length > 0 && (
           <>
-            {/* `items-start`, não `items-stretch`: com seis cartões em duas
-                fileiras, esticar iguala a altura de toda a fileira ao maior
-                cartão dela — e o Solo, que tem cinco linhas, ganharia um vão
-                do tamanho do Ilimitado embaixo. */}
-            <div className="mt-10 grid grid-cols-1 items-start gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {/*
+              `items-stretch` (o padrão): todos os cartões da fileira com a
+              mesma altura.
+
+              A versão anterior usava `items-start` para o Starter não ganhar
+              um vão do tamanho do Enterprise embaixo. Só que altura desigual
+              lê como plano inacabado: o olho compara a moldura antes de ler o
+              conteúdo, e o cartão mais baixo parece valer menos. Preferível o
+              vão — e o `flex-1` dentro do cartão empurra o botão para a base,
+              então os cinco botões ficam na mesma linha.
+
+              Três colunas só a partir de `xl`: em 1024px, três cartões
+              espremem o preço e a lista de recursos.
+            */}
+            <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-3">
               {planos.map((plano) => (
                 <CardPlano key={plano.id} plano={plano} onEscolher={escolher} />
               ))}

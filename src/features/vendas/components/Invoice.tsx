@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import HeaderInterprise from "@/shared/ui/HeaderInterprise";
 
 import { formatDate } from "@/shared/utils/date";
@@ -22,7 +22,7 @@ import FundoNota from "@/shared/ui/FundoNota";
 import useEnterprise from "@/features/empresa/store/enterprise.store";
 import OrcamentoService from "@/features/orcamentos/services/orcamento.service";
 
-import { Save, Trash2, X, QrCode, Check, Loader2, FileText } from "lucide-react";
+import { Save, Trash2, QrCode, Loader2, FileText } from "lucide-react";
 import { Skeleton, SkeletonInvoiceCard, SkeletonInvoiceHeader, SkeletonInvoiceRow, SkeletonSummary } from "@/shared/ui/skeleton";
 
 import { generatePixPayload, getQrCodeDataUrl } from "@/shared/utils/pix";
@@ -55,12 +55,6 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 
-type PagamentoType = {
-  id: string;
-  tipo: string;
-  valor: number;
-  dataPagamento: string;
-};
 
 const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = false }: InvoiceProps) => {
   const alert = useAlert();
@@ -107,7 +101,6 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
   const [products, setProducts] = useState<ProductType[]>([]);
   const [pedido, setPedido] = useState<PedidoClienteType | null>(null);
   const [itens, setItens] = useState<ItemPedidoType[]>([]);
-  const [pagamentos, setPagamentos] = useState<PagamentoType[]>([]);
 
   /** Data de emissão ao lado do vendedor: quem fez e quando, na mesma leitura. */
   const dataEmissao = formatDate(pedido?.pedido?.dataPedido ?? new Date());
@@ -130,7 +123,8 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
   const [percentual, setPercentual] = useState(100);
   const [percentualLivre, setPercentualLivre] = useState("");
   const [qrCodeNota, setQrCodeNota] = useState("");
-  const [modalExcluir, setModalExcluir] = useState(false);
+  const [modalCancelar, setModalCancelar] = useState(false);
+  const [cancelando, setCancelando] = useState(false);
 
   /* ─── PIX ───
      A configuração é da EMPRESA e vem do servidor. A nota só lê: quem
@@ -211,10 +205,12 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
   const total = totalLiquido;
   const temDesconto = totalDesconto > 0 && totalBruto > 0;
 
-  const totalPagoNaSessao = useMemo(() => pagamentos.reduce((acc, p) => acc + Number(p.valor), 0), [pagamentos]);
-  const totalPago = valorPagoAnterior + totalPagoNaSessao;
+  /* Não há mais "pago nesta sessão": todo recebimento vai direto ao servidor
+     e a nota é relida em seguida. O que o banco diz é o que a tela mostra —
+     sem um segundo total local para divergir dele. */
+  const totalPago = valorPagoAnterior;
   const pendente = Math.max(total - totalPago, 0);
-  const formaPagamento = pagamentos.length > 0 ? (pagamentos.every((p) => p.tipo === pagamentos[0].tipo) ? pagamentos[0].tipo : "Misto") : (pedido?.pedido?.formaPagamento ?? "Não consta");
+  const formaPagamento = pedido?.pedido?.formaPagamento ?? "Não consta";
 
   /* ─── PIX payload ─── */
   /* O QR cobra o percentual escolhido, não necessariamente o total. */
@@ -323,13 +319,8 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
         const payload: PedidoUpdateDto = { clienteId, produtosPedido: montarItens() };
         await NoteService.update(payload, id);
 
-        // Pagamentos lançados no modal (ainda não confirmados) são registrados
-        // agora também, pra não depender do usuário lembrar de apertar
-        // "Confirmar" dentro do modal antes de salvar a nota.
-        if (pagamentos.length > 0) {
-          await registrarPagamentosPendentes(id);
-        }
-
+        // Não há pagamento pendente a gravar junto: registrar já grava direto
+        // no servidor, então salvar a nota cuida só dos itens.
         alert.success("Nota alterada!", "As alterações foram salvas com sucesso.");
       } else {
         // CREATE — usa NovoPedidoDto. A nota criada NÃO fecha a tela: quem
@@ -355,25 +346,51 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
     }
   };
 
-  const handleExcluir = async () => {
+  /**
+   * Cancela a nota — não apaga.
+   *
+   * Venda errada precisa sumir da operação, mas não da história: o cliente
+   * lembra do pedido que fez e alguém vai ter que explicar o que aconteceu.
+   * Apagar do banco não deixa o que explicar. Cancelada, a nota mantém itens,
+   * valor e data, e some da lista de notas ativas.
+   *
+   * O servidor recusa cancelar nota paga (dinheiro que entrou sai pelo
+   * financeiro, com estorno) — a mensagem dele chega pronta para o balcão.
+   */
+  const handleCancelar = async () => {
     if (!id) return;
+
+    setCancelando(true);
+
     try {
-      await NoteService.delete(id);
-      setModalExcluir(false);
-      alert.success("Nota excluída!", "A nota foi removida permanentemente.");
+      await NoteService.cancelar(id);
+      setModalCancelar(false);
+      alert.success("Nota cancelada!", "Ela sai das notas ativas, mas continua no histórico.");
       onSaved?.();
     } catch (err) {
-      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível excluir a nota."));
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível cancelar a nota."));
+    } finally {
+      setCancelando(false);
     }
   };
-
-  /* ─── Pagamentos: local state (fallback se API não existir) ─── */
-  const gerarIdPagamento = () => `pag-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
 
   /* Recebe valor e forma por parâmetro: o formulário compartilhado tem o
      próprio estado, e depender do estado desta tela criava um render de
      atraso — o primeiro clique lançava o valor anterior. */
-  const handleAdicionarPagamento = (valorRecebido?: number, formaRecebida?: string) => {
+  /**
+   * Registra o pagamento e volta para a nota — uma etapa só.
+   *
+   * Antes eram duas: "Adicionar pagamento" empilhava numa lista de pendentes
+   * e um segundo botão "Confirmar" é que gravava. A separação existia para
+   * lançar "50 no Pix e 30 em dinheiro" como um recebimento só, mas cobrava
+   * dois cliques de todo mundo para atender o caso raro — e deixava o caso
+   * comum com um pagamento na tela que parecia gravado e não estava.
+   *
+   * Agora cada recebimento vai direto ao servidor. Pagamento misto continua
+   * possível: são dois lançamentos em vez de um, o que é mais fiel ao que
+   * aconteceu no balcão.
+   */
+  const handleAdicionarPagamento = async (valorRecebido?: number, formaRecebida?: string) => {
     const valorFinal = valorRecebido ?? valorPagamento;
     const tipoFinal = formaRecebida ?? tipoPagamento;
 
@@ -383,45 +400,25 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
       return;
     }
 
-    const novoPagamento: PagamentoType = {
-      id: gerarIdPagamento(),
-      tipo: tipoFinal,
-      valor: valorFinal,
-      dataPagamento: new Date().toISOString(),
-    };
-
-    setPagamentos((prev) => [...prev, novoPagamento]);
-    setTipoPagamento("");
-    setValorPagamento(0);
-    /* O destaque "nota salva — registre o pagamento" já cumpriu o papel. */
-    setFocarPagamento(false);
-    alert.toast("success", "Pagamento registrado!", undefined, { position: "bottom-right", timer: 2000 });
-  };
-
-  const handleRemoverPagamento = (pagamentoId: string) => {
-    setPagamentos((prev) => prev.filter((p) => p.id !== pagamentoId));
-    alert.toast("success", "Pagamento removido!", undefined, { position: "bottom-right", timer: 2000 });
-  };
-
-  const registrarPagamentosPendentes = async (pedidoId: string) => {
-    if (pagamentos.length === 0) return;
-
-    await FinanceiroService.registrarPagamentoNota(pedidoId, totalPagoNaSessao, formaPagamento);
-    const pedidoAtualizado = await NoteService.getById(pedidoId);
-    if (pedidoAtualizado) {
-      setPedido(pedidoAtualizado);
-      setValorPagoAnterior(Number(pedidoAtualizado.pedido.valorPago ?? 0));
-    }
-    setPagamentos([]);
-  };
-
-  const handleConfirmarPagamentos = async () => {
-    if (!id || pagamentos.length === 0) return;
-
     setConfirmandoPagamento(true);
+
     try {
-      await registrarPagamentosPendentes(id);
+      await FinanceiroService.registrarPagamentoNota(id, valorFinal, tipoFinal);
+
+      const pedidoAtualizado = await NoteService.getById(id);
+
+      if (pedidoAtualizado) {
+        setPedido(pedidoAtualizado);
+        setValorPagoAnterior(Number(pedidoAtualizado.pedido.valorPago ?? 0));
+      }
+
+      setTipoPagamento("");
+      setValorPagamento(0);
+      /* O destaque "nota salva — registre o pagamento" já cumpriu o papel. */
+      setFocarPagamento(false);
+
       alert.success("Pagamento registrado!", "O valor foi somado ao pagamento da nota.");
+
     } catch (err) {
       alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível registrar o pagamento."));
     } finally {
@@ -443,15 +440,22 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
 
       {/* ════════════ MODAL: PAGAMENTOS ════════════ */}
 
-      {/* ════════════ MODAL: EXCLUIR ════════════ */}
-      <Modal open={modalExcluir} onClose={() => setModalExcluir(false)} title="Excluir nota" subtitle="Essa ação não pode ser desfeita" accent="rgb(var(--danger))" maxWidth="max-w-sm">
-        <p className="text-sm text-mist">Deseja realmente excluir esta nota?</p>
+      {/* ════════════ MODAL: CANCELAR ════════════ */}
+      <Modal open={modalCancelar} onClose={() => setModalCancelar(false)} title="Cancelar nota" subtitle="A nota sai da operação, mas fica no histórico" accent="rgb(var(--danger))" maxWidth="max-w-sm">
+        <p className="text-sm leading-relaxed text-mist">
+          A nota deixa de contar como venda ativa e passa a aparecer como <span className="text-danger">cancelada</span>. Itens, valores e data continuam registrados.
+        </p>
         <div className="mt-5 flex justify-end gap-2">
-          <button onClick={() => setModalExcluir(false)} className="h-10 rounded-xl bg-fg/[0.05] px-4 text-sm text-ink transition-colors hover:bg-fg/[0.1]">
-            Cancelar
+          <button onClick={() => setModalCancelar(false)} className="h-10 rounded-xl bg-fg/[0.05] px-4 text-sm text-ink transition-colors hover:bg-fg/[0.1]">
+            Voltar
           </button>
-          <button onClick={handleExcluir} className="h-10 rounded-xl bg-danger px-4 text-sm text-white transition-colors hover:bg-danger">
-            Excluir
+          <button
+            onClick={handleCancelar}
+            disabled={cancelando}
+            className="flex h-10 items-center gap-2 rounded-xl bg-danger px-4 text-sm text-white transition-colors hover:brightness-110 disabled:opacity-50"
+          >
+            {cancelando && <Loader2 size={15} className="animate-spin" />}
+            Cancelar nota
           </button>
         </div>
       </Modal>
@@ -472,8 +476,20 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
               <span className="inline-flex items-center rounded-full bg-accent/[0.12] px-3 py-1 text-[11px] text-accent-soft ring-1 ring-accent/25">NOVA NOTA</span>
             )}
           </div>
-          {/* Ações de documento (baixar/excluir) moram no rodapé, junto ao
-              salvar — o topo fica só com o status da nota. */}
+
+          {/* Cancelar fica no canto oposto ao status: são as duas pontas da
+              vida da nota — em que pé ela está, e como encerrá-la. Longe do
+              "Salvar" do rodapé, também, para não errar o alvo com pressa. */}
+          {!modoOrcamento && id && (
+            <button
+              title="Cancelar nota"
+              aria-label="Cancelar nota"
+              onClick={() => setModalCancelar(true)}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-faint transition-colors hover:bg-danger/20 hover:text-danger"
+            >
+              <Trash2 size={15} />
+            </button>
+          )}
         </div>
 
         {/* Conteúdo da nota (capturado no PNG) */}
@@ -644,14 +660,28 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
               )}
             </div>
 
-            {/* Busca de produtos no corpo da nota. `data-sem-foto`: é ferramenta
-                de quem atende, não informação do cliente — não sai no PNG. */}
-            <div data-sem-foto className="px-6 pt-5">
-              <BuscaProduto produtos={products} carregando={loadingProdutos} onAdicionar={adicionarProduto} />
+            {/*
+              Busca logo acima da tabela, não dentro dela.
+
+              Como célula, a lista de sugestões era engolida pelo
+              `overflow-hidden` do quadro da tabela: as opções existiam no DOM e
+              nunca apareciam na tela. Aqui a lista tem para onde crescer.
+
+              Largura contida (`max-w-md`): o campo recebe um nome de produto,
+              não um parágrafo — esticado na largura da nota ele virava uma
+              faixa vazia atravessando a tela.
+
+              `data-sem-foto`: é ferramenta de quem atende, não informação do
+              cliente — fica de fora do PNG.
+            */}
+            <div data-sem-foto className="hidden px-6 pt-6 md:block">
+              <div className="max-w-md">
+                <BuscaProduto produtos={products} carregando={loadingProdutos} onAdicionar={adicionarProduto} />
+              </div>
             </div>
 
             {/* Tabela de itens */}
-            <div className="hidden px-6 pt-6 md:block">
+            <div className="hidden px-6 pt-3 md:block">
               {/* Sem altura máxima e sem rolagem própria aqui. O teto de 42vh
                   cortava a tabela pela metade na tela e, no download, capturava
                   só a parte visível — nota com muitos itens saía truncada. Quem
@@ -686,20 +716,23 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
                                 inputMode="numeric"
                                 value={item.quantidadeItem}
                                 onChange={(e) => atualizarLinha(item.itemPedidoId, { quantidadeItem: Math.max(0, Number(e.target.value) || 0) })}
-                                className="h-10 w-20 rounded-lg border border-fg/[0.06] bg-fg/[0.03] px-2 text-center tabular-nums text-ink outline-none focus:border-accent/60"
+                                /* Número menor que o texto da linha: a caixa continua
+                                   com alvo de toque confortável, mas o valor para de
+                                   competir com o nome do produto. */
+                                className="h-9 w-16 rounded-lg border border-fg/[0.06] bg-fg/[0.03] px-2 text-center text-[12.5px] tabular-nums text-ink outline-none focus:border-accent/60"
                               />
                             </td>
                             <td className="p-2 align-middle">
                               <div className="flex items-center gap-1.5">
-                                <MoneyInput value={item.valorVendaItem} onChange={(v) => atualizarLinha(item.itemPedidoId, { valorVendaItem: v })} className="h-10 w-28 rounded-lg border border-fg/[0.06] bg-fg/[0.03] px-2 text-center tabular-nums text-ink outline-none focus:border-accent/60" />
+                                <MoneyInput value={item.valorVendaItem} onChange={(v) => atualizarLinha(item.itemPedidoId, { valorVendaItem: v })} className="h-9 w-24 rounded-lg border border-fg/[0.06] bg-fg/[0.03] px-2 text-center text-[12.5px] tabular-nums text-ink outline-none focus:border-accent/60" />
                                 {item.valorVendaItem !== item.produto.valorProduto && <span className="text-[10px] text-mist line-through">{formatCurrency(item.produto.valorProduto)}</span>}
                               </div>
                             </td>
                             <td className="p-2 align-middle">
-                              <p className="flex h-10 items-center rounded-lg bg-fg/[0.03] px-3 tabular-nums text-ink">{formatCurrency(item.valorVendaItem * item.quantidadeItem)}</p>
+                              <p className="flex h-9 items-center rounded-lg bg-fg/[0.03] px-3 text-[12.5px] tabular-nums text-ink">{formatCurrency(item.valorVendaItem * item.quantidadeItem)}</p>
                             </td>
                             <td className="p-2 text-center align-middle">
-                              <button title="Remover" onClick={() => removerProduto(item.itemPedidoId)} className="grid h-9 w-9 place-items-center rounded-lg text-faint transition-colors hover:bg-danger/25 hover:text-danger">
+                              <button title="Remover" onClick={() => removerProduto(item.itemPedidoId)} className="grid h-8 w-8 place-items-center rounded-lg text-faint transition-colors hover:bg-danger/25 hover:text-danger">
                                 <Trash2 size={16} />
                               </button>
                             </td>
@@ -841,29 +874,10 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
             {/* Download da nota (PNG ou PDF), com o nome da empresa no arquivo. */}
             <MenuDownloadNota refNota={notaRef} nomeEmpresa={enterprise?.nomeFantasia ?? "nota"} prefixo={modoOrcamento ? "orcamento" : "nota"} titulo={modoOrcamento ? "Baixar orçamento" : "Baixar nota"} />
 
-            {!modoOrcamento && id && (
-              <button
-                title="Excluir nota"
-                aria-label="Excluir nota"
-                onClick={() => setModalExcluir(true)}
-                className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-fg/[0.1] text-mist transition-colors hover:border-danger/50 hover:text-danger"
-              >
-                <Trash2 size={18} />
-              </button>
-            )}
-
-            {/* Fechar sai sem obrigar a pagar — pagamento é sempre opcional.
-                Só aparece depois de salvar (nota existente). */}
-            {!modoOrcamento && id && (
-              <button
-                title="Fechar nota"
-                aria-label="Fechar nota"
-                onClick={() => onSaved?.()}
-                className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-fg/[0.1] text-mist transition-colors hover:border-accent/40 hover:text-ink"
-              >
-                <X size={18} />
-              </button>
-            )}
+            {/* Sem X aqui: o modal que envolve a nota já tem o próprio fechar
+                no topo, e dois botões de fechar na mesma tela só criavam a
+                dúvida de qual deles descarta a venda. Cancelar a nota mudou
+                para a barra de cima, ao lado do status. */}
 
             {modoOrcamento ? (
               <button
@@ -948,78 +962,14 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
                 <PagamentoForm
                   total={total}
                   jaPago={totalPago}
-                  textoConfirmar="Adicionar pagamento"
-                  onConfirmar={(valor, forma) => handleAdicionarPagamento(valor, forma)}
+                  compacto
+                  salvando={confirmandoPagamento}
+                  textoConfirmar="Registrar pagamento"
+                  onConfirmar={(valor, forma) => void handleAdicionarPagamento(valor, forma)}
                 />
               </>
             )}
 
-            {pagamentos.length > 0 && (
-              <div className="mt-5 border-t border-fg/[0.06] pt-4">
-                <p className="mb-2 text-[11px] uppercase tracking-[0.08em] text-faint">Ainda não gravados</p>
-
-                {/* Cada pagamento entra deslizando e sai encolhendo — confirma
-                    o lançamento sem precisar de um aviso na tela. */}
-                <AnimatePresence initial={false}>
-                  {pagamentos.map((p) => (
-                    <motion.div
-                      key={p.id}
-                      layout
-                      initial={{ opacity: 0, x: 20, height: 0 }}
-                      animate={{ opacity: 1, x: 0, height: "auto" }}
-                      exit={{ opacity: 0, x: 20, height: 0 }}
-                      transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="mb-2 flex items-center gap-2.5 rounded-xl border border-success/20 bg-success/[0.06] px-3 py-2">
-                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-success/15 text-success">
-                          <Check size={13} />
-                        </span>
-
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[12.5px] text-ink">{p.tipo}</span>
-                          <span className="block text-[10.5px] text-faint">{formatDate(p.dataPagamento, "-")}</span>
-                        </span>
-
-                        {/* Editável no lugar: errar o valor é comum, e obrigar a
-                            remover e lançar de novo custa três cliques para
-                            corrigir um dígito. */}
-                        <MoneyInput
-                          value={p.valor}
-                          onChange={(v) => setPagamentos((prev) => prev.map((x) => (x.id === p.id ? { ...x, valor: v } : x)))}
-                          className="w-[86px] shrink-0 rounded-md bg-transparent px-1 text-right text-[12.5px] tabular-nums text-success outline-none focus:bg-fg/[0.06]"
-                        />
-
-                        <button
-                          onClick={() => handleRemoverPagamento(p.id)}
-                          aria-label={`Remover ${p.tipo}`}
-                          className="shrink-0 text-muted transition-colors hover:text-danger"
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-
-                {/*
-                 * Confirmar grava de verdade.
-                 *
-                 * Adicionar acumula na lista; confirmar envia ao servidor. Separar
-                 * os dois é o que permite registrar "50 no Pix e 30 em dinheiro"
-                 * como um recebimento só, e desfazer um deles antes de gravar.
-                 */}
-                <motion.button
-                  layout
-                  onClick={handleConfirmarPagamentos}
-                  disabled={confirmandoPagamento}
-                  className="mt-1 flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl bg-success px-4 text-[13px] text-white transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-50"
-                >
-                  {confirmandoPagamento ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
-                  Confirmar {formatCurrency(totalPagoNaSessao)}
-                </motion.button>
-              </div>
-            )}
           </div>
         </aside>
         )}

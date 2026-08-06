@@ -10,7 +10,7 @@ import {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import RedeAnimada from "@/features/landing/components/RedeAnimada";
-import DiagnosticoPlano from "@/features/assinatura/components/DiagnosticoPlano";
+import CarrosselPlanos from "@/features/assinatura/components/CarrosselPlanos";
 
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -139,10 +139,16 @@ const CadastroEmpresaPage = () => {
   const [planosLoading, setPlanosLoading] = useState(true);
   const [verSenha, setVerSenha] = useState(false);
 
-  /* O diagnóstico responde antes de existir conta. Guardamos as respostas
-     aqui porque elas seguem junto do cadastro para virar lead — é o que o
-     vendedor lê antes de responder a primeira mensagem. */
-  const [respostas, setRespostas] = useState<RespostasDiagnostico | null>(null);
+  /*
+   * O lead continua sendo criado, mas sem respostas de diagnóstico — o
+   * questionário saiu do cadastro.
+   *
+   * O campo permanece no payload porque a API ainda o aceita e o painel
+   * comercial ainda o lê: mandar `undefined` é diferente de mudar o contrato
+   * dos dois lados por causa de uma tela. Quando o diagnóstico voltar (ou for
+   * aposentado de vez), este é o ponto único a mexer.
+   */
+  const respostas: RespostasDiagnostico | null = null;
 
   const {
     register,
@@ -479,7 +485,15 @@ const CadastroEmpresaPage = () => {
         <div className="absolute left-1/2 top-1/2 h-[300px] w-[300px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-soft opacity-[0.1] blur-[110px]" />
       </div>
 
-      <div className="relative z-10 my-auto flex w-full max-w-sm flex-col sm:max-w-xl">
+      {/*
+        A etapa dos planos é mais larga que as demais.
+
+        Os outros passos são formulário — campo empilhado em coluna estreita
+        lê melhor. A escolha do plano é comparação, e comparar em 576px
+        obrigava a espremer o cartão até o preço quebrar linha. Só esta etapa
+        abre para 896px; o resto continua como estava.
+      */}
+      <div className={`relative z-10 my-auto flex w-full max-w-sm flex-col transition-[max-width] duration-300 ${step === 0 ? "sm:max-w-4xl" : "sm:max-w-xl"}`}>
         {/* Logo e nome na horizontal, não empilhados.
             Empilhado, este bloco custava ~90px de altura — e o cadastro tem
             cinco etapas para caber na tela sem rolar. Deitado, custa 40px. */}
@@ -571,15 +585,23 @@ const CadastroEmpresaPage = () => {
                   </p>
                 )}
 
-                {/* Três perguntas no lugar da vitrine. A vitrine mostrava seis
-                    planos e deixava a escolha — e a escolha é justamente o que
-                    trava quem nunca usou um ERP. */}
+                {/*
+                  Os planos como cartões de KPI, num carrossel.
+
+                  Saiu o diagnóstico de três perguntas: responder um
+                  questionário para descobrir um plano é uma etapa a mais entre
+                  a pessoa e a conta dela, e quem chegou até aqui já decidiu
+                  que quer o sistema — falta só escolher o tamanho.
+
+                  Quem quer detalhe abre o "Saber mais" no próprio cartão, sem
+                  sair do cadastro. Mandar para outra página para ler sobre um
+                  plano é mandar para fora do cadastro, e boa parte não volta.
+                */}
                 {!planosLoading && planos.length > 0 && (
-                  <DiagnosticoPlano
+                  <CarrosselPlanos
+                    planos={planos}
                     selecionado={planoCodigo}
                     onSelecionar={(codigo) => setValue("planoCodigo", codigo, { shouldValidate: true })}
-                    onRespostas={setRespostas}
-                    onComparar={() => navigate("/planos")}
                   />
                 )}
 

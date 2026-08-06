@@ -41,11 +41,20 @@ type Props = {
   salvando?: boolean;
   /** Rótulo do botão. O padrão serve para nota; o financeiro usa o dele. */
   textoConfirmar?: string;
+  /**
+   * Encolhe tipografia e espaçamentos.
+   *
+   * Na nota o formulário mora numa coluna de 320px ao lado da venda, não numa
+   * tela própria. Com os tamanhos do financeiro, os três números do topo
+   * quebravam em duas linhas e o formulário passava da altura visível — quem
+   * recebia não via a conta inteira sem rolar.
+   */
+  compacto?: boolean;
   onConfirmar: (valor: number, forma: string) => void | Promise<void>;
   onCancelar?: () => void;
 };
 
-const PagamentoForm = ({ total, jaPago, salvando = false, textoConfirmar = "Adicionar pagamento", onConfirmar, onCancelar }: Props) => {
+const PagamentoForm = ({ total, jaPago, salvando = false, textoConfirmar = "Adicionar pagamento", compacto = false, onConfirmar, onCancelar }: Props) => {
   const restante = useMemo(() => Math.max(Math.round((total - jaPago) * 100) / 100, 0), [total, jaPago]);
 
   const [forma, setForma] = useState(FORMAS[0].id);
@@ -93,7 +102,7 @@ const PagamentoForm = ({ total, jaPago, salvando = false, textoConfirmar = "Adic
   const FormaAtual = escolhida.icone;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className={`flex flex-col ${compacto ? "gap-3.5" : "gap-5"}`}>
       {/* A conta, antes de pedir o valor */}
       <div className="grid grid-cols-3 gap-px overflow-hidden rounded-xl bg-fg/[0.06]">
         {[
@@ -101,53 +110,53 @@ const PagamentoForm = ({ total, jaPago, salvando = false, textoConfirmar = "Adic
           { rotulo: "Recebido", valor: jaPago, cor: "text-success" },
           { rotulo: "Falta", valor: restante, cor: restante > 0 ? "text-warning" : "text-success" },
         ].map((c) => (
-          <div key={c.rotulo} className="bg-surface px-3 py-2.5 text-center">
-            <p className="text-[10.5px] uppercase tracking-[0.08em] text-faint">{c.rotulo}</p>
-            <p className={`mt-1 truncate text-[14px] tabular-nums ${c.cor}`}>{formatCurrency(c.valor)}</p>
+          <div key={c.rotulo} className={`bg-surface text-center ${compacto ? "px-1.5 py-2" : "px-3 py-2.5"}`}>
+            <p className={`uppercase tracking-[0.08em] text-faint ${compacto ? "text-[9.5px]" : "text-[10.5px]"}`}>{c.rotulo}</p>
+            <p className={`mt-0.5 truncate tabular-nums ${compacto ? "text-[12px]" : "mt-1 text-[14px]"} ${c.cor}`}>{formatCurrency(c.valor)}</p>
           </div>
         ))}
       </div>
 
       {/* Quanto está recebendo */}
       <div>
-        <label className="mb-2 block text-[11px] uppercase tracking-[0.08em] text-faint">Quanto está recebendo</label>
+        <label className={`mb-1.5 block uppercase tracking-[0.08em] text-faint ${compacto ? "text-[10px]" : "mb-2 text-[11px]"}`}>Quanto está recebendo</label>
 
         <MoneyInput
           value={valor}
           onChange={setValor}
           withIcon
-          className={`w-full rounded-xl border bg-fg/[0.03] px-3.5 py-3 text-[15px] tabular-nums text-ink outline-none transition-colors ${
-            excede ? "border-danger/60" : "border-fg/[0.08] focus:border-accent/60"
-          }`}
+          className={`w-full rounded-xl border bg-fg/[0.03] tabular-nums text-ink outline-none transition-colors ${
+            compacto ? "px-3 py-2.5 text-[13.5px]" : "px-3.5 py-3 text-[15px]"
+          } ${excede ? "border-danger/60" : "border-fg/[0.08] focus:border-accent/60"}`}
         />
 
         <div className="mt-2 flex gap-2">
-          <button type="button" onClick={() => setValor(restante)} className={`flex-1 rounded-lg border py-1.5 text-[11.5px] transition-colors ${valor === restante ? "border-accent bg-accent/[0.12] text-accent-soft" : "border-fg/[0.1] text-mist hover:text-ink"}`}>
+          <button type="button" onClick={() => setValor(restante)} className={`flex-1 rounded-lg border transition-colors ${compacto ? "py-1 text-[10.5px]" : "py-1.5 text-[11.5px]"} ${valor === restante ? "border-accent bg-accent/[0.12] text-accent-soft" : "border-fg/[0.1] text-mist hover:text-ink"}`}>
             Tudo · {formatCurrency(restante)}
           </button>
-          <button type="button" onClick={() => setValor(metade)} className={`flex-1 rounded-lg border py-1.5 text-[11.5px] transition-colors ${valor === metade ? "border-accent bg-accent/[0.12] text-accent-soft" : "border-fg/[0.1] text-mist hover:text-ink"}`}>
+          <button type="button" onClick={() => setValor(metade)} className={`flex-1 rounded-lg border transition-colors ${compacto ? "py-1 text-[10.5px]" : "py-1.5 text-[11.5px]"} ${valor === metade ? "border-accent bg-accent/[0.12] text-accent-soft" : "border-fg/[0.1] text-mist hover:text-ink"}`}>
             Metade · {formatCurrency(metade)}
           </button>
         </div>
 
-        {excede && <p className="mt-2 text-[11.5px] text-danger">Passou do que falta — o máximo é {formatCurrency(restante)}.</p>}
+        {excede && <p className={`mt-2 text-danger ${compacto ? "text-[10.5px]" : "text-[11.5px]"}`}>Passou do que falta — o máximo é {formatCurrency(restante)}.</p>}
       </div>
 
       {/* Como está recebendo */}
       <div ref={formasRef} className="relative">
-        <label className="mb-2 block text-[11px] uppercase tracking-[0.08em] text-faint">Como o cliente pagou</label>
+        <label className={`mb-1.5 block uppercase tracking-[0.08em] text-faint ${compacto ? "text-[10px]" : "mb-2 text-[11px]"}`}>Como o cliente pagou</label>
 
         {/* O método escolhido é o próprio botão: mostra o estado e abre a troca. */}
         <button
           type="button"
           onClick={() => setAbertoFormas((v) => !v)}
           aria-expanded={abertoFormas}
-          className={`flex min-h-[46px] w-full items-center gap-2.5 rounded-xl border px-3.5 text-[13px] transition-colors ${
-            abertoFormas ? "border-accent/60 bg-accent/[0.08] text-ink" : "border-fg/[0.08] bg-fg/[0.03] text-ink hover:border-fg/[0.16]"
-          }`}
+          className={`flex w-full items-center gap-2.5 rounded-xl border transition-colors ${
+            compacto ? "min-h-[40px] px-3 text-[12px]" : "min-h-[46px] px-3.5 text-[13px]"
+          } ${abertoFormas ? "border-accent/60 bg-accent/[0.08] text-ink" : "border-fg/[0.08] bg-fg/[0.03] text-ink hover:border-fg/[0.16]"}`}
         >
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-accent/[0.14] text-accent-soft">
-            <FormaAtual size={15} />
+          <span className={`grid shrink-0 place-items-center rounded-lg bg-accent/[0.14] text-accent-soft ${compacto ? "h-6 w-6" : "h-7 w-7"}`}>
+            <FormaAtual size={compacto ? 13 : 15} />
           </span>
 
           <span className="min-w-0 flex-1 truncate text-left">{escolhida.label}</span>
@@ -183,11 +192,11 @@ const PagamentoForm = ({ total, jaPago, salvando = false, textoConfirmar = "Adic
                         setAbertoFormas(false);
                       }}
                       aria-pressed={on}
-                      className={`flex min-h-[58px] flex-col items-center justify-center gap-1.5 rounded-lg border text-[11.5px] transition-colors ${
-                        on ? "border-accent bg-accent/[0.12] text-accent-soft" : "border-fg/[0.07] text-mist hover:border-fg/[0.18] hover:text-ink"
-                      }`}
+                      className={`flex flex-col items-center justify-center gap-1 rounded-lg border transition-colors ${
+                        compacto ? "min-h-[50px] text-[10.5px]" : "min-h-[58px] gap-1.5 text-[11.5px]"
+                      } ${on ? "border-accent bg-accent/[0.12] text-accent-soft" : "border-fg/[0.07] text-mist hover:border-fg/[0.18] hover:text-ink"}`}
                     >
-                      <Icone size={17} />
+                      <Icone size={compacto ? 15 : 17} />
                       {f.label}
                     </motion.button>
                   );
@@ -209,7 +218,7 @@ const PagamentoForm = ({ total, jaPago, salvando = false, textoConfirmar = "Adic
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="rounded-xl border border-fg/[0.07] bg-fg/[0.02] px-3.5 py-2.5 text-[12px] leading-relaxed text-mist"
+            className={`rounded-xl border border-fg/[0.07] bg-fg/[0.02] leading-relaxed text-mist ${compacto ? "px-3 py-2 text-[11px]" : "px-3.5 py-2.5 text-[12px]"}`}
           >
             {sobra === 0 ? (
               <>
@@ -235,7 +244,9 @@ const PagamentoForm = ({ total, jaPago, salvando = false, textoConfirmar = "Adic
           type="button"
           onClick={() => onConfirmar(valor, forma)}
           disabled={!podeConfirmar}
-          className="flex min-h-[44px] items-center gap-2 rounded-xl bg-accent px-5 text-[13px] text-white transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-40"
+          className={`flex items-center justify-center gap-2 rounded-xl bg-accent text-white transition-all hover:brightness-110 active:scale-[0.99] disabled:opacity-40 ${
+            compacto ? "min-h-[40px] w-full px-4 text-[12.5px]" : "min-h-[44px] px-5 text-[13px]"
+          }`}
         >
           {salvando ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
           {textoConfirmar}

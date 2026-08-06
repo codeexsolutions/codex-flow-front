@@ -23,8 +23,17 @@ const NoteService = {
     return await sysgrafix.patch(`/pedidos/alterar/${pedidoId}`, data);
   },
 
-  /** Exclui pedido */
-  delete: (pedidoId: string) => sysgrafix.delete(`/pedidos/${pedidoId}`),
+  /**
+   * Cancela o pedido → PATCH /pedidos/:id/cancelar
+   *
+   * Substitui o `delete`, que apontava para `DELETE /pedidos/:id` — rota que
+   * nunca existiu na API. O botão de excluir respondia 404 e a nota
+   * continuava lá.
+   *
+   * Cancelar preserva itens, valor e data; só o status muda. Nota já paga é
+   * recusada pelo servidor: dinheiro que entrou sai pelo financeiro.
+   */
+  cancelar: (pedidoId: string) => sysgrafix.patch(`/pedidos/${pedidoId}/cancelar`),
 };
 
 export default NoteService;

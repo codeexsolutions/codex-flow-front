@@ -68,7 +68,10 @@ const useVendaStore = create<VendaState>((set, get) => ({
   },
 
   async removerVenda(pedidoId) {
-    await NoteService.delete(pedidoId);
+    // Cancela em vez de apagar: a venda sai da lista ativa e continua no
+    // histórico. (O `delete` de antes batia numa rota inexistente e falhava
+    // em silêncio — a venda simplesmente não saía.)
+    await NoteService.cancelar(pedidoId);
     await get().fetchVendas(true);
   },
 

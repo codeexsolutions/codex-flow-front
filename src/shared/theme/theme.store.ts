@@ -28,8 +28,20 @@ interface ThemeState {
 const useThemeStore = create<ThemeState>()(
   persist(
     (set) => ({
-      mode: "escuro",
-      accent: "roxo",
+      /*
+       * O Flow começa claro e verde.
+       *
+       * É a identidade da marca e o que a maioria espera de um sistema de
+       * balcão — tela clara aguenta luz de loja, e o verde é a cor do
+       * "deu certo" no PDV.
+       *
+       * Só vale para quem ainda não escolheu: o `persist` guarda a
+       * preferência de quem já mexeu em Aparência, e essa preferência
+       * continua vencendo. Trocar o tema de quem escolheu seria desfazer
+       * uma decisão da pessoa.
+       */
+      mode: "claro",
+      accent: "verde",
       fontScale: "md",
       motion: "auto",
       fx: "auto",

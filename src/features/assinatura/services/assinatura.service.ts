@@ -1,6 +1,7 @@
 import sysgrafix from "@/shared/api/sysgrafix";
 import type {
-  LeadRegistrado, MeuPlano, MinhaAssinatura, Plano, Recomendacao, RespostasDiagnostico, RetornoCadastro,
+  CobrancaPix, LeadRegistrado, MeuPlano, MinhaAssinatura, Plano, Recomendacao,
+  RespostasDiagnostico, RetornoCadastro,
 } from "../types/assinatura.types";
 
 /** A API responde sempre no formato { statusCode, message, data: [...] }. */
@@ -113,6 +114,42 @@ const AssinaturaService = {
     }
 
     return cadastro;
+  },
+
+  /**
+   * Gera (ou reaproveita) a cobrança Pix da fatura no Mercado Pago.
+   *
+   * Diferente do Pix estático de antes, esta cobrança é identificada: quando o
+   * dinheiro cai, o MP avisa por webhook e a fatura quita sozinha. O cliente
+   * não precisa mandar comprovante nem esperar alguém conferir.
+   */
+  cobrancaPix: async (faturaId: string): Promise<CobrancaPix> => {
+    const res = await sysgrafix.post<RetornoPadrao<CobrancaPix>>(`/mercadopago/faturas/${faturaId}/pix`, {});
+    const cobranca = res.data?.data?.[0];
+
+    if (!cobranca?.qrCode) throw new Error(res.data?.message || "Não foi possível gerar a cobrança Pix.");
+
+    return cobranca;
+  },
+
+  /**
+   * Ativa a cobrança automática e devolve o link de autorização do Mercado Pago.
+   *
+   * A conclusão acontece FORA daqui: o cliente autoriza no site do MP e o
+   * webhook é quem confirma. Esta chamada só abre a porta — tratar o retorno
+   * dela como "assinado" mostraria pago o que ainda não foi autorizado.
+   */
+  ativarPagamentoAutomatico: async (): Promise<string> => {
+    const res = await sysgrafix.post<RetornoPadrao<{ preapprovalId: string; initPoint: string }>>("/mercadopago/assinar", {});
+    const dados = res.data?.data?.[0];
+
+    if (!dados?.initPoint) throw new Error(res.data?.message || "Não foi possível iniciar o pagamento automático.");
+
+    return dados.initPoint;
+  },
+
+  cancelarPagamentoAutomatico: async (): Promise<void> => {
+    await sysgrafix.post("/mercadopago/cancelar", {});
   },
 };
 

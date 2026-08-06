@@ -10,14 +10,16 @@ import {
 import { Modal } from "@/shared/ui/Modal";
 import { useAlert } from "@/shared/ui/Alert";
 import { formatCurrencyFromCents } from "@/shared/utils/currency";
-import { formatDocument } from "@/shared/utils/format";
+import { formatDocument, formatNumber } from "@/shared/utils/format";
 import { MONTHS } from "@/shared/utils/date";
 
 import useAuth from "@/features/auth/store/auth.store";
 import { useLiberacaoEmpresa } from "@/shared/realtime/useLiberacaoEmpresa";
 import AssinaturaService from "@/features/assinatura/services/assinatura.service";
+import CardPlano from "@/features/assinatura/components/CardPlano";
 import {
-  CICLO_LABEL, FaturaMeta, ehPagavel, type Fatura, type MinhaAssinatura, type Plano, type StatusFatura,
+  CICLO_LABEL, FaturaMeta, ehPagavel, type CobrancaPix, type Fatura, type MinhaAssinatura,
+  type Plano, type StatusFatura,
 } from "@/features/assinatura/types/assinatura.types";
 
 type Filtro = "TODAS" | "A_PAGAR" | "PAGA";
@@ -108,6 +110,8 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
   const [enviando, setEnviando] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
   const [trocandoPlano, setTrocandoPlano] = useState(false);
+  /** Código do plano cuja troca está em andamento — trava só aquele cartão. */
+  const [salvandoPlano, setSalvandoPlano] = useState<string | null>(null);
   const [planos, setPlanos] = useState<Plano[]>([]);
 
   const carregar = useCallback(async () => {
@@ -148,17 +152,57 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
   const pix = assinatura?.pix;
   const suporte = assinatura?.suporte;
 
-  // Trocar de plano vale sempre: com a assinatura ativa, o backend cobra só a
-  // diferença numa fatura intermediária em vez do valor cheio.
+  /*
+   * Trocar de plano é uma vez por ciclo.
+   *
+   * Sem a trava dava para subir de plano, gerar a fatura da diferença, voltar
+   * para o barato antes de pagar e repetir — cada volta mexendo no valor de
+   * uma cobrança ainda não quitada. Quem decide é o servidor; a tela só lê a
+   * resposta dele para não oferecer um botão que a API vai recusar.
+   */
+  /* ---- Pix pelo Mercado Pago ---- */
+  const automatico = assinatura?.pagamentoAutomatico;
+  const automaticoDisponivel = Boolean(automatico?.disponivel);
+  const [cobranca, setCobranca] = useState<CobrancaPix | null>(null);
+
+  const troca = assinatura?.trocaDePlano;
+  const trocaLiberada = troca?.liberada ?? true;
+  const trocaLiberaEm = troca?.liberaEm ?? null;
   const podeTrocarPlano = Boolean(assinatura?.plano);
 
   /* ------------------------- Ações ------------------------- */
 
-  const abrirPagamento = (f: Fatura) => {
+  /**
+   * Abre o pagamento da fatura.
+   *
+   * Com o Mercado Pago ligado, gera uma cobrança Pix identificada: o dinheiro
+   * que cai é reconhecido sozinho e a fatura quita por webhook. Sem ele, cai
+   * no Pix estático da chave da empresa, que continua exigindo comprovante.
+   *
+   * A falha ao gerar não fecha o modal — mostra o Pix manual como alternativa
+   * em vez de deixar quem quer pagar sem caminho nenhum.
+   */
+  const abrirPagamento = async (f: Fatura) => {
     if (!ehPagavel(f)) return;
+
     setQrLoading(true);
     setCopiado(false);
+    setCobranca(null);
     setFaturaSelecionada(f);
+
+    if (!automaticoDisponivel) return;
+
+    try {
+      setCobranca(await AssinaturaService.cobrancaPix(f.id));
+    } catch (e) {
+      const err = e as { response?: { data?: { message?: string } }; message?: string };
+      alert.warning(
+        "Cobrança automática indisponível",
+        err?.response?.data?.message ?? err?.message ?? "Use o Pix abaixo e envie o comprovante.",
+      );
+    } finally {
+      setQrLoading(false);
+    }
   };
 
   const fecharModal = () => {
@@ -166,10 +210,10 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
     setCopiado(false);
   };
 
-  const copiarPix = async () => {
-    if (!pix?.copiaECola) return;
+  const copiarTexto = async (texto: string) => {
+    if (!texto) return;
     try {
-      await navigator.clipboard.writeText(pix.copiaECola);
+      await navigator.clipboard.writeText(texto);
       setCopiado(true);
       alert.success("Código copiado!", "Cole no aplicativo do seu banco.");
       setTimeout(() => setCopiado(false), 2500);
@@ -177,6 +221,8 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
       alert.error("Falha ao copiar", "Copie o código manualmente.");
     }
   };
+
+  const copiarPix = () => copiarTexto(pix?.copiaECola ?? "");
 
   /**
    * Abre o WhatsApp com a mensagem pronta e marca a fatura como aguardando
@@ -225,10 +271,24 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
   };
 
   const trocarPlano = async (codigo: string) => {
-    if (codigo === plano?.codigo) {
-      setTrocandoPlano(false);
-      return;
-    }
+    if (codigo === plano?.codigo || salvandoPlano) return;
+
+    /*
+     * Confirmação antes de trocar.
+     *
+     * A troca vale por um ciclo inteiro e mexe no valor da fatura. Um clique
+     * sem volta num cartão de plano é fácil demais de dar sem querer — e a
+     * pessoa só descobre depois que não pode desfazer.
+     */
+    const ok = await alert.confirm(
+      `Trocar para o plano ${codigo}?`,
+      "Você pode trocar uma vez por ciclo. Depois de confirmar, a próxima troca só fica disponível no mês que vem.",
+      { confirmText: "Trocar de plano" },
+    );
+
+    if (!ok) return;
+
+    setSalvandoPlano(codigo);
 
     try {
       const atualizada = await AssinaturaService.trocarPlano(codigo);
@@ -247,6 +307,8 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
     } catch (e) {
       const err = e as { response?: { data?: { message?: string } }; message?: string };
       alert.error("O plano não foi trocado", err?.response?.data?.message ?? err?.message ?? "Tente de novo em instantes.");
+    } finally {
+      setSalvandoPlano(null);
     }
   };
 
@@ -437,6 +499,24 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
           </div>
         </motion.section>
 
+        {/* ---------- Pix com confirmação automática ---------- */}
+        {/*
+          Aviso, não botão: não há nada para ativar. Com o Mercado Pago ligado,
+          toda cobrança já sai identificada — o cliente só precisa saber que
+          não vai mais precisar mandar comprovante, senão continua mandando.
+        */}
+        {automaticoDisponivel && faturasAbertas.length > 0 && (
+          <div className="flex items-center gap-3 rounded-2xl border border-success/20 bg-success/[0.05] px-5 py-3.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-success/15 text-success">
+              <ShieldCheck className="h-4 w-4" />
+            </span>
+            <p className="min-w-0 text-[12.5px] leading-relaxed text-mist">
+              <span className="text-ink">Pagou, liberou.</span> O Pix daqui é identificado: assim que o dinheiro cai, sua conta é
+              liberada sozinha — sem enviar comprovante nem esperar confirmação.
+            </p>
+          </div>
+        )}
+
         {/* ---------- Faturas: uma lista só ---------- */}
         <section className="card glass-sheen overflow-hidden">
           <div className="flex items-center justify-between gap-3 border-b border-fg/[0.06] px-5 py-3.5">
@@ -494,10 +574,77 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
           )}
         </section>
 
-        {/* ---------- Rodapé: empresa, plano e suporte em uma faixa ---------- */}
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {/* ---------- Rodapé: plano atual, empresa e suporte ---------- */}
+        {/* Três colunas a partir de `xl`, duas em `sm`: o outlet de
+            Configurações é largo, e duas colunas deixavam metade da faixa
+            vazia em monitor grande. */}
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {/* ---- Plano atual: o que a pessoa está pagando, por extenso ---- */}
+          <div className="card glass-sheen flex flex-col p-5">
+            <p className="text-[11px] uppercase tracking-[1.2px] text-faint">Plano atual</p>
+
+            {plano ? (
+              <>
+                <div className="mt-2 flex flex-wrap items-baseline gap-x-2">
+                  <span className="text-[22px] leading-none tracking-tight text-ink">{plano.nome}</span>
+                  <span className="text-[13px] tabular-nums text-mist">
+                    {formatCurrencyFromCents(plano.precoCentavos)}
+                    <span className="text-faint">{CICLO_LABEL[plano.ciclo]}</span>
+                  </span>
+                </div>
+
+                {plano.publicoAlvo && <p className="mt-1 text-[11.5px] text-accent-soft">{plano.publicoAlvo}</p>}
+
+                {/* Os tetos que a pessoa mais esbarra, nesta ordem. `null` no
+                    banco é "sem limite" — aqui vira o símbolo, não a palavra
+                    "null" nem um zero enganoso. */}
+                <div className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-fg/[0.06]">
+                  {(
+                    [
+                      ["Usuários", plano.limiteUsuarios],
+                      ["Clientes", plano.limiteClientes],
+                      ["Produtos", plano.limiteProdutos],
+                      ["Vendas/mês", plano.limitePedidosMes],
+                    ] as [string, number | null][]
+                  ).map(([rotulo, valor]) => (
+                    <div key={rotulo} className="bg-canvas px-3 py-2 text-center">
+                      <p className="text-[15px] leading-none tabular-nums text-ink">
+                        {valor === null ? "∞" : formatNumber(valor)}
+                      </p>
+                      <p className="mt-1 text-[9.5px] uppercase tracking-[0.06em] text-faint">{rotulo}</p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="mt-2 text-[13px] text-faint">Nenhum plano definido. Fale com o suporte.</p>
+            )}
+
+            <div className="flex-1" />
+
+            {podeTrocarPlano && (
+              trocaLiberada ? (
+                <button onClick={abrirTrocaDePlano} className="focus-ring mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl border border-fg/[0.07] py-2 text-[12px] text-mist transition hover:bg-fg/[0.04] hover:text-ink">
+                  <Sparkles size={13} />
+                  Ver planos e trocar
+                </button>
+              ) : (
+                /* Travado: o botão continua na tela, explicando o porquê.
+                   Sumir com ele faria a pessoa procurar onde estava — e o
+                   "sumiu" é sempre lido como defeito, não como regra. */
+                <p className="mt-4 flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-fg/[0.1] py-2 text-center text-[11.5px] leading-relaxed text-faint">
+                  <Clock size={12} className="shrink-0" />
+                  Nova troca de plano em {dataBr(trocaLiberaEm)}
+                </p>
+              )
+            )}
+          </div>
+
+          {/* ---- Empresa ---- */}
           <div className="card glass-sheen p-5">
-            <div className="flex items-center gap-3">
+            <p className="text-[11px] uppercase tracking-[1.2px] text-faint">Empresa</p>
+
+            <div className="mt-3 flex items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-fg/[0.07] bg-fg/[0.03]">
                 {empresa?.urlLogo ? <img src={empresa.urlLogo} alt="" className="h-full w-full object-cover" /> : <Building2 className="h-5 w-5 text-muted" />}
               </div>
@@ -509,11 +656,10 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
               </div>
             </div>
 
-            {podeTrocarPlano && (
-              <button onClick={abrirTrocaDePlano} className="focus-ring mt-4 w-full rounded-xl border border-fg/[0.07] py-2 text-[12px] text-mist transition hover:bg-fg/[0.04] hover:text-ink">
-                Trocar de plano antes de pagar
-              </button>
-            )}
+            <p className="mt-4 flex items-center gap-2 rounded-xl border border-fg/[0.06] px-3 py-2 text-[12px] text-mist">
+              {contaLiberada ? <CircleCheck size={14} className="shrink-0 text-success" /> : <Clock size={14} className="shrink-0 text-warning" />}
+              {contaLiberada ? "Conta liberada, acesso completo" : "Liberamos após confirmar o pagamento"}
+            </p>
           </div>
 
           <div className="card glass-sheen flex flex-col gap-2 p-5">
@@ -545,7 +691,58 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
         size="sm"
       >
         <div className="flex flex-col items-center">
-          {pix?.copiaECola ? (
+          {/* ---- Pix do Mercado Pago: confirma sozinho ---- */}
+          {cobranca?.qrCode ? (
+            <>
+              <div className="relative mb-4 rounded-2xl bg-white p-3 shadow-e2">
+                {cobranca.qrCodeBase64 ? (
+                  <img src={`data:image/png;base64,${cobranca.qrCodeBase64}`} alt="QR Code do Pix" className="h-52 w-52 rounded-lg" />
+                ) : (
+                  <div className="grid h-52 w-52 place-items-center text-[12px] text-slate-500">Use o código abaixo</div>
+                )}
+              </div>
+
+              <p className="flex items-center gap-1.5 text-[13px] text-success">
+                <ShieldCheck size={14} />
+                Confirmação automática
+              </p>
+              <p className="mt-1 max-w-[280px] text-center text-[11.5px] leading-relaxed text-faint">
+                Assim que o pagamento cair, sua conta é liberada sozinha — sem enviar comprovante.
+              </p>
+
+              <button
+                onClick={() => copiarTexto(cobranca.qrCode)}
+                className="focus-ring mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 text-sm text-white transition-all hover:brightness-110"
+              >
+                {copiado ? (
+                  <>
+                    <Check size={16} /> Código copiado
+                  </>
+                ) : (
+                  <>
+                    <Copy size={16} /> Copiar código Pix
+                  </>
+                )}
+              </button>
+
+              {cobranca.expiraEm && (
+                <p className="mt-2 flex items-center gap-1.5 text-[11px] text-faint">
+                  <Clock size={11} />
+                  Este código vale até {new Date(cobranca.expiraEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                </p>
+              )}
+
+              <details className="mt-3 w-full">
+                <summary className="cursor-pointer list-none text-center text-[11px] text-faint transition-colors hover:text-mist">Ver o código completo</summary>
+                <p className="mt-2 max-h-24 select-all overflow-y-auto break-all rounded-xl border border-fg/[0.07] bg-canvas p-3 font-mono text-[11px] leading-relaxed text-mist">{cobranca.qrCode}</p>
+              </details>
+            </>
+          ) : qrLoading && automaticoDisponivel ? (
+            <div className="flex flex-col items-center gap-3 py-16 text-[13px] text-mist">
+              <Loader2 className="h-6 w-6 animate-spin text-accent" />
+              Gerando sua cobrança Pix…
+            </div>
+          ) : pix?.copiaECola ? (
             <>
               {/* Cartão branco e QR preto: contraste é requisito de leitura. */}
               <div className="relative mb-4 rounded-2xl bg-white p-3 shadow-e2">
@@ -583,7 +780,10 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
             <p className="py-6 text-center text-[13px] text-mist">A chave Pix ainda não foi configurada. Fale com o suporte para receber os dados de pagamento.</p>
           )}
 
-          {faturaSelecionada && (
+          {/* "Já paguei" é do Pix manual. Na cobrança do Mercado Pago o aviso
+              não serve para nada — quem confirma é o webhook, e oferecer o
+              botão faria a pessoa achar que precisa avisar alguém. */}
+          {faturaSelecionada && !cobranca?.qrCode && (
             <button
               onClick={() => avisarPagamento(faturaSelecionada)}
               disabled={enviando}
@@ -598,49 +798,52 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
         </div>
       </Modal>
 
-      {/* ==================== MODAL TROCA DE PLANO ==================== */}
+      {/* ==================== TROCA DE PLANO ==================== */}
+      {/*
+        A vitrine inteira, dentro do sistema.
+
+        Antes era uma lista de botões com nome e preço — a versão pobre dos
+        planos, mostrada justamente na hora de gastar mais. Aqui vale o mesmo
+        cartão da página pública (`CardPlano`), com limites, recursos e o
+        destaque do plano vigente, no tema que a pessoa escolheu.
+      */}
       <Modal
         open={trocandoPlano}
-        onClose={() => setTrocandoPlano(false)}
-        title="Trocar de plano"
+        onClose={() => !salvandoPlano && setTrocandoPlano(false)}
+        title="Escolha seu plano"
         subtitle={
           assinatura?.status === "ATIVA"
             ? "No upgrade geramos uma fatura só com a diferença. No downgrade não há cobrança: o preço menor vale no próximo ciclo."
             : "A fatura em aberto passa a valer o preço do novo plano."
         }
-        size="sm"
+        size="full"
       >
         {planos.length === 0 ? (
-          <div className="flex items-center justify-center gap-2 py-8 text-sm text-mist">
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-mist">
             <Loader2 className="h-4 w-4 animate-spin text-accent" /> Carregando planos...
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
-            {planos.map((p) => {
-              const atual = p.codigo === plano?.codigo;
+          <div className="p-4 sm:p-6">
+            <p className="mb-4 flex items-center gap-2 rounded-xl border border-warning/25 bg-warning/[0.07] px-3.5 py-2.5 text-[12px] leading-relaxed text-warning">
+              <Clock size={14} className="shrink-0" />
+              Você troca de plano uma vez por ciclo. Depois de confirmar, a próxima troca fica disponível só no mês que vem.
+            </p>
 
-              return (
-                <button
+            {/* Cartões da mesma altura, como na vitrine pública — a mesma
+                escada de planos não pode ter duas aparências. */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-3">
+              {planos.map((p) => (
+                <CardPlano
                   key={p.id}
-                  onClick={() => trocarPlano(p.codigo)}
-                  className={`focus-ring flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition ${
-                    atual ? "border-accent/40 bg-accent/[0.08]" : "border-fg/[0.07] hover:border-accent/30 hover:bg-fg/[0.03]"
-                  }`}
-                >
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-2 text-[13px] text-ink">
-                      {p.nome}
-                      {atual && <span className="rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] text-accent-soft">Atual</span>}
-                    </span>
-                    <span className="mt-0.5 block truncate text-[11px] text-mist">{p.descricao}</span>
-                  </span>
-                  <span className="shrink-0 text-right">
-                    <span className="block text-[13px] tabular-nums text-ink">{formatCurrencyFromCents(p.precoCentavos)}</span>
-                    <span className="block text-[10px] text-faint">{CICLO_LABEL[p.ciclo]}</span>
-                  </span>
-                </button>
-              );
-            })}
+                  plano={p}
+                  atual={p.codigo === plano?.codigo}
+                  bloqueado={Boolean(salvandoPlano) && salvandoPlano !== p.codigo}
+                  ocupado={salvandoPlano === p.codigo}
+                  rotuloAcao={`Mudar para ${p.nome}`}
+                  onEscolher={() => trocarPlano(p.codigo)}
+                />
+              ))}
+            </div>
           </div>
         )}
       </Modal>
