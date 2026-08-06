@@ -457,11 +457,11 @@ const Sidebar = () => {
                   * sempre falta a metade que está no outro. A planilha faz o
                   * mesmo trabalho e é configurável pelo dono.
                   *
-                  * Sem trava de plano: o pacote comercial ainda vai ser
-                  * reorganizado.
+                  * Entra a partir do Standard, com teto de quantidade — por
+                  * isso o cadeado depende da flag, e não da existência da tela.
                   */}
                 {cat("Produção")}
-                {item("planilhas", <Table2 size={17} />, "Planilhas")}
+                {item("planilhas", <Table2 size={17} />, "Planilhas", false, !temRecurso("planilhas"))}
 
                 {cat("Relacionamento")}
                 {item("clientes", <Users size={17} />, "Clientes")}

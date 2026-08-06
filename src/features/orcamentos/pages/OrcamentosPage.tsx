@@ -48,7 +48,6 @@ const OrcamentosPage = () => {
   const [filtro, setFiltro] = useState<"todos" | StatusOrcamento>("todos");
   const [salvando, setSalvando] = useState<string | null>(null);
   const [visualizando, setVisualizando] = useState<Orcamento | null>(null);
-  const refNotaVisualizacao = useRef<HTMLDivElement>(null);
 
   const carregar = async () => {
     setCarregando(true);
@@ -86,7 +85,17 @@ const OrcamentosPage = () => {
      orçamento escolhido antes de rasterizar. Evita N nós escondidos na lista. */
   const refNotaBaixada = useRef<HTMLDivElement>(null);
 
-  const orcamentoAlvo = filtrados.find((o) => o.id === baixandoId) ?? null;
+  /*
+   * TODO download — da lista e do modal — sai deste nó, nunca do que está na
+   * tela.
+   *
+   * O nó visível vive dentro do corpo rolável do modal e com a largura que
+   * sobrar na tela: rasterizá-lo entrega um PNG do tamanho da janela e, se a
+   * pessoa tiver rolado até o total antes de clicar, com o topo cortado. O nó
+   * de fora tem 900px fixos, nunca rola e está sempre inteiro — o arquivo sai
+   * igual em qualquer aparelho, independente do que a pessoa estava vendo.
+   */
+  const orcamentoAlvo = filtrados.find((o) => o.id === baixandoId) ?? visualizando;
 
   const baixar = async (o: Orcamento) => {
     setBaixandoId(o.id);
@@ -225,20 +234,24 @@ const OrcamentosPage = () => {
         onClose={() => setVisualizando(null)}
         title="Orçamento"
         subtitle={visualizando ? `#${visualizando.codigo} · ${visualizando.clienteNome}` : ""}
-        size="full"
+        size="xl"
       >
         {visualizando && (
-          <div className="flex h-full flex-col">
-            {/* O orçamento em si — visual de leitura, sem pagamento e sem QR. */}
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="mx-auto w-full max-w-[900px]">
-                <OrcamentoNota orcamento={visualizando} refNota={refNotaVisualizacao} />
-              </div>
+          <div className="flex flex-col gap-4">
+            {/*
+              O orçamento em si — visual de leitura, sem pagamento e sem QR.
+
+              Sem scroller próprio aqui: o corpo do modal já rola. Dois
+              scrollers aninhados faziam a roda parar no de dentro e o rodapé
+              ficar preso fora de alcance no celular.
+            */}
+            <div className="overflow-hidden rounded-lg border border-fg/[0.06]">
+              <OrcamentoNota orcamento={visualizando} />
             </div>
 
             {/* Rodapé de ações */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-fg/[0.06] bg-surface px-4 py-3">
-              <MenuDownloadNota refNota={refNotaVisualizacao} nomeEmpresa={enterprise?.nomeFantasia ?? "orcamento"} prefixo="orcamento" titulo="Baixar orçamento" />
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-fg/[0.06] pt-3">
+              <MenuDownloadNota refNota={refNotaBaixada} nomeEmpresa={enterprise?.nomeFantasia ?? "orcamento"} prefixo="orcamento" titulo="Baixar orçamento" />
 
               <div className="flex flex-wrap items-center gap-2">
                 {visualizando.status !== "APROVADO" && (
@@ -290,9 +303,9 @@ const OrcamentosPage = () => {
         )}
       </Modal>
 
-      {/* Nó de orçamento fora da tela, para o download rápido da linha.
-          `html-to-image` precisa que o nó exista no DOM — escondido à esquerda,
-          não `display:none`. */}
+      {/* Nó de orçamento fora da tela — é a fonte de TODO download, tanto o
+          rápido da linha quanto o do modal. `html-to-image` precisa que o nó
+          exista no DOM: escondido à esquerda, nunca `display:none`. */}
       <div className="fixed -left-[9999px] top-0 w-[900px]" aria-hidden>
         {orcamentoAlvo && <OrcamentoNota orcamento={orcamentoAlvo} refNota={refNotaBaixada} />}
       </div>

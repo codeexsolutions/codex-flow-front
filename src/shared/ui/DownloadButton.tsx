@@ -57,9 +57,16 @@ export const gerarBlobNota = async (ref: RefObject<HTMLDivElement>): Promise<Blo
   const node = ref.current;
   if (!node) throw new Error("Nota não encontrada.");
 
-  /* Qualquer elemento rolado — o container da nota ou um scroller aninhado —
-     mostra só um pedaço do conteúdo, e é esse pedaço que vai para o PNG. Zeramos
-     todos antes de fotografar e devolvemos depois. */
+  /* Qualquer elemento rolado — um scroller acima da nota ou aninhado dentro
+     dela — mostra só um pedaço do conteúdo, e é esse pedaço que vai para o PNG.
+     Zeramos todos antes de fotografar e devolvemos depois.
+
+     Subir por TODOS os ancestrais, e não só pelo pai, é o que corrige a nota
+     cortada pela metade: dentro de um modal a nota fica a dois ou três níveis
+     do scroller de verdade (o corpo do modal), então olhar apenas
+     `node.parentElement` acertava um `<div>` que nunca rola e deixava o
+     scroller real intacto. Quem tivesse rolado até o total antes de clicar em
+     baixar levava o topo da nota cortado. */
   const rolados: { el: HTMLElement; top: number; left: number }[] = [];
 
   const guardarERolarAoTopo = (el: HTMLElement | null) => {
@@ -70,7 +77,10 @@ export const gerarBlobNota = async (ref: RefObject<HTMLDivElement>): Promise<Blo
     el.scrollLeft = 0;
   };
 
-  guardarERolarAoTopo(node.parentElement);
+  for (let pai = node.parentElement; pai; pai = pai.parentElement) {
+    guardarERolarAoTopo(pai);
+  }
+
   node.querySelectorAll<HTMLElement>("*").forEach(guardarERolarAoTopo);
 
   await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
