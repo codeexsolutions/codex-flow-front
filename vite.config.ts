@@ -20,10 +20,14 @@ export default defineConfig(({ mode }) => {
       react(),
 
       VitePWA({
-        // "prompt" e não "autoUpdate": com autoUpdate a versão troca sozinha no
-        // meio do uso — inclusive enquanto o vendedor fecha uma venda. Aqui a
-        // troca só acontece quando a pessoa aceita o aviso.
-        registerType: "prompt",
+        // "autoUpdate": a versão nova entra sozinha, sem depender de clique.
+        //
+        // Era "prompt", e o aviso podia ser dispensado no X — o worker ficava
+        // parado em `waiting` e o aviso não voltava para aquela versão, então um
+        // clique acidental prendia o cliente na versão antiga para sempre. O
+        // preço conhecido desta troca é a versão poder mudar durante o uso;
+        // ver a proteção do PDV em `PwaPrompts`.
+        registerType: "autoUpdate",
         injectRegister: "auto",
 
         includeAssets: ["apple-touch-icon.png", "favicon-32.png", "offline.html"],
@@ -61,9 +65,10 @@ export default defineConfig(({ mode }) => {
           globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
           cleanupOutdatedCaches: true,
           clientsClaim: true,
-          // `skipWaiting` desligado: quem decide a hora de trocar é o usuário,
-          // pelo aviso de nova versão.
-          skipWaiting: false,
+          // Ligado junto com o `autoUpdate`: sem ele o worker novo instala mas
+          // fica esperando todas as abas fecharem, e num PWA que passa o dia
+          // aberto isso é o mesmo que não atualizar.
+          skipWaiting: true,
 
           // Sem isto, abrir o app offline dava tela de erro do navegador.
           navigateFallback: "/index.html",
@@ -92,7 +97,22 @@ export default defineConfig(({ mode }) => {
             {
               // Leituras da API: rede primeiro, cache como rede de segurança.
               // Dá ao app uma última versão dos dados quando a conexão cai.
-              urlPattern: ({ url, request }) => request.method === "GET" && url.pathname.startsWith("/v1"),
+              //
+              // Sessão e status da empresa ficam FORA: a API responde 200 para
+              // empresa inativa, e um 200 é cacheável. O efeito era cruel —
+              // empresa que pagava e era reativada continuava vendo a tela de
+              // bloqueio por até 24h, servida do cache, sem jeito de forçar.
+              // Estado de autorização não pode vir de cache.
+              //
+              // A lista vai inline de propósito: o Workbox serializa esta
+              // função para dentro do sw.js, e uma constante de fora do escopo
+              // não existiria lá — viraria erro em tempo de execução.
+              urlPattern: ({ url, request }) =>
+                request.method === "GET" &&
+                url.pathname.startsWith("/v1") &&
+                !["/v1/auth", "/v1/usuarios/me", "/v1/assinatura"].some((rota) =>
+                  url.pathname.startsWith(rota),
+                ),
               handler: "NetworkFirst",
               options: {
                 cacheName: "api-leitura",

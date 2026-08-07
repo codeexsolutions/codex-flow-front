@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, RefreshCw, WifiOff, X } from "lucide-react";
+import { Download, WifiOff, X } from "lucide-react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 
 /**
@@ -46,7 +46,7 @@ const Faixa = ({ icon, texto, acao, onFechar, tom = "accent" }: { icon: React.Re
 
 const PwaPrompts = () => {
   const {
-    needRefresh: [precisaAtualizar, setPrecisaAtualizar],
+    needRefresh: [precisaAtualizar],
     updateServiceWorker,
   } = useRegisterSW({
     /*
@@ -79,6 +79,19 @@ const PwaPrompts = () => {
       });
     },
   });
+
+  /*
+   * Versão nova aplicada na hora, sem perguntar.
+   *
+   * Antes isto era um aviso com botão "Atualizar" e um X. O X escondia o aviso
+   * e ele não voltava enquanto aquele worker estivesse esperando — quem clicava
+   * sem querer ficava preso na versão antiga indefinidamente, e era esse o
+   * relato de "o programa não atualiza". `updateServiceWorker(true)` troca o
+   * worker e recarrega a página.
+   */
+  useEffect(() => {
+    if (precisaAtualizar) void updateServiceWorker(true);
+  }, [precisaAtualizar, updateServiceWorker]);
 
   const [instalavel, setInstalavel] = useState<BeforeInstallPromptEvent | null>(null);
   const [offline, setOffline] = useState(() => !navigator.onLine);
@@ -125,24 +138,11 @@ const PwaPrompts = () => {
     setInstalavel(null);
   };
 
-  if (!precisaAtualizar && !instalavel && !offline) return null;
+  if (!instalavel && !offline) return null;
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[300] flex flex-col gap-2 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:left-auto sm:right-4 sm:w-[380px]">
       {offline && <Faixa tom="warning" icon={<WifiOff size={16} />} texto="Você está sem conexão. O app continua funcionando, mas os dados podem estar desatualizados." />}
-
-      {precisaAtualizar && (
-        <Faixa
-          icon={<RefreshCw size={16} />}
-          texto="Uma nova versão do CodeEx Flow está pronta."
-          onFechar={() => setPrecisaAtualizar(false)}
-          acao={
-            <button type="button" onClick={() => updateServiceWorker(true)} className="focus-ring shrink-0 rounded-xl bg-accent px-3 py-1.5 text-[12px] text-white transition hover:brightness-110">
-              Atualizar
-            </button>
-          }
-        />
-      )}
 
       {instalavel && (
         <Faixa

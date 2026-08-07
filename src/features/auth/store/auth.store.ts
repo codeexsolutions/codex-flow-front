@@ -8,6 +8,7 @@ import useEnterprise from "@/features/empresa/store/enterprise.store";
 import { toCodigoEmpresaBase } from "@/shared/domain/empresa";
 import useTransicao from "@/shared/session/transicao.store";
 import { resetarLojas } from "@/shared/session/resetarLojas";
+import { registrarGanchosDeSessao } from "@/shared/api/sysgrafix";
 
 /*
  * A sessão NÃO mora mais aqui em token: o JWT vive num cookie httpOnly, que o
@@ -152,5 +153,33 @@ const useAuth = create<AuthStore>((set, get) => ({
     useTransicao.getState().fechar();
   },
 }));
+
+/*
+ * Liga a renovação automática de sessão à store.
+ *
+ * `aoRenovar` reaproveita o usuário que o refresh devolve — ele vem relido do
+ * banco, então é por aqui que uma empresa reativada volta a valer sem logout.
+ * `aoExpirar` derruba a sessão, e o roteador leva para o login sozinho.
+ */
+registrarGanchosDeSessao({
+  aoRenovar: (usuario) => {
+    useAuth.setState({
+      user: deSessaoParaUsuario(usuario as UsuarioSessao),
+      isLogged: true,
+    });
+  },
+
+  aoExpirar: () => {
+    // Só avisa quem de fato tinha sessão: para quem nunca logou, o 401 é o
+    // estado normal da tela de login e o alerta seria ruído.
+    const tinhaSessao = useAuth.getState().isLogged;
+
+    useAuth.getState().clearAuth();
+
+    if (tinhaSessao) {
+      alert.warning("Sessão expirada", "Sua sessão expirou. Faça login novamente.");
+    }
+  },
+});
 
 export default useAuth;
