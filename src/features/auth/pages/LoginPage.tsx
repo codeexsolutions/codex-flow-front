@@ -9,6 +9,7 @@ import AuthFormInputs from "@/features/auth/schema/auth.schema";
 import { onlyDigits } from "@/shared/utils/format";
 import useTransicao from "@/shared/session/transicao.store";
 import RedeAnimada from "@/features/landing/components/RedeAnimada";
+import BotaoInstalar from "@/shared/pwa/BotaoInstalar";
 
 const LANDING_ROUTE = "/page";
 
@@ -188,6 +189,20 @@ const AuthPage = () => {
           <Sparkles size={15} className="text-accent-soft" />
           Conhecer o CodeEx Flow
         </motion.button>
+
+        {/* Instalar o app.
+            Aqui, e não só depois de entrar: quem usa no balcão abre o sistema
+            todo dia pelo navegador, e é na tela de login que ele percebe que
+            teria um ícone na tela de início. Some sozinho quando já está
+            instalado ou quando o navegador não instala PWA. */}
+        <motion.div
+          className="mt-3 flex justify-center"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.32, duration: 0.5 }}
+        >
+          <BotaoInstalar className="w-full sm:w-auto" />
+        </motion.div>
 
         <motion.p
           className="mt-3 hidden text-center text-[10px] text-muted sm:block"

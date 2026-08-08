@@ -13,6 +13,7 @@ import { tocarNavegacao } from "@/shared/session/somSessao";
 import useEquipeStore, { planoTemEquipe } from "@/features/funcionarios/store/equipe.store";
 import usePlano from "@/shared/plano/plano.store";
 import { BUILD_ID, forcarAtualizacao } from "@/shared/pwa/versao";
+import BotaoInstalar from "@/shared/pwa/BotaoInstalar";
 
 type AbaId = "gerenciamento" | "atendimento";
 
@@ -501,6 +502,10 @@ const Sidebar = () => {
             </span>
             <span className="flex-1">Ajuda e suporte</span>
           </button>
+
+          {/* Instalar o app: some sozinho quando já está instalado ou quando o
+              navegador não instala PWA — ver `BotaoInstalar`. */}
+          <BotaoInstalar variante="menu" />
         </div>
 
         {/* Usuário */}

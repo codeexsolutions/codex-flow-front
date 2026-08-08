@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AliceCarousel from "react-alice-carousel";
 import "react-alice-carousel/lib/alice-carousel.css";
 import {
@@ -72,6 +72,19 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
   });
 
   const [detalhe, setDetalhe] = useState<Plano | null>(null);
+
+  /*
+   * Seleção vinda de fora traz o cartão para a frente.
+   *
+   * O plano pode ser escolhido sem tocar no carrossel — o link com `?plano=` na
+   * URL e o diagnóstico comercial fazem isso. Sem este sincronismo o cadastro
+   * abria mostrando um plano e com outro marcado, e a pessoa seguia achando
+   * que ia contratar o que estava vendo.
+   */
+  useEffect(() => {
+    const i = planos.findIndex((p) => p.codigo === selecionado);
+    if (i >= 0) setIndice(i);
+  }, [selecionado, planos]);
 
   const itens = useMemo(
     () =>
@@ -185,12 +198,18 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
       </p>
 
       {/*
-        Um cartão por vez até 900px, dois acima.
+        SEMPRE um cartão por vez.
 
-        Antes eram até três — e o cadastro é uma coluna de 576px, então cada
-        cartão ficava com ~190px: o preço quebrava linha, o KPI row virava
-        quatro colunas de dois dígitos e nada era legível. Um cartão inteiro
-        e grande compara melhor do que três espremidos.
+        Havia uma regra `900: { items: 2 }`, e ela media a coisa errada: o
+        `responsive` do Alice Carousel olha a largura da JANELA, não a do
+        container. O cadastro é uma coluna de 576px — então num monitor comum
+        a janela passava de 900px, dois cartões entravam nessa coluna e cada um
+        ficava com ~280px: preço quebrando linha e o KPI row ilegível. Era o
+        mesmo defeito que a versão de três cartões já tinha tido.
+
+        Dois cartões também quebravam a navegação: com dois visíveis, o índice
+        para no penúltimo (não há como rolar além de `total - visíveis`), e o
+        último pontinho nunca acendia — clicar nele não fazia nada.
 
         `-mx-2` compensa o padding dos itens, senão o primeiro nasce afastado
         da borda e o carrossel parece desalinhado.
@@ -200,7 +219,7 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
           items={itens}
           activeIndex={indice}
           onSlideChanged={(e) => setIndice(e.item)}
-          responsive={{ 0: { items: 1 }, 900: { items: 2 } }}
+          responsive={{ 0: { items: 1 } }}
           disableButtonsControls
           disableDotsControls
           mouseTracking

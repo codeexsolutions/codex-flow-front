@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Download, WifiOff, X } from "lucide-react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 
+import { useInstalacaoPwa } from "@/shared/pwa/instalacao";
+
 /**
  * Avisos do app instalável, todos discretos e no rodapé.
  *
@@ -14,12 +16,6 @@ import { useRegisterSW } from "virtual:pwa-register/react";
  * 3. **Procura por versão nova** (sem interface) — o motivo de o componente
  *    montar o `useRegisterSW`.
  */
-
-/** Evento do Chrome que permite disparar a instalação na hora que quisermos. */
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-};
 
 const DISPENSOU_INSTALACAO = "codex-flow-instalacao-dispensada";
 
@@ -109,24 +105,14 @@ const PwaPrompts = () => {
     },
   });
 
-  const [instalavel, setInstalavel] = useState<BeforeInstallPromptEvent | null>(null);
+  /* O convite de instalação é capturado num módulo só (`pwa/instalacao`): o
+     evento do navegador serve uma vez, e dois donos brigariam por ele. */
+  const { podeInstalar, instalar } = useInstalacaoPwa();
+
+  const [dispensou, setDispensou] = useState(() => Boolean(localStorage.getItem(DISPENSOU_INSTALACAO)));
   const [offline, setOffline] = useState(() => !navigator.onLine);
 
-  /* ---------------- Convite de instalação ---------------- */
-  useEffect(() => {
-    if (localStorage.getItem(DISPENSOU_INSTALACAO)) return;
-
-    const aoPoderInstalar = (e: Event) => {
-      // Sem o preventDefault o Chrome mostra o banner dele, na hora dele.
-      e.preventDefault();
-      setInstalavel(e as BeforeInstallPromptEvent);
-    };
-
-    window.addEventListener("beforeinstallprompt", aoPoderInstalar);
-    window.addEventListener("appinstalled", () => setInstalavel(null));
-
-    return () => window.removeEventListener("beforeinstallprompt", aoPoderInstalar);
-  }, []);
+  const instalavel = podeInstalar && !dispensou;
 
   /* ---------------- Estado da conexão ---------------- */
   useEffect(() => {
@@ -142,16 +128,9 @@ const PwaPrompts = () => {
     };
   }, []);
 
-  const instalar = async () => {
-    if (!instalavel) return;
-    await instalavel.prompt();
-    await instalavel.userChoice;
-    setInstalavel(null);
-  };
-
   const dispensarInstalacao = () => {
     localStorage.setItem(DISPENSOU_INSTALACAO, "1");
-    setInstalavel(null);
+    setDispensou(true);
   };
 
   if (!instalavel && !offline) return null;
@@ -166,7 +145,7 @@ const PwaPrompts = () => {
           texto="Instale o CodeEx Flow e abra direto da tela de início."
           onFechar={dispensarInstalacao}
           acao={
-            <button type="button" onClick={instalar} className="focus-ring shrink-0 rounded-xl bg-accent px-3 py-1.5 text-[12px] text-white transition hover:brightness-110">
+            <button type="button" onClick={() => void instalar()} className="focus-ring shrink-0 rounded-xl bg-accent px-3 py-1.5 text-[12px] text-white transition hover:brightness-110">
               Instalar
             </button>
           }
