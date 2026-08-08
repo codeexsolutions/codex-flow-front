@@ -5,15 +5,14 @@ import { useRegisterSW } from "virtual:pwa-register/react";
 /**
  * Avisos do app instalável, todos discretos e no rodapé.
  *
- * São três coisas que o PWA precisava e não tinha:
+ * Duas faixas e uma tarefa invisível:
  *
- * 1. **Nova versão** — com `skipWaiting` ligado, a troca acontecia sozinha no
- *    meio do uso. Agora o service worker fica esperando e quem decide é o
- *    usuário, pelo botão "Atualizar".
- * 2. **Convite de instalação** — ninguém descobria que dava para instalar.
- * 3. **Aviso de offline** — sem rede o app continua abrindo (o service worker
+ * 1. **Convite de instalação** — ninguém descobria que dava para instalar.
+ * 2. **Aviso de offline** — sem rede o app continua abrindo (o service worker
  *    serve do cache), mas a pessoa precisa saber que os dados podem estar
  *    desatualizados.
+ * 3. **Procura por versão nova** (sem interface) — o motivo de o componente
+ *    montar o `useRegisterSW`.
  */
 
 /** Evento do Chrome que permite disparar a instalação na hora que quisermos. */
@@ -45,10 +44,20 @@ const Faixa = ({ icon, texto, acao, onFechar, tom = "accent" }: { icon: React.Re
 );
 
 const PwaPrompts = () => {
-  const {
-    needRefresh: [precisaAtualizar],
-    updateServiceWorker,
-  } = useRegisterSW({
+  /*
+   * Quem aplica a versão nova é o próprio vite-plugin-pwa.
+   *
+   * Com `registerType: "autoUpdate"` (ver `vite.config.ts`), o worker novo
+   * instala com `skipWaiting`, assume o controle e o plugin recarrega a página
+   * no evento `activated`. `needRefresh` NUNCA dispara nesse modo, e
+   * `updateServiceWorker()` não faz nada — por isso não há botão "Atualizar"
+   * aqui: ele daria a impressão de controlar algo que já acontece sozinho.
+   *
+   * O que sobra por nossa conta é PROCURAR a versão nova, abaixo: o navegador
+   * só procura sozinho quando a página é aberta de novo, e um app instalado
+   * pode passar dias sem isso.
+   */
+  useRegisterSW({
     /*
      * O navegador só procura versão nova quando a página é aberta de novo — e
      * um PWA instalado pode ficar dias sem ser fechado. Sem esta checagem, um
@@ -72,26 +81,33 @@ const PwaPrompts = () => {
         }
       };
 
-      setInterval(procurar, 60 * 60 * 1000);
+      /*
+       * Quatro gatilhos, porque nenhum deles sozinho cobre um app instalado.
+       *
+       * - `setInterval`: o caso do balcão, com o app aberto o dia inteiro. O
+       *   navegador estrangula timers em aba escondida, então ele não basta.
+       * - `visibilitychange`: quem volta para o app depois de usar outro.
+       * - `pageshow` com `persisted`: no celular a aba volta do bfcache sem
+       *   disparar `visibilitychange` — sem isto, quem sai e volta pelo
+       *   alternador de apps nunca dispara checagem nenhuma.
+       * - `online`: o app que passou horas sem rede procura assim que ela
+       *   volta, em vez de esperar a próxima hora cheia.
+       */
+      const DE_HORA_EM_HORA = 60 * 60 * 1000;
+
+      setInterval(procurar, DE_HORA_EM_HORA);
 
       document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible") procurar();
+        if (document.visibilityState === "visible") void procurar();
       });
+
+      window.addEventListener("pageshow", (evento) => {
+        if ((evento as PageTransitionEvent).persisted) void procurar();
+      });
+
+      window.addEventListener("online", () => void procurar());
     },
   });
-
-  /*
-   * Versão nova aplicada na hora, sem perguntar.
-   *
-   * Antes isto era um aviso com botão "Atualizar" e um X. O X escondia o aviso
-   * e ele não voltava enquanto aquele worker estivesse esperando — quem clicava
-   * sem querer ficava preso na versão antiga indefinidamente, e era esse o
-   * relato de "o programa não atualiza". `updateServiceWorker(true)` troca o
-   * worker e recarrega a página.
-   */
-  useEffect(() => {
-    if (precisaAtualizar) void updateServiceWorker(true);
-  }, [precisaAtualizar, updateServiceWorker]);
 
   const [instalavel, setInstalavel] = useState<BeforeInstallPromptEvent | null>(null);
   const [offline, setOffline] = useState(() => !navigator.onLine);

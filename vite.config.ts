@@ -1,7 +1,35 @@
+import { execSync } from "node:child_process";
 import { fileURLToPath, URL } from "node:url";
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
+
+/**
+ * Identidade do build, carimbada no código.
+ *
+ * Sem ela, "o app está desatualizado?" é uma sensação: ninguém consegue olhar
+ * a tela e dizer qual versão está rodando, nem comparar com o que foi
+ * publicado. Com o carimbo, a pergunta vira uma conferência de dez segundos.
+ *
+ * Na Vercel o commit vem em `VERCEL_GIT_COMMIT_SHA`; fora dela, o git local
+ * responde. Sem git (um tarball baixado), sobra a data — que ainda distingue
+ * um build do outro.
+ */
+function identidadeDoBuild(): string {
+  const data = new Date().toISOString().slice(0, 16).replace("T", " ");
+
+  const commit = (() => {
+    if (process.env.VERCEL_GIT_COMMIT_SHA) return process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7);
+
+    try {
+      return execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+    } catch {
+      return "";
+    }
+  })();
+
+  return commit ? `${data} · ${commit}` : data;
+}
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -10,6 +38,11 @@ export default defineConfig(({ mode }) => {
   console.log(`Produção: ${env.PRODUCTION}`);
 
   return {
+    /* Substituído em tempo de build — vira uma string literal no bundle. */
+    define: {
+      __BUILD_ID__: JSON.stringify(identidadeDoBuild()),
+    },
+
     resolve: {
       alias: {
         "@": fileURLToPath(new URL("./src", import.meta.url)),

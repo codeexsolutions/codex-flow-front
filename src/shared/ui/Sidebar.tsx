@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
-import { Package, Users, DollarSign, Settings, LogOut, ShoppingCart, BarChart3, LayoutDashboard, Truck, UserCog, Wallet, LifeBuoy, Lock, MessageCircle, Table2, Building2, Headset } from "lucide-react";
+import { Package, Users, DollarSign, Settings, LogOut, ShoppingCart, BarChart3, LayoutDashboard, Truck, UserCog, Wallet, LifeBuoy, Lock, MessageCircle, Table2, Building2, Headset, RefreshCw } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import useAuth from "@/features/auth/store/auth.store";
@@ -12,6 +12,7 @@ import { getInitials } from "@/shared/utils/format";
 import { tocarNavegacao } from "@/shared/session/somSessao";
 import useEquipeStore, { planoTemEquipe } from "@/features/funcionarios/store/equipe.store";
 import usePlano from "@/shared/plano/plano.store";
+import { BUILD_ID, forcarAtualizacao } from "@/shared/pwa/versao";
 
 type AbaId = "gerenciamento" | "atendimento";
 
@@ -163,6 +164,14 @@ const Sidebar = () => {
 
   const handleLogout = () => {
     Promise.resolve(logout()).catch(() => {});
+  };
+
+  /* Busca a versão mais recente na marra — ver `forcarAtualizacao`. */
+  const [atualizando, setAtualizando] = useState(false);
+
+  const atualizarAgora = () => {
+    setAtualizando(true);
+    void forcarAtualizacao();
   };
 
   /**
@@ -526,10 +535,28 @@ const Sidebar = () => {
         <div className="relative flex items-center justify-between gap-2 border-t border-fg/[0.07] px-4 py-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <img src="/logo.png" width={22} height={22} alt="" className="rounded" />
-            <p className="truncate text-[13px] text-mist">CodeEx Flow</p>
+
+            <div className="min-w-0">
+              <p className="truncate text-[13px] leading-tight text-mist">CodeEx Flow</p>
+
+              {/* A versão fica visível de propósito: "meu app está atualizado?"
+                  precisa ter resposta olhando a tela, não sensação. Clicar
+                  limpa o cache e recarrega — a saída para o worker que travou
+                  numa versão antiga. */}
+              <button
+                type="button"
+                onClick={atualizarAgora}
+                disabled={atualizando}
+                title="Clique para buscar a versão mais recente"
+                className="focus-ring flex max-w-full items-center gap-1 rounded text-[10px] leading-tight text-faint transition-colors hover:text-accent-soft disabled:opacity-60"
+              >
+                <RefreshCw size={9} className={atualizando ? "animate-spin" : ""} />
+                <span className="truncate">{BUILD_ID}</span>
+              </button>
+            </div>
           </div>
 
-          <button type="button" onClick={handleLogout} className="focus-ring flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] text-mist transition-colors hover:bg-danger/10 hover:text-danger">
+          <button type="button" onClick={handleLogout} className="focus-ring flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] text-mist transition-colors hover:bg-danger/10 hover:text-danger">
             <LogOut size={14} /> Sair
           </button>
         </div>
