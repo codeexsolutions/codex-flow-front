@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 
 import { TabelaCard, TabelaHead, TabelaRow, TabelaVazia, type Coluna } from "@/shared/ui/DataTable";
+import BotaoRecibo from "@/shared/ui/BotaoRecibo";
 import { Modal } from "@/shared/ui/Modal";
 import { Form, FormSection, FormGrid, FormActions, TextField } from "@/shared/ui/form/FormKit";
 import { useAlert } from "@/shared/ui/Alert";
@@ -313,6 +314,26 @@ export default function FinanceiroPage() {
               </div>
             ))}
           </dl>
+        )}
+
+        {/* Recibo: só de nota quitada.
+            Um comprovante de quitação para pagamento parcial afirmaria o que
+            não aconteceu — e é o cliente que leva esse papel para a
+            contabilidade dele. */}
+        {detalhe && Number(detalhe.valor_pago ?? 0) >= Number(detalhe.total ?? 0) && (
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-fg/[0.06] pt-4">
+            <p className="text-[12px] leading-relaxed text-mist">Comprovante de pagamento para o cliente.</p>
+
+            <BotaoRecibo
+              dados={{
+                numero: String(detalhe.codigo_pedido),
+                clienteNome: detalhe.cliente_nome,
+                valor: Number(detalhe.valor_pago ?? 0),
+                formaPagamento: detalhe.forma_pagamento,
+                pagoEm: detalhe.data_pagamento ?? detalhe.data_pedido,
+              }}
+            />
+          </div>
         )}
       </Modal>
     </>

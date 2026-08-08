@@ -18,6 +18,7 @@ import { useAlert } from "@/shared/ui/Alert";
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import BuscaProduto from "@/features/vendas/components/BuscaProduto";
 import MenuDownloadNota from "@/shared/ui/MenuDownloadNota";
+import BotaoRecibo from "@/shared/ui/BotaoRecibo";
 import FundoNota from "@/shared/ui/FundoNota";
 import useEnterprise from "@/features/empresa/store/enterprise.store";
 import OrcamentoService from "@/features/orcamentos/services/orcamento.service";
@@ -211,6 +212,11 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
   const totalPago = valorPagoAnterior;
   const pendente = Math.max(total - totalPago, 0);
   const formaPagamento = pedido?.pedido?.formaPagamento ?? "Não consta";
+
+  /* Nota quitada: é o que libera o recibo. Comparado por valor, e não pelo
+     status do pedido — nota fechada com pagamento parcial não deve emitir
+     comprovante de quitação. */
+  const quitada = Boolean(id) && total > 0 && totalPago >= total;
 
   /* ─── PIX payload ─── */
   /* O QR cobra o percentual escolhido, não necessariamente o total. */
@@ -428,7 +434,21 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
 
   const statusPedido = pedido?.pedido?.pedidoStatus;
 
-  const salvarDesabilitado = !clienteId || itens.length === 0;
+  /*
+   * O que trava o botão muda conforme o documento.
+   *
+   * Nota exige cliente CADASTRADO: ela vira pedido, e pedido sem cliente não
+   * tem a quem cobrar. Orçamento não — ele é montado para nome livre, digitado
+   * no PDV, justamente para propor a quem ainda não é cliente.
+   *
+   * Enquanto os dois compartilhavam a mesma regra, o "Gerar orçamento" nascia
+   * desabilitado para sempre: o fluxo do PDV abre a proposta sem `clienteId`,
+   * então a condição nunca era satisfeita e o clique não fazia nada. Era esse
+   * o "não consigo cadastrar o orçamento".
+   */
+  const semDestinatario = modoOrcamento ? !(nome ?? "").trim() : !clienteId;
+
+  const salvarDesabilitado = semDestinatario || itens.length === 0;
 
   /* ─── Classes repetidas ─── */
   const lblResumo = "block text-[11px] uppercase tracking-[0.08em] text-faint";
@@ -873,6 +893,21 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
           <div className="flex items-center gap-2">
             {/* Download da nota (PNG ou PDF), com o nome da empresa no arquivo. */}
             <MenuDownloadNota refNota={notaRef} nomeEmpresa={enterprise?.nomeFantasia ?? "nota"} prefixo={modoOrcamento ? "orcamento" : "nota"} titulo={modoOrcamento ? "Baixar orçamento" : "Baixar nota"} />
+
+            {/* Recibo: só depois de quitada. Antes disso não há o que
+                comprovar, e um "recibo" de nota em aberto é um documento que
+                afirma o que não aconteceu. */}
+            {quitada && !modoOrcamento && (
+              <BotaoRecibo
+                dados={{
+                  numero: String(pedido?.pedido?.pedidoId ?? id ?? "").slice(0, 8),
+                  clienteNome: nome ?? "",
+                  valor: totalPago,
+                  formaPagamento,
+                  pagoEm: pedido?.pedido?.dataPedido ? String(pedido.pedido.dataPedido) : null,
+                }}
+              />
+            )}
 
             {/* Sem X aqui: o modal que envolve a nota já tem o próprio fechar
                 no topo, e dois botões de fechar na mesma tela só criavam a
