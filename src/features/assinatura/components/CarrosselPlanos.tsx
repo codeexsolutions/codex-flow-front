@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AliceCarousel from "react-alice-carousel";
 import "react-alice-carousel/lib/alice-carousel.css";
 import {
@@ -64,12 +64,28 @@ type Props = {
 
 const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
 
-  /* O índice é controlado por fora para as setas e os pontinhos acompanharem
-     — sem isso a seta anda e o indicador fica parado. */
+  /*
+   * Quem manda o carrossel andar é o `ref`, não a prop.
+   *
+   * `activeIndex` do Alice Carousel vale na PRIMEIRA renderização e ignora as
+   * mudanças seguintes. Como as setas e os pontinhos só mexiam nesse estado, o
+   * indicador andava e o cartão ficava parado — clicar no último ponto acendia
+   * o ponto e não trocava o plano. `slideTo` move de verdade; o estado local
+   * segue existindo só para desenhar setas e pontinhos.
+   */
+  const carrossel = useRef<AliceCarousel>(null);
+
   const [indice, setIndice] = useState(() => {
     const i = planos.findIndex((p) => p.codigo === selecionado);
     return i >= 0 ? i : Math.max(planos.findIndex((p) => p.destaque), 0);
   });
+
+  const irPara = (i: number) => {
+    const alvo = Math.min(Math.max(i, 0), planos.length - 1);
+
+    setIndice(alvo);
+    carrossel.current?.slideTo(alvo);
+  };
 
   const [detalhe, setDetalhe] = useState<Plano | null>(null);
 
@@ -83,7 +99,10 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
    */
   useEffect(() => {
     const i = planos.findIndex((p) => p.codigo === selecionado);
-    if (i >= 0) setIndice(i);
+    if (i >= 0) irPara(i);
+    // `irPara` é recriada a cada render; observá-la traria o efeito de volta a
+    // cada digitação do formulário e arrastaria o carrossel sozinho.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selecionado, planos]);
 
   const itens = useMemo(
@@ -93,17 +112,22 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
 
         return (
           /*
-           * Altura fixa em vez de `h-full`.
+           * Altura mínima fixa em vez de `h-full`.
            *
            * O Alice Carousel põe cada item num `<li>` inline-block sem altura
            * definida — `h-full` ali resolve para zero, os cartões colapsam e
            * se sobrepõem. Foi o que fazia "não parecer um item cada um".
            * Com `min-h` explícito, todos ficam iguais sem depender do
            * layout interno da biblioteca.
+           *
+           * 356px é o cartão mais alto (título, preço, os quatro números e a
+           * descrição em três linhas). Estava em 420 e sobrava um vão vazio no
+           * meio de todo cartão — folga que, num formulário, é só distância a
+           * mais até o botão de continuar.
            */
           <div key={plano.id} className="px-2 pb-1">
             <div
-              className={`flex min-h-[420px] flex-col rounded-2xl border transition-all ${
+              className={`flex min-h-[356px] flex-col rounded-2xl border transition-all ${
                 escolhido
                   ? "border-accent bg-accent/[0.08] shadow-[0_18px_50px_-24px_rgb(var(--accent))]"
                   : "border-fg/[0.1] bg-fg/[0.02] hover:border-accent/40"
@@ -216,6 +240,7 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
       */}
       <div className="-mx-2">
         <AliceCarousel
+          ref={carrossel}
           items={itens}
           activeIndex={indice}
           onSlideChanged={(e) => setIndice(e.item)}
@@ -232,7 +257,7 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
       {/* Controles próprios: os do pacote não seguem o tema e ficavam
           cinza-claro sobre fundo claro — invisíveis no tema claro. */}
       <div className="flex items-center justify-between gap-3">
-        <button type="button" aria-label="Plano anterior" className={seta} disabled={indice === 0} onClick={() => setIndice((i) => Math.max(0, i - 1))}>
+        <button type="button" aria-label="Plano anterior" className={seta} disabled={indice === 0} onClick={() => irPara(indice - 1)}>
           <ChevronLeft size={15} />
         </button>
 
@@ -242,13 +267,13 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
               key={p.id}
               type="button"
               aria-label={`Ir para ${p.nome}`}
-              onClick={() => setIndice(i)}
+              onClick={() => irPara(i)}
               className={`h-1.5 rounded-full transition-all ${i === indice ? "w-5 bg-accent" : "w-1.5 bg-fg/[0.18] hover:bg-fg/[0.3]"}`}
             />
           ))}
         </div>
 
-        <button type="button" aria-label="Próximo plano" className={seta} disabled={indice >= planos.length - 1} onClick={() => setIndice((i) => Math.min(planos.length - 1, i + 1))}>
+        <button type="button" aria-label="Próximo plano" className={seta} disabled={indice >= planos.length - 1} onClick={() => irPara(indice + 1)}>
           <ChevronRight size={15} />
         </button>
       </div>
