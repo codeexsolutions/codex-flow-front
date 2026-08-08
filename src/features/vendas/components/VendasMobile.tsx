@@ -1,9 +1,9 @@
 import { Search, ChevronRight, Eye, EyeOff, X, Download } from "lucide-react";
-import { useState } from "react";
 
 import { formatCurrency } from "@/shared/utils/currency";
 import { formatDateShort } from "@/shared/utils/date";
 import { getInitials } from "@/shared/utils/format";
+import { useDinheiroVisivel } from "@/shared/session/valoresVisiveis";
 
 export type StatusFiltro = "todos" | "pago" | "pendente" | "cancelado";
 
@@ -55,9 +55,8 @@ const STATUS: Record<VendaItem["status"], { label: string; cls: string }> = {
  *   virar abreviação ilegível.
  */
 const VendasMobile = ({ vendas, totalVendas, totalEmAberto, busca, onBusca, status, onStatus, onAbrirNota, onBaixarNota }: Props) => {
-  const [mostrar, setMostrar] = useState(true);
+  const { mostrar, alternar, dinheiro } = useDinheiroVisivel();
 
-  const dinheiro = (v: number) => (mostrar ? formatCurrency(v) : "•••••");
 
   return (
     <div className="flex min-h-full flex-col pb-4">
@@ -73,7 +72,7 @@ const VendasMobile = ({ vendas, totalVendas, totalEmAberto, busca, onBusca, stat
 
         <button
           type="button"
-          onClick={() => setMostrar((v) => !v)}
+          onClick={alternar}
           aria-label={mostrar ? "Esconder valores" : "Mostrar valores"}
           className="focus-ring flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-mist transition-colors hover:bg-fg/[0.06]"
         >

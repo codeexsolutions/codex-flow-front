@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Tags, PackagePlus, Search, Package, AlertTriangle, ChevronLeft, ChevronRight, RotateCw, Boxes, Wallet } from "lucide-react";
+import { Tags, PackagePlus, Search, Package, AlertTriangle, RotateCw, Boxes, Wallet } from "lucide-react";
 import ProductType from "@/shared/domain/produto";
 import ProductService from "@/features/estoque/services/product.service";
 import { ProdutoForm } from "@/features/estoque/components/ProdutoForm";
 import { ProductFormData } from "@/features/estoque/schema/product.schema";
 import { Modal } from "@/shared/ui/Modal";
 import { PageScreen } from "@/shared/ui/PageShell";
+import { TabelaPaginacao } from "@/shared/ui/DataTable";
 import { useAlert } from "@/shared/ui/Alert";
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import { formatNumber, toPercent } from "@/shared/utils/format";
@@ -479,31 +480,12 @@ const Estoque = () => {
               </div>
             </div>
 
-            {/* Rodapé / paginação */}
-            <div className="flex shrink-0 items-center justify-between border-t border-fg/[0.06] bg-fg/[0.02] px-5 py-3 text-[11px] text-faint">
-              <p>
-                {formatNumber(filtered.length)} {filtered.length === 1 ? "produto" : "produtos"}
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="flex cursor-pointer items-center gap-1 rounded-lg border border-fg/[0.08] bg-fg/[0.04] px-2.5 py-1.5 text-mist transition-colors hover:bg-fg/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" /> Anterior
-                </button>
-                <span className="px-1 tabular-nums">
-                  {page} / {totalPages}
-                </span>
-                <button
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="flex cursor-pointer items-center gap-1 rounded-lg border border-fg/[0.08] bg-fg/[0.04] px-2.5 py-1.5 text-mist transition-colors hover:bg-fg/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Próxima <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
+            <TabelaPaginacao
+              pagina={page}
+              totalPaginas={totalPages}
+              onPagina={setPage}
+              resumo={`${formatNumber(filtered.length)} ${filtered.length === 1 ? "produto" : "produtos"}`}
+            />
           </div>
 
 

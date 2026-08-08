@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Eye, EyeOff, Plus, Receipt, ArrowLeftRight, CheckCircle2, Trash2, ArrowUpRight, ArrowDownRight } from "lucide-react";
 
-import { formatCurrency } from "@/shared/utils/currency";
+import { useDinheiroVisivel } from "@/shared/session/valoresVisiveis";
 
 export type AbaFinanceiro = "notas" | "caixa";
 
@@ -73,10 +73,9 @@ const FinanceiroMobile = ({
   onExcluir,
   onNovaMovimentacao,
 }: Props) => {
-  const [mostrar, setMostrar] = useState(true);
+  const { mostrar, alternar, dinheiro } = useDinheiroVisivel();
   const [confirmando, setConfirmando] = useState<string | null>(null);
 
-  const dinheiro = (v: number) => (mostrar ? formatCurrency(v) : "•••••");
 
   return (
     <div className="flex min-h-full flex-col pb-4">
@@ -89,7 +88,7 @@ const FinanceiroMobile = ({
 
         <button
           type="button"
-          onClick={() => setMostrar((v) => !v)}
+          onClick={alternar}
           aria-label={mostrar ? "Esconder valores" : "Mostrar valores"}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-mist transition-colors hover:bg-fg/[0.06]"
         >

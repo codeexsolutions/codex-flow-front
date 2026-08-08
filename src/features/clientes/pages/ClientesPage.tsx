@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users, UserPlus, Search, AlertTriangle, ChevronLeft, ChevronRight, Cake, RotateCw, MapPin, MessageCircle, Phone, ClipboardList } from "lucide-react";
+import { Users, UserPlus, Search, AlertTriangle, ChevronRight, Cake, RotateCw, MapPin, MessageCircle, Phone, ClipboardList } from "lucide-react";
 import CustomerService from "@/features/clientes/services/client.service";
 import useClienteStore from "@/features/clientes/store/cliente.store";
 import useSincronizacao from "@/shared/realtime/useSincronizacao";
@@ -20,6 +20,7 @@ import { SkeletonTableRows, SkeletonIdentityCell } from "@/shared/ui/skeleton";
 import { useAutoPageSize, ROW_HEIGHT } from "@/shared/hooks/useAutoPageSize";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { PageScreen } from "@/shared/ui/PageShell";
+import { TabelaPaginacao } from "@/shared/ui/DataTable";
 import { aniversarioBr, diaAniversario, ehAniversarianteDoMes, ehAniversarioHoje } from "@/features/clientes/utils/aniversario";
 
 type Filtro = "todos" | "ativo" | "inativo" | "incompletos";
@@ -431,31 +432,12 @@ const Clientes = () => {
             </div>
           </div>
 
-          {/* Rodapé / paginação */}
-          <div className="flex shrink-0 items-center justify-between border-t border-fg/[0.06] bg-fg/[0.02] px-5 py-3 text-[11px] text-faint">
-            <p>
-              {formatNumber(filtered.length)} {filtered.length === 1 ? "cliente" : "clientes"}
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="flex cursor-pointer items-center gap-1 rounded-lg border border-fg/[0.08] bg-fg/[0.04] px-2.5 py-1.5 text-mist transition-colors hover:bg-fg/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" /> Anterior
-              </button>
-              <span className="px-1 tabular-nums">
-                {page} / {totalPages}
-              </span>
-              <button
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="flex cursor-pointer items-center gap-1 rounded-lg border border-fg/[0.08] bg-fg/[0.04] px-2.5 py-1.5 text-mist transition-colors hover:bg-fg/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Próxima <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
+          <TabelaPaginacao
+            pagina={page}
+            totalPaginas={totalPages}
+            onPagina={setPage}
+            resumo={`${formatNumber(filtered.length)} ${filtered.length === 1 ? "cliente" : "clientes"}`}
+          />
         </div>
 
         {/* ---------- Painéis ---------- */}

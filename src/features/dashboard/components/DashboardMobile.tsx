@@ -1,10 +1,9 @@
-import { useState } from "react";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, ChevronRight, TrendingUp, AlertTriangle, Package, ShoppingCart, Users } from "lucide-react";
 
-import { formatCurrency } from "@/shared/utils/currency";
 import { formatNumber, getInitials } from "@/shared/utils/format";
 import { formatDate } from "@/shared/utils/date";
+import { useDinheiroVisivel } from "@/shared/session/valoresVisiveis";
 
 export type VendaRecente = { id: string; cliente?: string; data: string | Date; total: number; paga: boolean };
 export type ProdutoCritico = { id: string; nome: string; quantidade: number };
@@ -64,9 +63,8 @@ const DashboardMobile = ({
   onIrParaVendas,
   onIrParaClientes,
 }: Props) => {
-  const [mostrar, setMostrar] = useState(true);
+  const { mostrar, alternar, dinheiro } = useDinheiroVisivel();
 
-  const dinheiro = (v: number) => (mostrar ? formatCurrency(v) : "•••••");
 
   const maior = Math.max(...porMes.map((m) => m.faturado), 1);
 
@@ -89,7 +87,7 @@ const DashboardMobile = ({
 
         <button
           type="button"
-          onClick={() => setMostrar((v) => !v)}
+          onClick={alternar}
           aria-label={mostrar ? "Esconder valores" : "Mostrar valores"}
           className="focus-ring flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-mist transition-colors hover:bg-fg/[0.06]"
         >

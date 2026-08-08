@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 
 export type Coluna<T> = {
   id: string;
@@ -114,6 +114,50 @@ export function TabelaRow<T>({ colunas, cols, row, onClick }: { colunas: Coluna<
     </Tag>
   );
 }
+
+/**
+ * Rodapé de paginação das listas.
+ *
+ * Estava copiado em quatro telas — Clientes, Estoque, o extrato de faturas e o
+ * histórico de pedidos do cliente — com quatro variações de espaçamento e dois
+ * jeitos diferentes de desabilitar as setas. Aqui é um só; o que muda entre as
+ * telas é o `resumo` da esquerda ("12 clientes", "Mostrando 1–8 de 11", o
+ * ticket médio), que cada uma escreve do seu jeito.
+ */
+export const TabelaPaginacao = ({
+  pagina,
+  totalPaginas,
+  onPagina,
+  resumo,
+}: {
+  pagina: number;
+  totalPaginas: number;
+  onPagina: (p: number) => void;
+  resumo?: ReactNode;
+}) => {
+  const botao =
+    "focus-ring flex cursor-pointer items-center gap-1 rounded-lg border border-fg/[0.08] bg-fg/[0.04] px-2.5 py-1.5 text-mist transition-colors hover:bg-fg/[0.08] disabled:cursor-not-allowed disabled:opacity-40";
+
+  return (
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-fg/[0.06] bg-fg/[0.02] px-5 py-3 text-[11px] text-faint">
+      <div className="min-w-0">{resumo}</div>
+
+      <div className="flex items-center gap-2">
+        <button type="button" disabled={pagina <= 1} onClick={() => onPagina(Math.max(1, pagina - 1))} aria-label="Página anterior" className={botao}>
+          <ChevronLeft className="h-3.5 w-3.5" /> Anterior
+        </button>
+
+        <span className="px-1 tabular-nums">
+          {pagina} / {totalPaginas}
+        </span>
+
+        <button type="button" disabled={pagina >= totalPaginas} onClick={() => onPagina(Math.min(totalPaginas, pagina + 1))} aria-label="Próxima página" className={botao}>
+          Próxima <ChevronRight className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export const TabelaVazia = ({ icon, title, description, action }: { icon?: ReactNode; title: string; description?: string; action?: ReactNode }) => (
   <div className="flex h-full min-h-[180px] flex-col items-center justify-center gap-2.5 px-6 py-10 text-center">

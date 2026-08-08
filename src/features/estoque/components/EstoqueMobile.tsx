@@ -1,8 +1,7 @@
-import { useState } from "react";
 import { Search, X, Plus, Package, Eye, EyeOff, AlertTriangle } from "lucide-react";
 
-import { formatCurrency } from "@/shared/utils/currency";
 import { formatNumber } from "@/shared/utils/format";
+import { useDinheiroVisivel } from "@/shared/session/valoresVisiveis";
 
 export type FiltroEstoque = "todos" | "disponivel" | "baixo" | "esgotado";
 
@@ -71,9 +70,8 @@ const EstoqueMobile = ({
   onAbrir,
   onNovo,
 }: Props) => {
-  const [mostrar, setMostrar] = useState(true);
+  const { mostrar, alternar, dinheiro } = useDinheiroVisivel();
 
-  const dinheiro = (v: number) => (mostrar ? formatCurrency(v) : "•••••");
 
   return (
     <div className="flex min-h-full flex-col pb-4">
@@ -89,7 +87,7 @@ const EstoqueMobile = ({
 
         <button
           type="button"
-          onClick={() => setMostrar((v) => !v)}
+          onClick={alternar}
           aria-label={mostrar ? "Esconder valores" : "Mostrar valores"}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-mist transition-colors hover:bg-fg/[0.06]"
         >

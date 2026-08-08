@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  ChevronLeft, ChevronRight, CircleCheck, CircleSlash, FileDown, Hourglass, Loader2,
+  CircleCheck, CircleSlash, FileDown, Hourglass, Loader2,
   QrCode, ReceiptText, Search, Timer, TriangleAlert,
 } from "lucide-react";
 
 import { formatCurrencyFromCents } from "@/shared/utils/currency";
 import { formatDate, formatDateShort } from "@/shared/utils/date";
 import { formatNumber, onlyDigits } from "@/shared/utils/format";
+import { TabelaPaginacao } from "@/shared/ui/DataTable";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { competenciaBr, prazoAte, tituloFatura } from "@/features/assinatura/utils/fatura.format";
 import { ehPagavel, type Fatura, type StatusFatura } from "@/features/assinatura/types/assinatura.types";
@@ -306,36 +307,12 @@ const ExtratoFaturas = ({
         )}
       </ul>
 
-      {/* ---------- Rodapé: intervalo + paginação ---------- */}
-      <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-fg/[0.06] bg-fg/[0.02] px-5 py-2.5 text-[11px] text-faint">
-        <p className="tabular-nums">
-          {primeiro === 0 ? "Nenhuma fatura" : `Mostrando ${primeiro}–${ultimo} de ${formatNumber(filtradas.length)}`}
-        </p>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={pagina <= 1}
-            onClick={() => setPagina((p) => Math.max(1, p - 1))}
-            aria-label="Página anterior"
-            className="focus-ring flex cursor-pointer items-center gap-1 rounded-lg border border-fg/[0.08] bg-fg/[0.04] px-2.5 py-1.5 text-mist transition-colors hover:bg-fg/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" /> Anterior
-          </button>
-          <span className="px-1 tabular-nums">
-            {pagina} / {totalPaginas}
-          </span>
-          <button
-            type="button"
-            disabled={pagina >= totalPaginas}
-            onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
-            aria-label="Próxima página"
-            className="focus-ring flex cursor-pointer items-center gap-1 rounded-lg border border-fg/[0.08] bg-fg/[0.04] px-2.5 py-1.5 text-mist transition-colors hover:bg-fg/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Próxima <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </footer>
+      <TabelaPaginacao
+        pagina={pagina}
+        totalPaginas={totalPaginas}
+        onPagina={setPagina}
+        resumo={<span className="tabular-nums">{primeiro === 0 ? "Nenhuma fatura" : `Mostrando ${primeiro}–${ultimo} de ${formatNumber(filtradas.length)}`}</span>}
+      />
     </section>
   );
 };

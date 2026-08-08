@@ -1,9 +1,8 @@
 import { Search, Plus, ChevronRight, Eye, EyeOff, FileText } from "lucide-react";
-import { useState } from "react";
 
-import { formatCurrency } from "@/shared/utils/currency";
 import { formatTime, formatDate } from "@/shared/utils/date";
 import { getInitials } from "@/shared/utils/format";
+import { useDinheiroVisivel } from "@/shared/session/valoresVisiveis";
 
 export type VendaResumo = {
   pedidoId: string;
@@ -73,10 +72,8 @@ const PDVMobile = ({
   onNovaVenda,
   onNovoOrcamento,
 }: Props) => {
-  const [mostrarValores, setMostrarValores] = useState(true);
+  const { mostrar: mostrarValores, alternar, dinheiro } = useDinheiroVisivel();
 
-  const oculto = "•••••";
-  const dinheiro = (v: number) => (mostrarValores ? formatCurrency(v) : oculto);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -94,7 +91,7 @@ const PDVMobile = ({
 
         <button
           type="button"
-          onClick={() => setMostrarValores((v) => !v)}
+          onClick={alternar}
           aria-label={mostrarValores ? "Esconder valores" : "Mostrar valores"}
           className="focus-ring flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-mist transition-colors hover:bg-fg/[0.06]"
         >
