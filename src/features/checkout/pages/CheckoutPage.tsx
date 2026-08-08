@@ -124,6 +124,22 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
   const proximaFatura = assinatura?.faturaEmAberto ?? null;
   const emConfirmacao = faturasAbertas.filter((f) => f.status === "AGUARDANDO_CONFIRMACAO");
 
+  /*
+   * Teste grátis.
+   *
+   * Enquanto ele corre, a empresa usa o sistema inteiro sem ter pago — e a
+   * fatura que está em aberto só passa a valer quando o período acaba. Sem
+   * dizer isso na tela, quem está em teste vê "saldo em aberto" e acha que
+   * está devendo agora.
+   */
+  const teste = assinatura?.teste;
+  const emTesteGratis = Boolean(teste?.emTeste);
+  const diasDeTeste = teste?.diasRestantes ?? null;
+
+  /** "acaba hoje", "falta 1 dia", "faltam 5 dias". */
+  const prazoDoTeste =
+    diasDeTeste === null ? "" : diasDeTeste === 0 ? "acaba hoje" : diasDeTeste === 1 ? "falta 1 dia" : `faltam ${diasDeTeste} dias`;
+
   /** Quanto falta (ou faz) para o vencimento da próxima — a faixa lê disso. */
   const prazoProxima = prazoAte(proximaFatura?.vencimento);
   const vencido = proximaFatura?.status === "VENCIDA";
@@ -416,7 +432,27 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
           é a página de Configurações. Sozinho: centralizado na viewport. */}
       <div className={embutido ? "flex w-full flex-col gap-4" : "mx-auto flex w-full max-w-6xl flex-col gap-4 px-5 py-8 lg:px-8"}>
         {/* ---------- Aviso contextual (só um, quando faz sentido) ---------- */}
-        {emConfirmacao.length > 0 ? (
+        {emTesteGratis ? (
+          <Aviso
+            icon={<Sparkles className="h-4 w-4" />}
+            titulo={`Teste grátis — ${prazoDoTeste}`}
+            texto={
+              proximaFatura
+                ? `Você está usando o Flow completo, sem pagar nada. Quando o teste terminar, a fatura de ${formatCurrencyFromCents(proximaFatura.valorCentavos)} abaixo passa a valer — pode adiantar o pagamento quando quiser.`
+                : "Você está usando o Flow completo, sem pagar nada. Quando o teste terminar, geramos a primeira cobrança."
+            }
+            acao={
+              proximaFatura && ehPagavel(proximaFatura) ? (
+                <button
+                  onClick={() => abrirPagamento(proximaFatura)}
+                  className="focus-ring inline-flex shrink-0 items-center gap-2 rounded-xl border border-fg/[0.08] px-3 py-2 text-[12px] text-mist transition hover:bg-fg/[0.04] hover:text-ink"
+                >
+                  <QrCode size={14} /> Pagar agora
+                </button>
+              ) : undefined
+            }
+          />
+        ) : emConfirmacao.length > 0 ? (
           <Aviso
             icon={<Clock className="h-4 w-4" />}
             titulo="Recebemos seu aviso de pagamento"
@@ -476,7 +512,9 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
             >
               <div className="flex flex-col gap-5 px-5 py-5 sm:flex-row sm:items-center sm:justify-between lg:px-6">
                 <div className="min-w-0">
-                  <p className="text-[10px] uppercase tracking-[0.14em] text-muted">{faturasAbertas.length === 0 ? "Nada em aberto" : "Saldo em aberto"}</p>
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-muted">
+                {faturasAbertas.length === 0 ? "Nada em aberto" : emTesteGratis ? "A pagar quando o teste acabar" : "Saldo em aberto"}
+              </p>
 
                   <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5">
                     <span className="text-[34px] leading-none tracking-tight tabular-nums text-ink sm:text-[38px]">{formatCurrencyFromCents(totalAPagar)}</span>
@@ -492,7 +530,9 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
                   <p className={`mt-2 text-[12.5px] ${vencido ? "text-danger" : "text-mist"}`}>
                     {faturasAbertas.length === 0
                       ? "Todas as faturas estão quitadas — nada a fazer por aqui."
-                      : `Próxima: ${competenciaBr(proximaFatura?.competencia ?? "")} · vence em ${formatDate(proximaFatura?.vencimento)}${prazoProxima.texto ? ` (${prazoProxima.texto})` : ""}`}
+                      : emTesteGratis
+                        ? `Nada a pagar agora · a cobrança começa em ${formatDate(proximaFatura?.vencimento)}`
+                        : `Próxima: ${competenciaBr(proximaFatura?.competencia ?? "")} · vence em ${formatDate(proximaFatura?.vencimento)}${prazoProxima.texto ? ` (${prazoProxima.texto})` : ""}`}
                   </p>
                 </div>
 
@@ -529,10 +569,10 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
                   apoio={`${faturasPagas.length} ${faturasPagas.length === 1 ? "fatura" : "faturas"}`}
                 />
                 <Indicador
-                  icone={contaLiberada ? <CircleCheck size={11} /> : <Clock size={11} />}
+                  icone={emTesteGratis ? <Sparkles size={11} /> : contaLiberada ? <CircleCheck size={11} /> : <Clock size={11} />}
                   label="Conta"
-                  valor={contaLiberada ? "Liberada" : "Aguardando"}
-                  apoio={contaLiberada ? "Acesso completo" : "Liberamos após o pagamento"}
+                  valor={emTesteGratis ? "Teste grátis" : contaLiberada ? "Liberada" : "Aguardando"}
+                  apoio={emTesteGratis ? prazoDoTeste : contaLiberada ? "Acesso completo" : "Liberamos após o pagamento"}
                 />
               </div>
             </motion.section>

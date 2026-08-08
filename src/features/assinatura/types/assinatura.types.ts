@@ -171,6 +171,21 @@ export type MinhaAssinatura = {
   };
   pix: PixCobranca | null;
   suporte: Suporte;
+  /**
+   * Teste grátis em curso.
+   *
+   * Vem calculado do servidor: é ele que decide quando o período acaba, e uma
+   * conta feita na tela poderia mostrar "faltam 2 dias" para quem a API já
+   * está bloqueando. Opcional porque uma API anterior à migration 028 não
+   * manda o campo — sem ele, a tela se comporta como antes.
+   */
+  teste?: {
+    emTeste: boolean;
+    /** ISO "AAAA-MM-DD" do último dia. */
+    terminaEm: string | null;
+    /** 0 = acaba hoje. */
+    diasRestantes: number | null;
+  };
 };
 
 /** Resposta de POST /empresas/cadastrar. */
