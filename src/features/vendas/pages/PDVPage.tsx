@@ -146,7 +146,7 @@ const PontoDeVenda = () => {
     setSalvandoCadastro(true);
 
     try {
-      await criarCliente(dados as never);
+      await criarCliente(dados);
       await fetchClientes(true);
 
       setNovoClienteOpen(false);
@@ -629,9 +629,9 @@ const PontoDeVenda = () => {
       </Modal>
 
         {/* Cadastros sem sair da tela — as rotas são as mesmas de Clientes e Estoque. */}
-        {/* Sem `Modal` em volta: o `ClienteForm` já traz o próprio overlay de
-            tela cheia. Envolvê-lo empilhava dois fundos escuros e dois cartões,
-            que era o "bugado" — a caixa aparecia dentro de outra caixa. */}
+        {/* Sem `Modal` em volta: o `ClienteForm` já abre no `Modal` do sistema.
+            Envolvê-lo empilhava dois fundos escuros e dois cartões, que era o
+            "bugado" — a caixa aparecia dentro de outra caixa. */}
         {novoClienteOpen && <ClienteForm saving={salvandoCadastro} onClose={() => setNovoClienteOpen(false)} onSubmit={handleNovoCliente} />}
 
         <Modal open={novoProdutoOpen} onClose={() => setNovoProdutoOpen(false)} title="Novo produto" subtitle="Ele fica disponível na nota na hora">

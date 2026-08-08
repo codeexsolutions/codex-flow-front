@@ -1,13 +1,28 @@
 import axios, { type AxiosRequestConfig } from "axios";
 
 import { API_URL } from "@/shared/api/apiUrl";
+import { lerRefreshToken, lerToken, limparSessao, salvarSessao } from "@/shared/api/sessao";
 
 const sysgrafix = axios.create({
   baseURL: API_URL,
-  // O JWT vive num cookie httpOnly: o navegador o envia sozinho em toda
-  // requisição. Sem `withCredentials` o cookie NÃO acompanha em chamadas
-  // cross-origin (site na Vercel, API na Railway) — o login viria vazio.
-  withCredentials: true,
+});
+
+/*
+ * O token vai no header, em toda requisição.
+ *
+ * Lido do `localStorage` a cada chamada, e não guardado numa variável do
+ * módulo: assim uma renovação (ou um logout em outra aba) passa a valer na
+ * requisição seguinte, sem ninguém precisar reconstruir o cliente HTTP.
+ */
+sysgrafix.interceptors.request.use((config) => {
+  const token = lerToken();
+
+  if (token) {
+    config.headers = config.headers ?? {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  return config;
 });
 
 /*
@@ -15,8 +30,8 @@ const sysgrafix = axios.create({
  *
  * O access token dura 12h; antes disso existia só ele, então quem passava do
  * expediente tomava 401 e o app quebrava calado. Agora o 401 dispara uma
- * renovação pelo cookie de refresh e a requisição original é repetida — a troca
- * é invisível para quem está usando.
+ * renovação com o refresh token guardado e a requisição original é repetida —
+ * a troca é invisível para quem está usando.
  *
  * A store de sessão registra os callbacks aqui em vez de ser importada: este
  * módulo é importado por todos os serviços, e importar a store criaria ciclo
@@ -35,23 +50,32 @@ export function registrarGanchosDeSessao(g: GanchosDeSessao) {
 
 /*
  * Uma renovação por vez. Sem isto, uma tela que dispara seis requisições ao
- * abrir mandaria seis refreshes concorrentes — e como cada um reemite o cookie,
- * os últimos chegariam com o refresh que os primeiros já rotacionaram.
+ * abrir mandaria seis refreshes concorrentes — e como cada um rotaciona o
+ * refresh token, os últimos chegariam com um token que os primeiros já
+ * invalidaram.
  */
 let renovacaoEmCurso: Promise<unknown> | null = null;
 
 function renovarSessao() {
   if (!renovacaoEmCurso) {
+    const refreshToken = lerRefreshToken();
+
+    if (!refreshToken) return Promise.reject(new Error("Sessão expirada."));
+
     renovacaoEmCurso = axios
-      .post(`${API_URL}/auth/refresh`, {}, { withCredentials: true })
+      .post(`${API_URL}/auth/refresh`, { refreshToken })
       .then((res) => {
-        const usuario = res.data?.data?.[0];
+        const sessao = res.data?.data?.[0];
 
-        if (!usuario) throw new Error("Sessão expirada.");
+        if (!sessao?.accessToken) throw new Error("Sessão expirada.");
 
-        ganchos?.aoRenovar(usuario);
+        // O par novo entra antes do aviso à store: a requisição repetida logo
+        // abaixo já lê o token atualizado do `localStorage`.
+        salvarSessao(sessao.accessToken, sessao.refreshToken ?? undefined);
 
-        return usuario;
+        ganchos?.aoRenovar(sessao);
+
+        return sessao;
       })
       .finally(() => {
         renovacaoEmCurso = null;
@@ -87,6 +111,7 @@ sysgrafix.interceptors.response.use(
         return sysgrafix(config);
       } catch {
         // Refresh também morreu: a sessão acabou de verdade.
+        limparSessao();
         ganchos?.aoExpirar();
       }
     }

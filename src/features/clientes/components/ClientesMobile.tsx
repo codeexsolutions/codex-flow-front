@@ -1,4 +1,4 @@
-import { Search, X, Plus, ChevronRight, UserPlus, MessageCircle } from "lucide-react";
+import { Search, X, Plus, ChevronRight, UserPlus, MessageCircle, Cake } from "lucide-react";
 
 import { formatDocument, getInitials, formatNumber } from "@/shared/utils/format";
 import { maskPhone } from "@/shared/validation/masks";
@@ -12,6 +12,7 @@ export type ClienteItem = {
   telefone?: string;
   whatsapp?: string;
   ativo: boolean;
+  aniversarioHoje?: boolean;
 };
 
 type Props = {
@@ -137,10 +138,19 @@ const ClientesMobile = ({ clientes, total, ativos, busca, onBusca, filtro, onFil
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-2">
                         <span className={`truncate text-[14.5px] ${c.ativo ? "text-ink" : "text-mist"}`}>{c.nome}</span>
+
+                        {/* Aniversário do dia: o motivo mais barato de ligar
+                            para um cliente que já é seu. */}
+                        {c.aniversarioHoje && (
+                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent/20 px-1.5 py-0.5 text-[10px] text-accent-soft" title="Faz aniversário hoje">
+                            <Cake size={10} /> hoje
+                          </span>
+                        )}
+
                         {!c.ativo && <span className="shrink-0 rounded-full bg-fg/[0.06] px-1.5 py-0.5 text-[10px] text-muted">Inativo</span>}
                       </span>
                       <span className="block truncate text-[12px] text-faint">
-                        {c.cpfCnpj ? formatDocument(c.cpfCnpj) : numero ? maskPhone(numero) : "Sem documento"}
+                        {numero ? maskPhone(numero) : c.cpfCnpj ? formatDocument(c.cpfCnpj) : "Sem contato"}
                       </span>
                     </span>
                   </button>

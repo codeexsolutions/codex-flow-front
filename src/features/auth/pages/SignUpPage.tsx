@@ -307,7 +307,7 @@ const CadastroEmpresaPage = () => {
 
       // Login automático com as credenciais que o cliente acabou de definir.
       // Sem isso ele cairia na tela de login logo depois de se cadastrar.
-      // O servidor seta o cookie httpOnly e devolve o usuário da sessão.
+      // O servidor devolve os tokens e o usuário da sessão.
       let usuario: Awaited<ReturnType<typeof AuthService.login>>;
 
       try {
@@ -321,8 +321,9 @@ const CadastroEmpresaPage = () => {
       }
 
       // `setAuth` direto (e não `login` da store): a empresa ainda está
-      // inativa, então buscar os dados dela agora não traz nada de útil.
-      useAuth.getState().setAuth(usuario);
+      // inativa, então buscar os dados dela agora não traz nada de útil. Os
+      // tokens vão junto — é o que autentica o checkout logo em seguida.
+      useAuth.getState().setAuth(usuario, usuario.accessToken, usuario.refreshToken);
 
       // Com WhatsApp configurado a pessoa vai para a conversa; sem número,
       // o fluxo antigo continua valendo e ela vai pagar.

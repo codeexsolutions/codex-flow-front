@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 
 import { API_ORIGEM } from "@/shared/api/apiUrl";
+import { lerToken } from "@/shared/api/sessao";
 import { getInitials } from "@/shared/utils/format";
 import useAuth from "@/features/auth/store/auth.store";
 
@@ -27,11 +28,11 @@ const Presenca = ({ planilhaId }: { planilhaId: string }) => {
     let socket: Socket | null = null;
 
     try {
-      // Token em cookie httpOnly — o navegador o envia no handshake sozinho.
+      // Mesmo token das requisições HTTP, mandado em `auth.token`.
       // `polling` no fallback: presença é estado de agora, mas numa rede que
       // bloqueia websocket ainda vale mostrar quem está junto.
       socket = io(API_ORIGEM, {
-        withCredentials: true,
+        auth: { token: lerToken() ?? "" },
         transports: ["websocket", "polling"],
         reconnection: true,
         reconnectionAttempts: 5,

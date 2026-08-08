@@ -4,6 +4,7 @@ import { io, type Socket } from "socket.io-client";
 import useAuth from "@/features/auth/store/auth.store";
 import AssinaturaService from "@/features/assinatura/services/assinatura.service";
 import { API_ORIGEM } from "@/shared/api/apiUrl";
+import { lerToken } from "@/shared/api/sessao";
 
 /**
  * Escuta a liberação da empresa e destrava o cliente sozinho.
@@ -55,7 +56,7 @@ export function useLiberacaoEmpresa(aoLiberar: (dados: { planoNome?: string | nu
 
     try {
       socket = io(origem, {
-        withCredentials: true,
+        auth: { token: lerToken() ?? "" },
         transports: ["websocket", "polling"],
         reconnection: true,
         reconnectionAttempts: 5,

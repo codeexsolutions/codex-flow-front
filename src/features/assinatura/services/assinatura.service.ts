@@ -1,4 +1,5 @@
 import sysgrafix from "@/shared/api/sysgrafix";
+import { salvarSessao } from "@/shared/api/sessao";
 import type {
   CobrancaPix, LeadRegistrado, MeuPlano, MinhaAssinatura, Plano, Recomendacao,
   RespostasDiagnostico, RetornoCadastro,
@@ -74,16 +75,22 @@ const AssinaturaService = {
   },
 
   /**
-   * Gira o cookie com o status atual da empresa — é o que destrava o checkout.
-   * O servidor regrava o cookie httpOnly; aqui só chega o `ativo`.
+   * Reemite o token com o status atual da empresa — é o que destrava o sistema
+   * assim que o pagamento é confirmado.
+   *
+   * O token novo é guardado aqui mesmo: quem chamou quer saber do `ativo`, e
+   * esquecer de trocar o token deixaria a sessão presa no `ativo: false`
+   * antigo até o próximo login.
    */
   revalidar: async (): Promise<{ ativo: boolean }> => {
-    const res = await sysgrafix.post<RetornoPadrao<{ ativo: boolean }>>("/assinatura/revalidar", {});
+    const res = await sysgrafix.post<RetornoPadrao<{ ativo: boolean; accessToken?: string }>>("/assinatura/revalidar", {});
     const dados = res.data?.data?.[0];
 
     if (!dados) throw new Error(res.data?.message || "Não foi possível revalidar a sessão.");
 
-    return dados;
+    if (dados.accessToken) salvarSessao(dados.accessToken);
+
+    return { ativo: dados.ativo };
   },
 
   trocarPlano: async (planoCodigo: string): Promise<MinhaAssinatura> => {

@@ -3,6 +3,7 @@ import { io, type Socket } from "socket.io-client";
 
 import { API_ORIGEM } from "@/shared/api/apiUrl";
 import useAuth from "@/features/auth/store/auth.store";
+import { lerToken } from "@/shared/api/sessao";
 
 export type Colecao = "clientes" | "produtos" | "pedidos" | "producao" | "planilhas";
 
@@ -45,12 +46,12 @@ export function useSincronizacao(colecoes: Colecao[], aoMudar: () => void, ativo
     let agendado: number | undefined;
 
     try {
-      // O token é um cookie httpOnly: o navegador o envia no handshake sozinho,
-      // com `withCredentials` (cross-origin: site ↔ API em domínios diferentes).
+      // O socket é autenticado pelo mesmo token das requisições HTTP, mandado
+      // em `auth.token` no handshake.
       // `polling` no fallback: rede que bloqueia websocket (proxy, 3G) ainda
       // sincroniza — sem ele o socket morre em silêncio.
       socket = io(API_ORIGEM, {
-        withCredentials: true,
+        auth: { token: lerToken() ?? "" },
         transports: ["websocket", "polling"],
         reconnection: true,
         reconnectionAttempts: 5,

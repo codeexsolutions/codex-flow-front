@@ -2,73 +2,55 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-  ChevronLeft, Building2, Receipt, Loader2, QrCode, Check, Copy, Sparkles, ArrowRight,
-  CircleCheck, Clock, AlertTriangle, MessageCircle, Mail, RefreshCw, LogOut, CalendarDays,
-  Wallet, ShieldCheck,
+  ChevronLeft, Building2, Loader2, QrCode, Check, Copy, Sparkles, ArrowRight,
+  CircleCheck, Clock, AlertTriangle, MessageCircle, Mail, RefreshCw, LogOut, CalendarClock,
+  WalletMinimal, ShieldCheck,
 } from "lucide-react";
 
 import { Modal } from "@/shared/ui/Modal";
+import { SkeletonFaturas } from "@/shared/ui/skeleton";
 import { useAlert } from "@/shared/ui/Alert";
 import { formatCurrencyFromCents } from "@/shared/utils/currency";
-import { formatDocument, formatNumber } from "@/shared/utils/format";
-import { MONTHS } from "@/shared/utils/date";
+import { formatDocument } from "@/shared/utils/format";
+import { formatDate } from "@/shared/utils/date";
 
 import useAuth from "@/features/auth/store/auth.store";
 import { useLiberacaoEmpresa } from "@/shared/realtime/useLiberacaoEmpresa";
 import AssinaturaService from "@/features/assinatura/services/assinatura.service";
 import CardPlano from "@/features/assinatura/components/CardPlano";
+import { baixarFaturaPdf } from "@/features/assinatura/utils/faturaPdf";
+import { competenciaBr, prazoAte } from "@/features/assinatura/utils/fatura.format";
+import ExtratoFaturas from "@/features/checkout/components/ExtratoFaturas";
 import {
   CICLO_LABEL, FaturaMeta, ehPagavel, type CobrancaPix, type Fatura, type MinhaAssinatura,
-  type Plano, type StatusFatura,
+  type Plano,
 } from "@/features/assinatura/types/assinatura.types";
-
-type Filtro = "TODAS" | "A_PAGAR" | "PAGA";
-
-/** Vencimento chega como ISO puro; na tela vale a data, não o fuso. */
-const dataBr = (iso?: string | null) => {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("pt-BR", { timeZone: "UTC" });
-};
-
-/** Competência vem como "AAAA-MM" — na tela ninguém lê isso. */
-const competenciaBr = (competencia: string) => {
-  const [ano, mes] = competencia.split("-");
-  return MONTHS[Number(mes) - 1] ? `${MONTHS[Number(mes) - 1]}/${ano}` : competencia;
-};
 
 /* ================================================================== */
 /* Peças da tela */
 /* ================================================================== */
 
 /**
- * Stat tile: rótulo discreto, valor em destaque, apoio opcional.
- * Todos os tiles têm o mesmo peso — quem carrega a leitura é o número.
+ * Indicador da faixa da conta.
  *
- * O fundo é opaco de propósito: as divisórias do KPI row são os vãos de 1px do
- * grid, e um fundo translúcido deixaria a linha atravessar o tile.
+ * Antes eram quatro tiles de 19px, cada um disputando atenção com o total em
+ * aberto logo acima. Aqui o rótulo vem em cima, em versalete, e o valor abaixo
+ * em corpo de texto: a faixa vira a linha de referência da conta, não um
+ * segundo herói.
+ *
+ * O fundo é opaco de propósito: as divisórias são os vãos de 1px do grid, e um
+ * fundo translúcido deixaria a linha atravessar a célula.
  */
-function StatTile({ label, value, hint, icon }: { label: string; value: React.ReactNode; hint?: string; icon: React.ReactNode }) {
+function Indicador({ label, valor, apoio, icone }: { label: string; valor: React.ReactNode; apoio?: string; icone: React.ReactNode }) {
   return (
-    <div className="bg-canvas px-4 py-3.5">
-      <p className="flex items-center gap-1.5 text-[11px] text-faint">
-        <span className="text-muted">{icon}</span>
+    <div className="min-w-0 bg-canvas px-4 py-3">
+      <p className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-muted">
+        <span className="text-faint">{icone}</span>
         {label}
       </p>
-      <p className="mt-1.5 truncate text-[19px] leading-tight text-ink">{value}</p>
-      {hint && <p className="mt-0.5 truncate text-[11px] text-mist">{hint}</p>}
+      <p className="mt-1.5 truncate text-[14px] leading-tight text-ink">{valor}</p>
+      {apoio && <p className="mt-0.5 truncate text-[11px] text-faint">{apoio}</p>}
     </div>
-  );
-}
-
-/** Status sempre com ponto + texto: nunca só a cor. */
-function StatusBadge({ status }: { status: StatusFatura }) {
-  const m = FaturaMeta[status];
-  return (
-    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] ring-1 ${m.bg} ${m.text} ${m.ring}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${m.dot}`} />
-      {m.label}
-    </span>
   );
 }
 
@@ -104,11 +86,12 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
 
-  const [filtro, setFiltro] = useState<Filtro>("TODAS");
   const [faturaSelecionada, setFaturaSelecionada] = useState<Fatura | null>(null);
   const [copiado, setCopiado] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
+  /** Id da fatura cujo PDF está sendo gerado — trava só aquele botão. */
+  const [baixando, setBaixando] = useState<string | null>(null);
   const [trocandoPlano, setTrocandoPlano] = useState(false);
   /** Código do plano cuja troca está em andamento — trava só aquele cartão. */
   const [salvandoPlano, setSalvandoPlano] = useState<string | null>(null);
@@ -135,17 +118,15 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
   const faturasAbertas = useMemo(() => faturas.filter((f) => f.status !== "PAGA" && f.status !== "CANCELADA"), [faturas]);
   const faturasPagas = useMemo(() => faturas.filter((f) => f.status === "PAGA"), [faturas]);
 
-  const faturasFiltradas = useMemo(() => {
-    if (filtro === "A_PAGAR") return faturasAbertas;
-    if (filtro === "PAGA") return faturasPagas;
-    return faturas;
-  }, [faturas, filtro, faturasAbertas, faturasPagas]);
-
   const totalAPagar = useMemo(() => faturasAbertas.reduce((acc, f) => acc + f.valorCentavos, 0), [faturasAbertas]);
   const totalPago = useMemo(() => faturasPagas.reduce((acc, f) => acc + f.valorCentavos, 0), [faturasPagas]);
 
   const proximaFatura = assinatura?.faturaEmAberto ?? null;
   const emConfirmacao = faturasAbertas.filter((f) => f.status === "AGUARDANDO_CONFIRMACAO");
+
+  /** Quanto falta (ou faz) para o vencimento da próxima — a faixa lê disso. */
+  const prazoProxima = prazoAte(proximaFatura?.vencimento);
+  const vencido = proximaFatura?.status === "VENCIDA";
 
   const empresa = assinatura?.empresa;
   const plano = assinatura?.plano;
@@ -318,6 +299,29 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
   };
 
   /**
+   * Gera e baixa o PDF da fatura, em nome da CodeEx Solutions.
+   *
+   * O jsPDF entra por import dinâmico dentro de `baixarFaturaPdf`, então o
+   * primeiro clique tem um instante de espera — daí o estado por fatura, e não
+   * um booleano global: baixar uma linha não pode travar as outras.
+   */
+  const baixarFatura = async (f: Fatura) => {
+    if (!assinatura || baixando) return;
+
+    setBaixando(f.id);
+
+    try {
+      const arquivo = await baixarFaturaPdf(f, assinatura);
+      alert.success("Fatura baixada", `Salvamos o arquivo ${arquivo} na sua pasta de downloads.`);
+    } catch (e) {
+      const err = e as { message?: string };
+      alert.error("Não foi possível gerar o PDF", err?.message ?? "Tente de novo em instantes.");
+    } finally {
+      setBaixando(null);
+    }
+  };
+
+  /**
    * Pagamento confirmado pelo dono: o socket avisa, a sessão já foi renovada
    * com o token novo e aqui só resta comemorar e levar o cliente para dentro.
    */
@@ -343,11 +347,13 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
 
   /* ------------------------- Estados de carga ------------------------- */
 
+  /* O esqueleto respeita o mesmo container da tela pronta: embutido em
+     Configurações ele não repete padding, e sozinho ele centraliza — senão o
+     conteúdo salta de posição no instante em que os dados chegam. */
   if (carregando) {
     return (
-      <div className="flex min-h-[60dvh] w-full items-center justify-center gap-2 text-sm text-mist">
-        <Loader2 className="h-5 w-5 animate-spin text-accent" />
-        Carregando sua assinatura...
+      <div className={embutido ? "w-full" : "mx-auto w-full max-w-5xl px-5 py-8 lg:px-8"}>
+        <SkeletonFaturas />
       </div>
     );
   }
@@ -408,7 +414,7 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
 
       {/* Embutido: alinhado à esquerda, sem padding próprio — quem cuida disso
           é a página de Configurações. Sozinho: centralizado na viewport. */}
-      <div className={embutido ? "flex w-full flex-col gap-5" : "mx-auto flex max-w-5xl flex-col gap-6 px-5 py-8 lg:px-8"}>
+      <div className={embutido ? "flex w-full flex-col gap-4" : "mx-auto flex w-full max-w-6xl flex-col gap-4 px-5 py-8 lg:px-8"}>
         {/* ---------- Aviso contextual (só um, quando faz sentido) ---------- */}
         {emConfirmacao.length > 0 ? (
           <Aviso
@@ -438,247 +444,203 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
           )
         )}
 
-        {/* ---------- Hero: o número que importa + ação ---------- */}
-        {/* Entra como as demais telas: opacidade e um passo curto, em escada.
-            Sem escala — o número grande do total borraria enquanto anima. */}
-        <motion.section
-          className="card glass-sheen overflow-hidden"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease: [0.22, 0.61, 0.36, 1] }}
-        >
-          <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-end sm:justify-between lg:p-7">
-            <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-[1.2px] text-faint">{faturasAbertas.length === 0 ? "Tudo em dia" : "Você tem a pagar"}</p>
-              <p className="mt-1 text-[44px] leading-none tracking-tight text-ink sm:text-5xl">{formatCurrencyFromCents(totalAPagar)}</p>
-              <p className="mt-2 text-[13px] text-mist">
-                {faturasAbertas.length === 0
-                  ? "Nenhuma fatura em aberto — nada a fazer por aqui."
-                  : `${faturasAbertas.length} ${faturasAbertas.length === 1 ? "fatura" : "faturas"} · a próxima vence em ${dataBr(proximaFatura?.vencimento)}`}
+        {/* ---------- Duas colunas: a conta à esquerda, o plano à direita ---------- */}
+        {/*
+          O extrato é o que se consulta; o plano é o que se confere. Empilhados,
+          o cartão do plano só aparecia depois de rolar a lista inteira — e o
+          resumo pobre que existia ali no rodapé não era o mesmo cartão que a
+          pessoa viu quando escolheu o plano. Agora é: o cartão completo da tela
+          de planos, ao lado da conta.
+
+          Abaixo de `xl` volta a empilhar — em tela estreita não há largura para
+          o extrato e o cartão sem espremer os dois.
+        */}
+        <section className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-start">
+          <div className="flex min-w-0 flex-1 flex-col gap-4">
+            {/* ---------- Faixa da conta: o saldo e a próxima obrigação ---------- */}
+            {/*
+              O topo virou cabeçalho de extrato: uma faixa só, com o saldo em aberto
+              à esquerda, a ação à direita e os indicadores na régua de baixo. O
+              herói de 44px que existia aqui gritava o mesmo número duas vezes — uma
+              no título, outra no primeiro tile — e empurrava o extrato para fora da
+              primeira tela, que é justamente o que a pessoa veio ver.
+
+              Entra como as demais telas: opacidade e um passo curto. Sem escala —
+              o número do saldo borraria enquanto anima.
+            */}
+            <motion.section
+              className="card glass-sheen overflow-hidden"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, ease: [0.22, 0.61, 0.36, 1] }}
+            >
+              <div className="flex flex-col gap-5 px-5 py-5 sm:flex-row sm:items-center sm:justify-between lg:px-6">
+                <div className="min-w-0">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-muted">{faturasAbertas.length === 0 ? "Nada em aberto" : "Saldo em aberto"}</p>
+
+                  <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5">
+                    <span className="text-[34px] leading-none tracking-tight tabular-nums text-ink sm:text-[38px]">{formatCurrencyFromCents(totalAPagar)}</span>
+                    {faturasAbertas.length > 0 && (
+                      <span className="text-[12px] text-faint">
+                        em {faturasAbertas.length} {faturasAbertas.length === 1 ? "fatura" : "faturas"}
+                      </span>
+                    )}
+                  </p>
+
+                  {/* A linha de apoio responde "e daí?": quando vence e há quanto
+                      tempo passou. Data sozinha obriga a pessoa a fazer a conta. */}
+                  <p className={`mt-2 text-[12.5px] ${vencido ? "text-danger" : "text-mist"}`}>
+                    {faturasAbertas.length === 0
+                      ? "Todas as faturas estão quitadas — nada a fazer por aqui."
+                      : `Próxima: ${competenciaBr(proximaFatura?.competencia ?? "")} · vence em ${formatDate(proximaFatura?.vencimento)}${prazoProxima.texto ? ` (${prazoProxima.texto})` : ""}`}
+                  </p>
+                </div>
+
+                {proximaFatura && ehPagavel(proximaFatura) && (
+                  <button
+                    onClick={() => abrirPagamento(proximaFatura)}
+                    className="focus-ring group inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-[13px] text-white shadow-[0_10px_30px_-12px_rgb(var(--accent))] transition-all hover:brightness-110 active:scale-[0.99]"
+                  >
+                    <QrCode size={15} />
+                    Pagar com Pix
+                    <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Régua da conta — quatro leituras curtas, mesmo peso entre si */}
+              <div className="grid grid-cols-2 gap-px bg-fg/[0.06] pt-px lg:grid-cols-4">
+                <Indicador
+                  icone={<Sparkles size={11} />}
+                  label="Plano"
+                  valor={plano?.nome ?? "—"}
+                  apoio={plano ? `${formatCurrencyFromCents(plano.precoCentavos)}${CICLO_LABEL[plano.ciclo]}` : "Sem plano definido"}
+                />
+                <Indicador
+                  icone={<CalendarClock size={11} />}
+                  label="Próximo vencimento"
+                  valor={formatDate(proximaFatura?.vencimento ?? assinatura.proximoVencimento)}
+                  apoio={proximaFatura ? FaturaMeta[proximaFatura.status].label : "Em dia"}
+                />
+                <Indicador
+                  icone={<WalletMinimal size={11} />}
+                  label="Total pago"
+                  valor={formatCurrencyFromCents(totalPago)}
+                  apoio={`${faturasPagas.length} ${faturasPagas.length === 1 ? "fatura" : "faturas"}`}
+                />
+                <Indicador
+                  icone={contaLiberada ? <CircleCheck size={11} /> : <Clock size={11} />}
+                  label="Conta"
+                  valor={contaLiberada ? "Liberada" : "Aguardando"}
+                  apoio={contaLiberada ? "Acesso completo" : "Liberamos após o pagamento"}
+                />
+              </div>
+            </motion.section>
+
+            {/* ---------- Pix com confirmação automática ---------- */}
+            {/*
+              Aviso, não botão: não há nada para ativar. Com o Mercado Pago ligado,
+              toda cobrança já sai identificada — o cliente só precisa saber que
+              não vai mais precisar mandar comprovante, senão continua mandando.
+            */}
+            {automaticoDisponivel && faturasAbertas.length > 0 && (
+              <div className="flex items-center gap-3 rounded-2xl border border-success/20 bg-success/[0.05] px-5 py-3.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-success/15 text-success">
+                  <ShieldCheck className="h-4 w-4" />
+                </span>
+                <p className="min-w-0 text-[12.5px] leading-relaxed text-mist">
+                  <span className="text-ink">Pagou, liberou.</span> O Pix daqui é identificado: assim que o dinheiro cai, sua conta é
+                  liberada sozinha — sem enviar comprovante nem esperar confirmação.
+                </p>
+              </div>
+            )}
+
+            {/* ---------- Extrato de faturas: a tabela padrão do sistema ---------- */}
+            {/*
+              O extrato mora num componente próprio porque ele tem estado seu —
+              busca, filtro e página — que não interessa a mais ninguém nesta tela.
+            */}
+            <ExtratoFaturas
+              faturas={faturas}
+              planoNome={plano?.nome}
+              baixando={baixando}
+              onPagar={abrirPagamento}
+              onBaixar={baixarFatura}
+            />
+          </div>
+
+          {/* ---------- Coluna do plano ---------- */}
+          <aside className="flex w-full shrink-0 flex-col gap-4 xl:w-[336px]">
+            {plano ? (
+              <div className="flex flex-col gap-2">
+                {/* O mesmo `CardPlano` da vitrine e do modal de troca: limites,
+                    recursos e o selo de plano vigente, sem versão resumida. */}
+                <CardPlano plano={plano} atual />
+
+                {podeTrocarPlano &&
+                  (trocaLiberada ? (
+                    <button onClick={abrirTrocaDePlano} className="focus-ring flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-fg/[0.07] py-2 text-[12px] text-mist transition hover:bg-fg/[0.04] hover:text-ink">
+                      <Sparkles size={13} />
+                      Ver planos e trocar
+                    </button>
+                  ) : (
+                    /* Travado: o botão continua na tela, explicando o porquê.
+                       Sumir com ele faria a pessoa procurar onde estava — e o
+                       "sumiu" é sempre lido como defeito, não como regra. */
+                    <p className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-fg/[0.1] py-2 text-center text-[11.5px] leading-relaxed text-faint">
+                      <Clock size={12} className="shrink-0" />
+                      Nova troca de plano em {formatDate(trocaLiberaEm)}
+                    </p>
+                  ))}
+              </div>
+            ) : (
+              <div className="card glass-sheen p-5">
+                <p className="text-[11px] uppercase tracking-[1.2px] text-faint">Plano atual</p>
+                <p className="mt-2 text-[13px] text-faint">Nenhum plano definido. Fale com o suporte.</p>
+              </div>
+            )}
+
+            {/* ---- Empresa ---- */}
+            <div className="card glass-sheen p-5">
+              <p className="text-[11px] uppercase tracking-[1.2px] text-faint">Empresa</p>
+
+              <div className="mt-3 flex items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-fg/[0.07] bg-fg/[0.03]">
+                  {empresa?.urlLogo ? <img src={empresa.urlLogo} alt="" className="h-full w-full object-cover" /> : <Building2 className="h-5 w-5 text-muted" />}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] text-ink">{empresa?.nomeFantasia}</p>
+                  <p className="truncate text-[11px] text-faint">
+                    {empresa?.cpfCnpj ? formatDocument(empresa.cpfCnpj) : "—"} · {empresa?.codigoEmpresa}
+                  </p>
+                </div>
+              </div>
+
+              <p className="mt-4 flex items-center gap-2 rounded-xl border border-fg/[0.06] px-3 py-2 text-[12px] text-mist">
+                {contaLiberada ? <CircleCheck size={14} className="shrink-0 text-success" /> : <Clock size={14} className="shrink-0 text-warning" />}
+                {contaLiberada ? "Conta liberada, acesso completo" : "Liberamos após confirmar o pagamento"}
               </p>
             </div>
 
-            {proximaFatura && ehPagavel(proximaFatura) && (
-              <button
-                onClick={() => abrirPagamento(proximaFatura)}
-                className="focus-ring group inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm text-white shadow-[0_10px_30px_-12px_rgb(var(--accent))] transition-all hover:brightness-110 active:scale-[0.99]"
-              >
-                <QrCode size={16} />
-                Pagar com Pix
-                <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
-              </button>
-            )}
-          </div>
+            {/* ---- Suporte ---- */}
+            <div className="card glass-sheen flex flex-col gap-2 p-5">
+              <p className="text-[11px] uppercase tracking-[1.2px] text-faint">Precisa de ajuda?</p>
 
-          {/* KPI row — mesma altura, mesmo peso, sem degradês concorrentes */}
-          <div className="grid grid-cols-2 gap-px bg-fg/[0.06] pt-px lg:grid-cols-4">
-            <StatTile
-              icon={<Sparkles size={12} />}
-              label="Plano"
-              value={plano?.nome ?? "—"}
-              hint={plano ? `${formatCurrencyFromCents(plano.precoCentavos)}${CICLO_LABEL[plano.ciclo]}` : "Sem plano definido"}
-            />
-            <StatTile
-              icon={<CalendarDays size={12} />}
-              label="Próximo vencimento"
-              value={dataBr(proximaFatura?.vencimento ?? assinatura.proximoVencimento)}
-              hint={proximaFatura ? FaturaMeta[proximaFatura.status].label : "Em dia"}
-            />
-            <StatTile
-              icon={<Wallet size={12} />}
-              label="Total pago"
-              value={formatCurrencyFromCents(totalPago)}
-              hint={`${faturasPagas.length} ${faturasPagas.length === 1 ? "fatura" : "faturas"}`}
-            />
-            <StatTile
-              icon={contaLiberada ? <CircleCheck size={12} /> : <Clock size={12} />}
-              label="Conta"
-              value={contaLiberada ? "Liberada" : "Aguardando"}
-              hint={contaLiberada ? "Acesso completo" : "Liberamos após o pagamento"}
-            />
-          </div>
-        </motion.section>
+              {suporte?.linkWhatsapp && (
+                <a href={suporte.linkWhatsapp} target="_blank" rel="noopener noreferrer" className="focus-ring flex items-center gap-2.5 rounded-xl border border-fg/[0.06] px-3.5 py-2.5 text-[13px] text-mist transition hover:bg-fg/[0.04] hover:text-ink">
+                  <MessageCircle size={15} className="text-muted" /> WhatsApp {suporte.whatsapp}
+                </a>
+              )}
 
-        {/* ---------- Pix com confirmação automática ---------- */}
-        {/*
-          Aviso, não botão: não há nada para ativar. Com o Mercado Pago ligado,
-          toda cobrança já sai identificada — o cliente só precisa saber que
-          não vai mais precisar mandar comprovante, senão continua mandando.
-        */}
-        {automaticoDisponivel && faturasAbertas.length > 0 && (
-          <div className="flex items-center gap-3 rounded-2xl border border-success/20 bg-success/[0.05] px-5 py-3.5">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-success/15 text-success">
-              <ShieldCheck className="h-4 w-4" />
-            </span>
-            <p className="min-w-0 text-[12.5px] leading-relaxed text-mist">
-              <span className="text-ink">Pagou, liberou.</span> O Pix daqui é identificado: assim que o dinheiro cai, sua conta é
-              liberada sozinha — sem enviar comprovante nem esperar confirmação.
-            </p>
-          </div>
-        )}
+              {suporte?.email && (
+                <a href={`mailto:${suporte.email}`} className="focus-ring flex items-center gap-2.5 rounded-xl border border-fg/[0.06] px-3.5 py-2.5 text-[13px] text-mist transition hover:bg-fg/[0.04] hover:text-ink">
+                  <Mail size={15} className="text-muted" /> {suporte.email}
+                </a>
+              )}
 
-        {/* ---------- Faturas: uma lista só ---------- */}
-        <section className="card glass-sheen overflow-hidden">
-          <div className="flex items-center justify-between gap-3 border-b border-fg/[0.06] px-5 py-3.5">
-            <p className="flex items-center gap-2 text-sm text-ink">
-              <Receipt size={15} className="text-muted" />
-              Faturas
-            </p>
-
-            <div className="flex gap-1 rounded-lg bg-fg/[0.04] p-0.5">
-              {(
-                [
-                  ["TODAS", "Todas"],
-                  ["A_PAGAR", "A pagar"],
-                  ["PAGA", "Pagas"],
-                ] as [Filtro, string][]
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  onClick={() => setFiltro(id)}
-                  className={`focus-ring rounded-md px-2.5 py-1 text-[11px] transition-colors ${filtro === id ? "bg-accent text-white" : "text-mist hover:text-ink"}`}
-                >
-                  {label}
-                </button>
-              ))}
+              {!suporte?.linkWhatsapp && !suporte?.email && <p className="text-[13px] text-faint">Nenhum canal de suporte configurado.</p>}
             </div>
-          </div>
-
-          {faturasFiltradas.length === 0 ? (
-            <p className="px-5 py-14 text-center text-[13px] text-faint">Nada neste filtro. Troque para ver as outras faturas.</p>
-          ) : (
-            <ul className="divide-y divide-fg/[0.05]">
-              {faturasFiltradas.map((f) => (
-                <li key={f.id} className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-fg/[0.02]">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] text-ink">{f.descricao || `Assinatura ${competenciaBr(f.competencia)}`}</p>
-                    <p className="mt-0.5 text-[11px] text-faint">
-                      {f.status === "PAGA" ? `Pago em ${dataBr(f.pagoEm)}` : `Vence em ${dataBr(f.vencimento)}`}
-                    </p>
-                  </div>
-
-                  <StatusBadge status={f.status} />
-
-                  <p className="w-28 shrink-0 text-right text-[13px] tabular-nums text-ink">{formatCurrencyFromCents(f.valorCentavos)}</p>
-
-                  <div className="w-[76px] shrink-0 text-right">
-                    {ehPagavel(f) && (
-                      <button onClick={() => abrirPagamento(f)} className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/[0.08] px-2.5 text-[12px] text-accent-soft transition hover:bg-accent/[0.16]">
-                        <QrCode size={13} /> Pagar
-                      </button>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* ---------- Rodapé: plano atual, empresa e suporte ---------- */}
-        {/* Três colunas a partir de `xl`, duas em `sm`: o outlet de
-            Configurações é largo, e duas colunas deixavam metade da faixa
-            vazia em monitor grande. */}
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {/* ---- Plano atual: o que a pessoa está pagando, por extenso ---- */}
-          <div className="card glass-sheen flex flex-col p-5">
-            <p className="text-[11px] uppercase tracking-[1.2px] text-faint">Plano atual</p>
-
-            {plano ? (
-              <>
-                <div className="mt-2 flex flex-wrap items-baseline gap-x-2">
-                  <span className="text-[22px] leading-none tracking-tight text-ink">{plano.nome}</span>
-                  <span className="text-[13px] tabular-nums text-mist">
-                    {formatCurrencyFromCents(plano.precoCentavos)}
-                    <span className="text-faint">{CICLO_LABEL[plano.ciclo]}</span>
-                  </span>
-                </div>
-
-                {plano.publicoAlvo && <p className="mt-1 text-[11.5px] text-accent-soft">{plano.publicoAlvo}</p>}
-
-                {/* Os tetos que a pessoa mais esbarra, nesta ordem. `null` no
-                    banco é "sem limite" — aqui vira o símbolo, não a palavra
-                    "null" nem um zero enganoso. */}
-                <div className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-fg/[0.06]">
-                  {(
-                    [
-                      ["Usuários", plano.limiteUsuarios],
-                      ["Clientes", plano.limiteClientes],
-                      ["Produtos", plano.limiteProdutos],
-                      ["Vendas/mês", plano.limitePedidosMes],
-                    ] as [string, number | null][]
-                  ).map(([rotulo, valor]) => (
-                    <div key={rotulo} className="bg-canvas px-3 py-2 text-center">
-                      <p className="text-[15px] leading-none tabular-nums text-ink">
-                        {valor === null ? "∞" : formatNumber(valor)}
-                      </p>
-                      <p className="mt-1 text-[9.5px] uppercase tracking-[0.06em] text-faint">{rotulo}</p>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <p className="mt-2 text-[13px] text-faint">Nenhum plano definido. Fale com o suporte.</p>
-            )}
-
-            <div className="flex-1" />
-
-            {podeTrocarPlano && (
-              trocaLiberada ? (
-                <button onClick={abrirTrocaDePlano} className="focus-ring mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl border border-fg/[0.07] py-2 text-[12px] text-mist transition hover:bg-fg/[0.04] hover:text-ink">
-                  <Sparkles size={13} />
-                  Ver planos e trocar
-                </button>
-              ) : (
-                /* Travado: o botão continua na tela, explicando o porquê.
-                   Sumir com ele faria a pessoa procurar onde estava — e o
-                   "sumiu" é sempre lido como defeito, não como regra. */
-                <p className="mt-4 flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-fg/[0.1] py-2 text-center text-[11.5px] leading-relaxed text-faint">
-                  <Clock size={12} className="shrink-0" />
-                  Nova troca de plano em {dataBr(trocaLiberaEm)}
-                </p>
-              )
-            )}
-          </div>
-
-          {/* ---- Empresa ---- */}
-          <div className="card glass-sheen p-5">
-            <p className="text-[11px] uppercase tracking-[1.2px] text-faint">Empresa</p>
-
-            <div className="mt-3 flex items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-fg/[0.07] bg-fg/[0.03]">
-                {empresa?.urlLogo ? <img src={empresa.urlLogo} alt="" className="h-full w-full object-cover" /> : <Building2 className="h-5 w-5 text-muted" />}
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-[13px] text-ink">{empresa?.nomeFantasia}</p>
-                <p className="truncate text-[11px] text-faint">
-                  {empresa?.cpfCnpj ? formatDocument(empresa.cpfCnpj) : "—"} · {empresa?.codigoEmpresa}
-                </p>
-              </div>
-            </div>
-
-            <p className="mt-4 flex items-center gap-2 rounded-xl border border-fg/[0.06] px-3 py-2 text-[12px] text-mist">
-              {contaLiberada ? <CircleCheck size={14} className="shrink-0 text-success" /> : <Clock size={14} className="shrink-0 text-warning" />}
-              {contaLiberada ? "Conta liberada, acesso completo" : "Liberamos após confirmar o pagamento"}
-            </p>
-          </div>
-
-          <div className="card glass-sheen flex flex-col gap-2 p-5">
-            <p className="text-[11px] uppercase tracking-[1.2px] text-faint">Precisa de ajuda?</p>
-
-            {suporte?.linkWhatsapp && (
-              <a href={suporte.linkWhatsapp} target="_blank" rel="noopener noreferrer" className="focus-ring flex items-center gap-2.5 rounded-xl border border-fg/[0.06] px-3.5 py-2.5 text-[13px] text-mist transition hover:bg-fg/[0.04] hover:text-ink">
-                <MessageCircle size={15} className="text-muted" /> WhatsApp {suporte.whatsapp}
-              </a>
-            )}
-
-            {suporte?.email && (
-              <a href={`mailto:${suporte.email}`} className="focus-ring flex items-center gap-2.5 rounded-xl border border-fg/[0.06] px-3.5 py-2.5 text-[13px] text-mist transition hover:bg-fg/[0.04] hover:text-ink">
-                <Mail size={15} className="text-muted" /> {suporte.email}
-              </a>
-            )}
-
-            {!suporte?.linkWhatsapp && !suporte?.email && <p className="text-[13px] text-faint">Nenhum canal de suporte configurado.</p>}
-          </div>
+          </aside>
         </section>
       </div>
 

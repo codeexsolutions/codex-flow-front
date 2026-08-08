@@ -9,6 +9,7 @@ import NotificacaoService, { type Mural, type Notificacao, type TipoNotificacao 
 import { formatDateTime } from "@/shared/utils/date";
 import { notificarNoAparelho, notificacoesLigadas, pedirPermissao, definirPreferencia, permissaoAtual, suportaNotificacao } from "@/shared/pwa/notificacaoDispositivo";
 import { API_ORIGEM } from "@/shared/api/apiUrl";
+import { lerToken } from "@/shared/api/sessao";
 
 /** Ícone e cor por tipo de evento — o rótulo sempre acompanha, nunca só a cor. */
 const LOOK: Record<TipoNotificacao, { icon: React.ReactNode; cls: string }> = {
@@ -66,7 +67,8 @@ const SinoNotificacoes = () => {
 
     try {
       socket = io(origem, {
-        withCredentials: true,
+        // Mesmo token das requisições HTTP, mandado no handshake.
+        auth: { token: lerToken() ?? "" },
         transports: ["websocket", "polling"],
         reconnection: true,
         reconnectionAttempts: 5,

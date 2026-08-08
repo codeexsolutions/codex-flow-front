@@ -103,6 +103,96 @@ export const SkeletonSummary = ({ cards = 6 }: { cards?: number }) => (
   </div>
 );
 
+/* ─────────────────────────── Assinatura e faturas ─────────────────────────── */
+
+/**
+ * Esqueleto da tela de faturas.
+ *
+ * Reproduz a página inteira — herói, KPI row, tabela e os três cartões do
+ * rodapé — porque era isso que um spinner centralizado escondia: a tela
+ * aparecia de uma vez, já rolada, e o olho tinha de reencontrar tudo. Aqui o
+ * layout nasce no lugar e só falta o dado chegar.
+ */
+export const SkeletonFaturas = ({ linhas = 8 }: { linhas?: number }) => (
+  <div className="flex w-full flex-col gap-5">
+    {/* Faixa da conta: saldo + ação, com a régua de indicadores embaixo */}
+    <div className="card glass-sheen overflow-hidden">
+      <div className="flex flex-col gap-5 px-5 py-5 sm:flex-row sm:items-center sm:justify-between lg:px-6">
+        <div className="min-w-0">
+          <Skeleton className="h-2.5 w-24" />
+          <Skeleton className="mt-3 h-9 w-48" />
+          <Skeleton className="mt-3 h-3 w-64" />
+        </div>
+        <Skeleton className="h-10 w-40 rounded-xl" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-px bg-fg/[0.06] pt-px lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="bg-canvas px-4 py-3">
+            <Skeleton className="h-2.5 w-20" />
+            <Skeleton className="mt-2 h-3.5 w-24" />
+            <Skeleton className="mt-1.5 h-2.5 w-16" />
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* Extrato: barra, cabeçalho de colunas, linhas e rodapé de paginação */}
+    <div className="card glass-sheen overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-fg/[0.06] px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <Skeleton className="h-8 w-8 rounded-lg" />
+          <div>
+            <Skeleton className="h-3 w-32" />
+            <Skeleton className="mt-1.5 h-2.5 w-20" />
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-7 w-40 rounded-lg" />
+          <Skeleton className="h-7 w-52 rounded-lg" />
+        </div>
+      </div>
+
+      <div className="hidden border-b border-fg/[0.06] bg-fg/[0.02] px-5 py-2 sm:block">
+        <Skeleton className="h-2.5 w-full" />
+      </div>
+
+      <div className="animate-pulse">
+        {Array.from({ length: linhas }).map((_, i) => (
+          <div key={i} className="flex items-center gap-4 border-b border-fg/[0.04] px-5" style={{ height: 58 }}>
+            <div className="min-w-0 flex-1">
+              <div className="h-3 w-2/5 rounded bg-fg/[0.06]" />
+              <div className="mt-2 h-2.5 w-1/4 rounded bg-fg/[0.04]" />
+            </div>
+            <div className="hidden h-2.5 w-16 rounded bg-fg/[0.05] sm:block" />
+            <div className="hidden h-2.5 w-20 rounded bg-fg/[0.05] sm:block" />
+            <div className="hidden h-2.5 w-24 rounded bg-fg/[0.05] sm:block" />
+            <div className="h-3 w-20 rounded bg-fg/[0.06]" />
+            <div className="h-7 w-7 rounded-lg bg-fg/[0.05]" />
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between gap-3 border-t border-fg/[0.06] bg-fg/[0.02] px-5 py-2.5">
+        <Skeleton className="h-2.5 w-36" />
+        <Skeleton className="h-7 w-48 rounded-lg" />
+      </div>
+    </div>
+
+    {/* Rodapé: plano, empresa e suporte */}
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="card glass-sheen p-5">
+          <Skeleton className="h-2.5 w-24" />
+          <Skeleton className="mt-3 h-5 w-32" />
+          <Skeleton className="mt-2 h-3 w-40" />
+          <Skeleton className="mt-4 h-16 w-full rounded-xl" />
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
 /* ─────────────────────────── Dashboard ─────────────────────────── */
 
 /**
