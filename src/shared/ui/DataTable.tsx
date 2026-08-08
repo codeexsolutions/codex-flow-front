@@ -115,6 +115,65 @@ export function TabelaRow<T>({ colunas, cols, row, onClick }: { colunas: Coluna<
   );
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   Lista de altura fixa
+
+   O outro formato de tabela do sistema, usado por Clientes e Estoque: as
+   linhas têm altura constante, o corpo não rola e o que não couber vai para a
+   próxima página (ver `useAutoPageSize`). As três peças abaixo eram copiadas
+   nas duas telas — as classes do cabeçalho, da linha e das linhas-fantasma
+   eram idênticas byte a byte, e só as células mudavam.
+   ══════════════════════════════════════════════════════════════════════ */
+
+export const ListaCabecalho = ({ cols, children }: { cols: string; children: ReactNode }) => (
+  <div className={`grid shrink-0 ${cols} border-b border-fg/[0.06] bg-fg/[0.02] px-5 py-2.5 text-[10px] uppercase tracking-[0.12em] text-muted`}>{children}</div>
+);
+
+/**
+ * Linha da lista. `onClick` a torna um `<button>` — abrir o registro é a ação
+ * principal dessas telas, e um `<div>` com `onClick` não recebe foco nem
+ * responde ao Enter.
+ */
+export const ListaLinha = ({
+  cols,
+  altura,
+  onClick,
+  ariaLabel,
+  children,
+}: {
+  cols: string;
+  altura: number;
+  onClick?: () => void;
+  ariaLabel?: string;
+  children: ReactNode;
+}) => {
+  const Tag = onClick ? "button" : "div";
+
+  return (
+    <Tag
+      {...(onClick ? { type: "button" as const, onClick, "aria-label": ariaLabel } : {})}
+      className={`group relative grid w-full ${cols} items-center border-b border-fg/[0.04] px-5 text-left transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-r before:bg-accent before:opacity-0 before:transition-opacity hover:bg-fg/[0.03] hover:before:opacity-100`}
+      style={{ height: altura }}
+    >
+      {children}
+    </Tag>
+  );
+};
+
+/**
+ * Linhas vazias que completam a página.
+ *
+ * Sem elas o rodapé sobe e desce conforme a última página tem duas ou dez
+ * linhas — e a paginação vira um alvo que se move entre um clique e outro.
+ */
+export const ListaFantasmas = ({ quantidade, altura }: { quantidade: number; altura: number }) => (
+  <>
+    {Array.from({ length: quantidade }).map((_, i) => (
+      <div key={`fantasma-${i}`} aria-hidden className="border-b border-fg/[0.04]" style={{ height: altura }} />
+    ))}
+  </>
+);
+
 /**
  * Rodapé de paginação das listas.
  *

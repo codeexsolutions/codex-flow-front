@@ -20,7 +20,7 @@ import { SkeletonTableRows, SkeletonIdentityCell } from "@/shared/ui/skeleton";
 import { useAutoPageSize, ROW_HEIGHT } from "@/shared/hooks/useAutoPageSize";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { PageScreen } from "@/shared/ui/PageShell";
-import { TabelaPaginacao } from "@/shared/ui/DataTable";
+import { ListaCabecalho, ListaFantasmas, ListaLinha, TabelaPaginacao } from "@/shared/ui/DataTable";
 import { aniversarioBr, diaAniversario, ehAniversarianteDoMes, ehAniversarioHoje } from "@/features/clientes/utils/aniversario";
 
 type Filtro = "todos" | "ativo" | "inativo" | "incompletos";
@@ -320,13 +320,13 @@ const Clientes = () => {
           {/* Colunas + linhas rolam juntas na horizontal quando a tela é estreita. */}
           <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
             <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth: TABLE_MIN_WIDTH }}>
-              <div className={`grid shrink-0 ${COLS} border-b border-fg/[0.06] bg-fg/[0.02] px-5 py-2.5 text-[10px] uppercase tracking-[0.12em] text-muted`}>
+              <ListaCabecalho cols={COLS}>
                 <p>Cliente</p>
                 <p>Contato</p>
                 <p>Local</p>
                 <p>Ficha</p>
                 <p className="text-right">Situação</p>
-              </div>
+              </ListaCabecalho>
 
               {/* Corpo: sem scroll — o que não cabe vai pra próxima página */}
               <div ref={bodyRef} className="min-h-0 flex-1 overflow-hidden">
@@ -358,12 +358,12 @@ const Clientes = () => {
                       const doMes = ehAniversarianteDoMes(c.dataNascimento);
 
                       return (
-                        <button
+                        <ListaLinha
                           key={c.id ?? c.nome}
+                          cols={COLS}
+                          altura={ROW_HEIGHT}
                           onClick={() => c.id && navigate(`/clientes/${c.id}`)}
-                          aria-label={`Abrir cliente ${c.nome}`}
-                          className={`group relative grid w-full ${COLS} items-center border-b border-fg/[0.04] px-5 text-left transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-r before:bg-accent before:opacity-0 before:transition-opacity hover:bg-fg/[0.03] hover:before:opacity-100`}
-                          style={{ height: ROW_HEIGHT }}
+                          ariaLabel={`Abrir cliente ${c.nome}`}
                         >
                           <div className="flex min-w-0 items-center gap-3">
                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent/25 bg-gradient-to-br from-accent/25 to-accent-soft/10 text-[11px] text-accent-soft">{getInitials(c.nome)}</div>
@@ -418,14 +418,11 @@ const Clientes = () => {
                           <span className="flex justify-end">
                             <StatusBadge status={c.status} />
                           </span>
-                        </button>
+                        </ListaLinha>
                       );
                     })}
 
-                    {/* Linhas vazias pra preencher o espaço quando a página não enche */}
-                    {Array.from({ length: emptySlots }).map((_, i) => (
-                      <div key={`empty-${i}`} aria-hidden className="border-b border-fg/[0.04]" style={{ height: ROW_HEIGHT }} />
-                    ))}
+                    <ListaFantasmas quantidade={emptySlots} altura={ROW_HEIGHT} />
                   </>
                 )}
               </div>

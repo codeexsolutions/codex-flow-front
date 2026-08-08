@@ -6,7 +6,7 @@ import { ProdutoForm } from "@/features/estoque/components/ProdutoForm";
 import { ProductFormData } from "@/features/estoque/schema/product.schema";
 import { Modal } from "@/shared/ui/Modal";
 import { PageScreen } from "@/shared/ui/PageShell";
-import { TabelaPaginacao } from "@/shared/ui/DataTable";
+import { ListaCabecalho, ListaFantasmas, ListaLinha, TabelaPaginacao } from "@/shared/ui/DataTable";
 import { useAlert } from "@/shared/ui/Alert";
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import { formatNumber, toPercent } from "@/shared/utils/format";
@@ -393,7 +393,7 @@ const Estoque = () => {
             <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
               <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth: TABLE_MIN_WIDTH }}>
                 {/* Cabeçalho de colunas */}
-                <div className={`grid shrink-0 ${COLS} border-b border-fg/[0.06] bg-fg/[0.02] px-5 py-2.5 text-[10px] uppercase tracking-[0.12em] text-muted`}>
+                <ListaCabecalho cols={COLS}>
                   <p>Produto</p>
                   {/* "Custo" e não "Compra": quem presta serviço não compra
                       nada e mesmo assim tem custo — e mesmo na revenda o custo
@@ -403,7 +403,7 @@ const Estoque = () => {
                   <p className="text-right">Qtd.</p>
                   <p className="text-right">Estoque</p>
                   <p aria-hidden />
-                </div>
+                </ListaCabecalho>
 
                 {/* Corpo: sem scroll — o que não cabe vai pra próxima página */}
                 <div ref={bodyRef} className="min-h-0 flex-1 overflow-hidden">
@@ -429,15 +429,15 @@ const Estoque = () => {
                   ) : (
                     <>
                       {pageItems.map((product) => (
-                        <button
+                        <ListaLinha
                           key={product.id}
+                          cols={COLS}
+                          altura={ROW_HEIGHT}
                           onClick={() => {
                             setSelectedProduct(product);
                             setModal("editar");
                           }}
-                          aria-label={`Editar produto ${product.nome}`}
-                          className={`group relative grid w-full ${COLS} items-center border-b border-fg/[0.04] px-5 text-left transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-r before:bg-accent before:opacity-0 before:transition-opacity hover:bg-fg/[0.03] hover:before:opacity-100`}
-                          style={{ height: ROW_HEIGHT }}
+                          ariaLabel={`Editar produto ${product.nome}`}
                         >
                           <div className="flex min-w-0 items-center gap-3">
                             <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-accent/25 bg-gradient-to-br from-accent/25 to-accent-soft/10">
@@ -467,13 +467,10 @@ const Estoque = () => {
                             <StockBadge quantidade={product.quantidade} />
                           </span>
                           <span aria-hidden />
-                        </button>
+                        </ListaLinha>
                       ))}
 
-                      {/* Linhas vazias pra preencher o espaço quando a página não enche */}
-                      {Array.from({ length: emptySlots }).map((_, i) => (
-                        <div key={`empty-${i}`} aria-hidden className="border-b border-fg/[0.04]" style={{ height: ROW_HEIGHT }} />
-                      ))}
+                      <ListaFantasmas quantidade={emptySlots} altura={ROW_HEIGHT} />
                     </>
                   )}
                 </div>
