@@ -28,6 +28,7 @@ import { estaAberto as estaAberta, totalDoPedido } from "@/shared/domain/pedido"
 import { formatTime as horaVenda, formatDate as dataVenda, isSameDay as ehHoje, isSameMonth as ehDesteMes } from "@/shared/utils/date";
 import { getInitials as iniciais, formatDocument } from "@/shared/utils/format";
 import { TabsPdv } from "@/features/vendas/components/TabsPdv";
+import { Selo } from "@/shared/ui/StatusBadge";
 
 // Só o essencial: quem é o cliente e (se existir) qual pedido.
 /* `clienteId` opcional: orçamento é montado para nome livre, sem cadastro. */
@@ -50,25 +51,12 @@ const Kpi = ({ icon, label, value, tone = "neutral" }: { icon: ReactNode; label:
   </div>
 );
 
-const StatusBadge = ({ status }: { status: "ABERTA" | "PARCIAL" | "PAGA" }) => {
-  if (status === "PAGA")
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-success/40 bg-success/15 px-2.5 py-1 text-[11px] text-success">
-        <span className="h-1.5 w-1.5 rounded-full bg-success" /> Pago
-      </span>
-    );
-  if (status === "PARCIAL")
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/15 px-2.5 py-1 text-[11px] text-accent-soft">
-        <span className="h-1.5 w-1.5 rounded-full bg-accent-soft" /> Parcial
-      </span>
-    );
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning/15 px-2.5 py-1 text-[11px] text-warning">
-      <span className="h-1.5 w-1.5 rounded-full bg-warning" /> Em aberto
-    </span>
-  );
-};
+const TOM_PAGAMENTO = { PAGA: "sucesso", PARCIAL: "info", ABERTA: "alerta" } as const;
+const ROTULO_PAGAMENTO = { PAGA: "Pago", PARCIAL: "Parcial", ABERTA: "Em aberto" } as const;
+
+const StatusBadge = ({ status }: { status: keyof typeof TOM_PAGAMENTO }) => (
+  <Selo tom={TOM_PAGAMENTO[status]}>{ROTULO_PAGAMENTO[status]}</Selo>
+);
 
 const Avatar = ({ name, size = "md" }: { name?: string; size?: "sm" | "md" }) => {
   const dim = size === "sm" ? "h-8 w-8 text-[10px]" : "h-9 w-9 text-[11px]";

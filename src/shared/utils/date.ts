@@ -131,3 +131,10 @@ export function isSameMonth(value: DateInput, ref: DateInput = new Date()): bool
 }
 
 export const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"] as const;
+
+/**
+ * Data como as tabelas escrevem: vazio vira "-", e não o travessão do `EMPTY`.
+ * A diferença importa numa coluna estreita, onde "—" e uma data têm larguras
+ * muito diferentes.
+ */
+export const brDate = (valor?: DateInput): string => (valor ? formatDate(valor, "-") : "-");

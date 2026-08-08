@@ -8,6 +8,7 @@ import useAuth from "@/features/auth/store/auth.store";
 import FuncionarioService, { type Equipe, type Funcionario, type PermissaoFuncionario } from "@/features/funcionarios/services/funcionario.service";
 import useEquipeStore from "@/features/funcionarios/store/equipe.store";
 import { PageScreen } from "@/shared/ui/PageShell";
+import { Selo } from "@/shared/ui/StatusBadge";
 
 const COLS = "grid-cols-[1.4fr_1fr_110px_100px_112px]";
 
@@ -36,12 +37,8 @@ function AcessoBadge({ f }: { f: Funcionario }) {
 
 function StatusBadge({ status }: { status: Funcionario["status"] }) {
   const ativo = status === "ATIVO";
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] ring-1 ${ativo ? "bg-success/15 text-success ring-success/25" : "bg-fg/[0.06] text-mist ring-fg/[0.08]"}`}>
-      <span className={`h-1.5 w-1.5 rounded-full ${ativo ? "bg-success" : "bg-muted"}`} />
-      {ativo ? "Ativo" : "Inativo"}
-    </span>
-  );
+
+  return <Selo tom={ativo ? "sucesso" : "neutro"}>{ativo ? "Ativo" : "Inativo"}</Selo>;
 }
 
 const FuncionariosPage = () => {

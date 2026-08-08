@@ -9,39 +9,31 @@ import { Modal } from "@/shared/ui/Modal";
 import { Form, FormSection, FormGrid, FormActions, TextField, SelectBox } from "@/shared/ui/form/FormKit";
 import { useAlert } from "@/shared/ui/Alert";
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
-import { formatCurrency as brl } from "@/shared/utils/currency";
-import { formatDate } from "@/shared/utils/date";
+import { money } from "@/shared/utils/currency";
+import { brDate } from "@/shared/utils/date";
 import { onlyDigits } from "@/shared/utils/format";
 import { maskCep } from "@/shared/validation/masks";
 import { unwrapList } from "@/shared/api/types";
 import useEnterprise from "@/features/empresa/store/enterprise.store";
+import { Selo, type TomSelo } from "@/shared/ui/StatusBadge";
 
-const money = (v?: number) => brl(v ?? 0);
-const brDate = (v?: string | null) => (v ? formatDate(v, "-") : "-");
 
-const SWATCH: Record<string, { label: string; cls: string }> = {
-  PENDENTE: { label: "Pendente", cls: "border-warning/40 bg-warning/15 text-warning" },
-  POSTADO: { label: "Postado", cls: "border-success/40 bg-success/15 text-success" },
-  CANCELADO: { label: "Cancelado", cls: "border-fg/10 bg-fg/[0.04] text-mist" },
-  EM_TRANSITO: { label: "Em trânsito", cls: "border-accent/40 bg-accent/15 text-accent-soft" },
-  ENTREGUE: { label: "Entregue", cls: "border-success/40 bg-success/15 text-success" },
+const SWATCH: Record<string, { label: string; tom: TomSelo }> = {
+  PENDENTE: { label: "Pendente", tom: "alerta" },
+  POSTADO: { label: "Postado", tom: "sucesso" },
+  CANCELADO: { label: "Cancelado", tom: "neutro" },
+  EM_TRANSITO: { label: "Em trânsito", tom: "info" },
+  ENTREGUE: { label: "Entregue", tom: "sucesso" },
 };
 
 const StatusBadge = ({ status }: { status: string }) => {
   const s = SWATCH[status];
-  if (!s) return <span className="inline-flex rounded-full border border-fg/10 bg-fg/[0.04] px-2.5 py-0.5 text-[11px] text-mist">{status}</span>;
-  return <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] ${s.cls}`}>{s.label}</span>;
+  return <Selo tom={s?.tom}>{s?.label ?? status}</Selo>;
 };
 
-const ServicoBadge = ({ servico }: { servico: string }) => {
-  const cores: Record<string, string> = {
-    SEDEX: "border-accent/40 bg-accent/15 text-accent-soft",
-    PAC: "border-warning/40 bg-warning/15 text-warning",
-    SEDEX12: "border-success/40 bg-success/15 text-success",
-  };
-  const cls = cores[servico] ?? "border-fg/10 bg-fg/[0.04] text-mist";
-  return <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] ${cls}`}>{servico}</span>;
-};
+const TOM_SERVICO: Record<string, TomSelo> = { SEDEX: "info", PAC: "alerta", SEDEX12: "sucesso" };
+
+const ServicoBadge = ({ servico }: { servico: string }) => <Selo tom={TOM_SERVICO[servico]}>{servico}</Selo>;
 
 type NovaPostagemForm = {
   servico: ServicoCorreio;

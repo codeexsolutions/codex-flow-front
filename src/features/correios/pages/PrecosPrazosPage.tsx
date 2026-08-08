@@ -5,14 +5,13 @@ import useEnterprise from "@/features/empresa/store/enterprise.store";
 import CorreiosService from "@/features/correios/services/correios.service";
 import type { CalcFreteDto, FreteResultado, ServicoCorreio } from "@/features/correios/types/correios.types";
 
-import { formatCurrency as brl } from "@/shared/utils/currency";
+import { money } from "@/shared/utils/currency";
 import { onlyDigits } from "@/shared/utils/format";
 import { maskCep } from "@/shared/validation/masks";
 import { unwrapList } from "@/shared/api/types";
 import { useAlert } from "@/shared/ui/Alert";
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 
-const money = (v?: number) => brl(v ?? 0);
 
 const SERVICO_CORES: Record<string, string> = {
   SEDEX: "border-accent/40 bg-accent/15 text-accent-soft ring-accent/20",

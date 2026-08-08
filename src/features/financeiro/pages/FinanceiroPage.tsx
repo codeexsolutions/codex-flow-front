@@ -13,8 +13,8 @@ import { useAlert } from "@/shared/ui/Alert";
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import useFinanceiroStore from "@/features/financeiro/store/financeiro.store";
 import type { MovimentacaoType, NotaFinanceiroType, NovaMovimentacaoType } from "@/shared/domain/financeiro";
-import { formatCurrency as brl } from "@/shared/utils/currency";
-import { formatDate } from "@/shared/utils/date";
+import { formatCurrency as brl, money } from "@/shared/utils/currency";
+import { brDate } from "@/shared/utils/date";
 import { useIsMobile } from "@/shared/hooks/useIsMobile";
 import FinanceiroMobile from "@/features/financeiro/components/FinanceiroMobile";
 import { Rosca } from "@/shared/ui/Rosca";
@@ -32,8 +32,6 @@ import FiltroPeriodo, { dentroDoPeriodo, periodoPadrao, rotuloPeriodo, type Peri
  * período que a pessoa escolher, e por qual forma de pagamento.
  */
 
-const brDate = (v?: string | null) => (v ? formatDate(v, "-") : "-");
-const money = (v?: number) => brl(v ?? 0);
 
 /** Célula vazia que ocupa o vão flexível do fim da linha. */
 const COLUNA_VAO = { id: "vao", header: "", cell: () => null };
