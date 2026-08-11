@@ -10,7 +10,6 @@ export const empresaSchema = z.object({
   cpfCnpj: z.string().optional().default(""), // somente leitura
   inscMunicipal: z.string().optional().default(""),
   urlLogo: optionalUrl,
-  urlImagem: optionalUrl,
   /** Imagem de fundo (wallpaper) que entra na nota de venda e no orçamento. */
   notaBackground: optionalUrl,
 
@@ -49,6 +48,5 @@ export const identificacaoSchema = empresaSchema.pick({
   cpfCnpj: true,
   inscMunicipal: true,
   urlLogo: true,
-  urlImagem: true,
   notaBackground: true,
 });

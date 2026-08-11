@@ -44,6 +44,20 @@ type InvoiceProps = {
   /** Modo orçamento: a mesma nota, mas com título "Orçamento", sem pagamento
       e com "Gerar orçamento" no lugar de "Gerar Nota". */
   modoOrcamento?: boolean;
+  /**
+   * Itens com que a nota já nasce — usado por quem vem de um orçamento.
+   *
+   * É o que torna possível "converter em venda" e "editar orçamento" sem
+   * relançar produto por produto: a nota abre com a proposta montada, e o
+   * operador só confirma. Vale apenas para nota NOVA; havendo `id`, os itens
+   * vêm do pedido salvo, que é a verdade.
+   */
+  itensIniciais?: ItemPedidoType[];
+  /**
+   * Orçamento que está sendo reescrito. Presente, "Gerar orçamento" salva por
+   * cima em vez de criar uma segunda proposta com o mesmo conteúdo.
+   */
+  orcamentoId?: string;
 };
 
 
@@ -57,7 +71,7 @@ const STATUS_STYLE: Record<string, string> = {
 
 
 
-const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = false }: InvoiceProps) => {
+const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = false, itensIniciais, orcamentoId }: InvoiceProps) => {
   const alert = useAlert();
   const notaRef = useRef<HTMLDivElement>(null);
 
@@ -101,7 +115,10 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
   /* ─── Dados ─── */
   const [products, setProducts] = useState<ProductType[]>([]);
   const [pedido, setPedido] = useState<PedidoClienteType | null>(null);
-  const [itens, setItens] = useState<ItemPedidoType[]>([]);
+
+  /* Nota nova pode nascer com itens (veio de um orçamento). Nota existente
+     ignora: os itens dela são carregados do pedido logo abaixo. */
+  const [itens, setItens] = useState<ItemPedidoType[]>(() => (idInicial ? [] : (itensIniciais ?? [])));
 
   /** Data de emissão ao lado do vendedor: quem fez e quando, na mesma leitura. */
   const dataEmissao = formatDate(pedido?.pedido?.dataPedido ?? new Date());
@@ -276,7 +293,7 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
     setSavingNote(true);
 
     try {
-      await OrcamentoService.criar({
+      const proposta = {
         clienteNome: nomeCliente,
         clienteId: clienteId ?? null,
         clienteContato: telefoneCliente || null,
@@ -286,9 +303,19 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
           quantidade: l.quantidadeItem,
           valorUnitario: l.valorVendaItem,
         })),
-      });
+      };
 
-      alert.success("Orçamento gerado!", "Ele está na aba Orçamentos, aguardando a resposta do cliente.");
+      /* Editando: salva por cima. Sem isso, corrigir a quantidade de um item
+         deixaria duas propostas quase idênticas na lista, e o cliente com
+         duas versões do mesmo orçamento. */
+      if (orcamentoId) {
+        await OrcamentoService.atualizar(orcamentoId, proposta);
+        alert.success("Orçamento atualizado!", "A proposta foi reescrita e continua aguardando resposta.");
+      } else {
+        await OrcamentoService.criar(proposta);
+        alert.success("Orçamento gerado!", "Ele está na aba Orçamentos, aguardando a resposta do cliente.");
+      }
+
       onSaved?.();
     } catch (err) {
       alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível gerar o orçamento."));
@@ -921,7 +948,7 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
                 className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-warning px-5 text-sm text-white transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-40 sm:flex-none"
               >
                 {savingNote ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
-                {savingNote ? "Gerando..." : "Gerar orçamento"}
+                {savingNote ? "Salvando..." : orcamentoId ? "Salvar orçamento" : "Gerar orçamento"}
               </button>
             ) : (
               <button

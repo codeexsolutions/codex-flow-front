@@ -6,7 +6,6 @@ interface EnterpriseType {
   cpfCnpj: string;
   inscMunicipal?: string;
   urlLogo?: string;
-  urlImagem?: string;
   /** Imagem de fundo (wallpaper) da nota de venda e do orçamento. */
   notaBackground?: string;
   ativo: boolean;

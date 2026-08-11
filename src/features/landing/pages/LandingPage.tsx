@@ -9,8 +9,8 @@ import type { LucideIcon } from "lucide-react";
 
 import RedeAnimada from "@/features/landing/components/RedeAnimada";
 import { useReveal } from "@/features/landing/hooks/useReveal";
-import AssinaturaService from "@/features/assinatura/services/assinatura.service";
-import { CICLO_LABEL, type Plano } from "@/features/assinatura/types/assinatura.types";
+import useCatalogo from "@/shared/plano/catalogo.store";
+import { CICLO_LABEL } from "@/features/assinatura/types/assinatura.types";
 import { formatCurrencyFromCents } from "@/shared/utils/currency";
 import { formatNumber } from "@/shared/utils/format";
 import { useContatoSuporte, linkWhatsapp } from "@/shared/suporte/useContatoSuporte";
@@ -69,7 +69,11 @@ const Grad = ({ children }: { children: React.ReactNode }) => (
 const LandingPage = () => {
   const navigate = useNavigate();
 
-  const [planos, setPlanos] = useState<Plano[]>([]);
+  /* Os preços vêm do catálogo compartilhado — carregado no boot, então a
+     seção de planos já nasce com o cartão em vez de com "Carregando planos…". */
+  const planos = useCatalogo((s) => s.planos);
+  const carregarCatalogo = useCatalogo((s) => s.carregar);
+
   const [grudado, setGrudado] = useState(false);
 
   /* Cravar o número no código já colocou um telefone pessoal no ar. */
@@ -79,16 +83,8 @@ const LandingPage = () => {
   /* Os preços vêm da API. Fixá-los aqui garantiria que um dia ficariam
      diferentes do que o cliente paga de verdade. */
   useEffect(() => {
-    let vivo = true;
-
-    AssinaturaService.listarPlanos()
-      .then((lista) => vivo && setPlanos(lista))
-      .catch(() => {});
-
-    return () => {
-      vivo = false;
-    };
-  }, []);
+    carregarCatalogo();
+  }, [carregarCatalogo]);
 
   useEffect(() => {
     const aoRolar = () => setGrudado(window.scrollY > 8);
@@ -269,18 +265,36 @@ const LandingPage = () => {
             </div>
             <div data-reveal>
               <Titulo>
-                Escolha o tamanho da sua <Grad>operação</Grad>
+                {planos.length === 1 ? (
+                  <>
+                    Um plano, o sistema <Grad>inteiro</Grad>
+                  </>
+                ) : (
+                  <>
+                    Escolha o tamanho da sua <Grad>operação</Grad>
+                  </>
+                )}
               </Titulo>
             </div>
             <p data-reveal className="mt-3 text-[clamp(1rem,2.4vw,1.1rem)] font-light text-mist">
-              Trocou de plano depois? Você paga só a diferença.
+              {planos.length === 1
+                ? "Sem pacote para destravar depois. Sem fidelidade."
+                : "Trocou de plano depois? Você paga só a diferença."}
             </p>
           </header>
 
           {planos.length === 0 ? (
             <p className="text-center text-[13px] text-faint">Carregando planos…</p>
           ) : (
-            <div className="mx-auto grid max-w-5xl grid-cols-1 items-stretch gap-5 md:grid-cols-3">
+            /* Com um cartão só, três colunas deixariam ele encolhido num canto
+               da fileira; a largura travada centraliza sem esticar o cartão. */
+            <div
+              className={
+                vitrine.length === 1
+                  ? "mx-auto grid max-w-sm grid-cols-1 items-stretch gap-5"
+                  : "mx-auto grid max-w-5xl grid-cols-1 items-stretch gap-5 md:grid-cols-3"
+              }
+            >
               {vitrine.map((p) => (
                 <article
                   key={p.id}

@@ -21,6 +21,7 @@ import CadastroEmpresaPage from "@/features/auth/pages/SignUpPage";
 import BoasVindasPage from "@/features/auth/pages/BoasVindasPage";
 
 import usePlano from "@/shared/plano/plano.store";
+import useCatalogo from "@/shared/plano/catalogo.store";
 import RecursoDoPlano from "@/shared/plano/RecursoDoPlano";
 
 import Workflow from "@/features/vendas/pages/PDVPage";
@@ -69,6 +70,18 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
 
   const carregarPlano = usePlano((s) => s.carregar);
   const limparPlano = usePlano((s) => s.limpar);
+  const carregarCatalogo = useCatalogo((s) => s.carregar);
+
+  /*
+   * O catálogo é buscado no boot, antes de qualquer tela pedir.
+   *
+   * A rota é pública, então isso vale também para quem ainda não entrou — que
+   * é justamente quem vai ao cadastro. Quando a etapa do plano abre, o cartão
+   * já está lá: nada de spinner nem de layout pulando quando a lista chega.
+   */
+  useEffect(() => {
+    carregarCatalogo();
+  }, [carregarCatalogo]);
 
   /*
    * O plano é buscado uma vez, quando a empresa ativa entra.

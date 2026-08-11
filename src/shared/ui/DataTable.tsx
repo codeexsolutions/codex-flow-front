@@ -1,6 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 
+import Dica from "@/shared/ui/Dica";
+
 export type Coluna<T> = {
   id: string;
   header: ReactNode;
@@ -133,23 +135,30 @@ export const ListaCabecalho = ({ cols, children }: { cols: string; children: Rea
  * Linha da lista. `onClick` a torna um `<button>` — abrir o registro é a ação
  * principal dessas telas, e um `<div>` com `onClick` não recebe foco nem
  * responde ao Enter.
+ *
+ * `acoes` são os botões da própria linha (ligar, editar, o que a tela tiver).
+ * Eles ficam FORA do botão da linha, sobrepostos à direita: botão dentro de
+ * botão é HTML inválido, e na prática o clique no ícone dispararia também a
+ * navegação da linha — a pessoa pediria "editar" e receberia outra tela.
  */
 export const ListaLinha = ({
   cols,
   altura,
   onClick,
   ariaLabel,
+  acoes,
   children,
 }: {
   cols: string;
   altura: number;
   onClick?: () => void;
   ariaLabel?: string;
+  acoes?: ReactNode;
   children: ReactNode;
 }) => {
   const Tag = onClick ? "button" : "div";
 
-  return (
+  const linha = (
     <Tag
       {...(onClick ? { type: "button" as const, onClick, "aria-label": ariaLabel } : {})}
       className={`group relative grid w-full ${cols} items-center border-b border-fg/[0.04] px-5 text-left transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-r before:bg-accent before:opacity-0 before:transition-opacity hover:bg-fg/[0.03] hover:before:opacity-100`}
@@ -158,7 +167,61 @@ export const ListaLinha = ({
       {children}
     </Tag>
   );
+
+  if (!acoes) return linha;
+
+  return (
+    /* `group` também aqui: as ações são irmãs do botão da linha, e o
+       `group-hover` delas precisa de um ancestral comum aos dois. */
+    <div className="group relative" style={{ height: altura }}>
+      {linha}
+
+      {/* `pointer-events-none` na faixa e `auto` só nos botões: o vão entre
+          eles continua sendo área clicável da linha. */}
+      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4">
+        <div className="pointer-events-auto flex items-center gap-1 opacity-60 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+          {acoes}
+        </div>
+      </div>
+    </div>
+  );
 };
+
+/**
+ * Botão de ícone de uma linha de tabela.
+ *
+ * Alvo de 30px com o ícone em 14: menor que isso vira alvo de mira no
+ * trackpad. Quem responde "o que este ícone faz" é a `Dica` — tooltip do tema,
+ * imediato, em vez do `title` do navegador (lento, cinza e recortado pelo
+ * `overflow` da tabela).
+ */
+export const ListaAcao = ({
+  icon,
+  label,
+  onClick,
+  tone = "neutral",
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+  tone?: "neutral" | "success";
+}) => (
+  <Dica texto={label}>
+    <button
+      type="button"
+      aria-label={label}
+      onClick={(ev) => {
+        ev.stopPropagation();
+        onClick();
+      }}
+      className={`focus-ring flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded-lg border border-fg/[0.08] bg-surface/90 transition-colors hover:bg-fg/[0.08] ${
+        tone === "success" ? "text-success hover:text-success" : "text-mist hover:text-ink"
+      }`}
+    >
+      {icon}
+    </button>
+  </Dica>
+);
 
 /**
  * Linhas vazias que completam a página.

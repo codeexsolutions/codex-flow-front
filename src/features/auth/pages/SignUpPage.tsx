@@ -23,7 +23,8 @@ import { formatCurrencyFromCents } from "@/shared/utils/currency";
 import AuthService from "@/features/auth/services/auth.service";
 import useAuth from "@/features/auth/store/auth.store";
 import AssinaturaService from "@/features/assinatura/services/assinatura.service";
-import { CICLO_LABEL, type Plano, type RespostasDiagnostico } from "@/features/assinatura/types/assinatura.types";
+import { CICLO_LABEL, type RespostasDiagnostico } from "@/features/assinatura/types/assinatura.types";
+import useCatalogo from "@/shared/plano/catalogo.store";
 
 const LANDING_ROUTE = "/";
 
@@ -31,7 +32,9 @@ const LANDING_ROUTE = "/";
 const DESTAQUES_CAD = [
   { icone: Zap, titulo: "Entra na hora", texto: "Cadastrou, já tem acesso. Sem instalação e sem técnico." },
   { icone: QrCode, titulo: "Paga por Pix", texto: "QR na tela, você manda o comprovante e a gente libera." },
-  { icone: Repeat, titulo: "Troca quando quiser", texto: "Mudou de plano depois? Paga só a diferença." },
+  /* Enquanto a vitrine tem um plano só, prometer troca é prometer uma tela
+     que não existe. O que continua verdade é não haver fidelidade. */
+  { icone: Repeat, titulo: "Sem fidelidade", texto: "Mês a mês. Parou de usar, parou de pagar." },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -49,7 +52,6 @@ const cadastroSchema = z
     cpfCnpj: z.string().min(1, "Obrigatório").refine(isValidCpfCnpj, "CPF/CNPJ inválido"),
     inscMunicipal: z.string().optional(),
     urlLogo: optionalUrl,
-    urlImagem: optionalUrl,
 
     contato: z.object({
       email: z.string().min(1, "Obrigatório").email("Email inválido"),
@@ -95,11 +97,13 @@ type CadastroFormInputs = z.infer<typeof cadastroSchema>;
 /* Etapas */
 /* ------------------------------------------------------------------ */
 
-const STEPS = ["Diagnóstico", "Empresa", "Contato", "Endereço", "Acesso"] as const;
+/* A primeira etapa chamava "Diagnóstico" desde que existia o questionário de
+   três perguntas. Ele saiu; o rótulo tinha ficado. */
+const STEPS = ["Plano", "Empresa", "Contato", "Endereço", "Acesso"] as const;
 
 const STEP_FIELDS: Record<number, string[]> = {
   0: ["planoCodigo"],
-  1: ["nomeFantasia", "nomeRepresentante", "cpfCnpj", "inscMunicipal", "urlLogo", "urlImagem"],
+  1: ["nomeFantasia", "nomeRepresentante", "cpfCnpj", "inscMunicipal", "urlLogo"],
   2: ["contato.email", "contato.celular", "contato.telefone", "contato.whatsapp"],
   3: ["endereco.cep", "endereco.logradouro", "endereco.numero", "endereco.complemento", "endereco.bairro", "endereco.cidade", "endereco.uf"],
   4: ["senha", "confirmarSenha", "aceite"],
@@ -135,9 +139,21 @@ const CadastroEmpresaPage = () => {
   const reduzir = useReducedMotion();
   const [isLoading, setIsLoading] = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
-  const [planos, setPlanos] = useState<Plano[]>([]);
-  const [planosLoading, setPlanosLoading] = useState(true);
   const [verSenha, setVerSenha] = useState(false);
+
+  /*
+   * Os planos vêm do catálogo compartilhado, carregado no boot do app.
+   *
+   * A tela não busca mais nada: quando o cadastro abre, a lista já está em
+   * memória e a etapa do plano nasce com o cartão pronto. Buscar aqui fazia a
+   * etapa abrir vazia e o cartão entrar depois, empurrando o layout.
+   */
+  const planos = useCatalogo((s) => s.planos);
+  const catalogoCarregado = useCatalogo((s) => s.carregado);
+  const erroCatalogo = useCatalogo((s) => s.erro);
+  const carregarCatalogo = useCatalogo((s) => s.carregar);
+
+  const planosLoading = !catalogoCarregado;
 
   /*
    * O lead continua sendo criado, mas sem respostas de diagnóstico — o
@@ -168,31 +184,36 @@ const CadastroEmpresaPage = () => {
 
   /* ------------------------- Planos ------------------------- */
 
+  /* Rede de segurança para quem abre `/cadastro` direto: a store ignora o
+     pedido repetido, então chamar aqui não custa uma segunda requisição. */
   useEffect(() => {
-    let ativo = true;
+    carregarCatalogo();
+  }, [carregarCatalogo]);
 
-    AssinaturaService.listarPlanos()
-      .then((lista) => {
-        if (!ativo) return;
+  useEffect(() => {
+    if (!planos.length) return;
 
-        setPlanos(lista);
+    // Plano que veio da URL só vale se existir de fato — link antigo apontando
+    // para um plano fora de catálogo não pode marcar uma escolha que a API vai
+    // recusar depois.
+    const daUrl = searchParams.get("plano");
+    const valido = planos.some((p) => p.codigo === daUrl);
 
-        // Plano que veio da URL só vale se existir de fato; caso contrário
-        // deixamos em branco para o cliente escolher com o preço na tela.
-        const daUrl = searchParams.get("plano");
-        const valido = lista.some((p) => p.codigo === daUrl);
+    if (valido) {
+      setValue("planoCodigo", daUrl!, { shouldValidate: true });
+      setStep((s) => (s === 0 ? 1 : s));
+      return;
+    }
 
-        if (daUrl && !valido) setValue("planoCodigo", "");
-        if (valido) setStep((s) => (s === 0 ? 1 : s));
-      })
-      .catch(() => ativo && toast.warn("Não foi possível carregar os planos."))
-      .finally(() => ativo && setPlanosLoading(false));
+    // Catálogo com um plano só: escolher entre uma opção não é escolha. O
+    // cartão abre já marcado e a etapa vira confirmação, não decisão. Com mais
+    // de um plano o campo volta a nascer vazio, para a pessoa comparar preço.
+    const atual = getValues("planoCodigo");
 
-    return () => {
-      ativo = false;
-    };
-    // Só na montagem: o plano da URL é lido uma vez.
-  }, []);
+    if (planos.some((p) => p.codigo === atual)) return;
+
+    setValue("planoCodigo", planos.length === 1 ? planos[0].codigo : "", { shouldValidate: false });
+  }, [planos, searchParams, setValue, getValues]);
 
   /* ------------------------- ViaCEP ------------------------- */
 
@@ -247,7 +268,6 @@ const CadastroEmpresaPage = () => {
       cpfCnpj,
       inscMunicipal: data.inscMunicipal ?? "",
       urlLogo: data.urlLogo ?? "",
-      urlImagem: data.urlImagem ?? "",
       planoCodigo: data.planoCodigo,
       senha: data.senha,
       contato: {
@@ -581,9 +601,24 @@ const CadastroEmpresaPage = () => {
                 )}
 
                 {!planosLoading && planos.length === 0 && (
-                  <p className="py-8 text-center text-[13px] text-faint">
-                    Nenhum plano disponível agora. Fale com o suporte para liberar seu cadastro.
-                  </p>
+                  <div className="flex flex-col items-center gap-3 py-8 text-center">
+                    <p className="text-[13px] text-faint">
+                      {erroCatalogo || "Nenhum plano disponível agora. Fale com o suporte para liberar seu cadastro."}
+                    </p>
+
+                    {/* A falha aqui costuma ser de rede, não de catálogo vazio:
+                        sem esta saída a pessoa precisa recarregar a página e
+                        perde o que já digitou. */}
+                    {erroCatalogo && (
+                      <button
+                        type="button"
+                        onClick={() => carregarCatalogo(true)}
+                        className="focus-ring rounded-xl border border-fg/[0.1] px-3 py-1.5 text-[12px] text-mist transition hover:bg-fg/[0.04] hover:text-ink"
+                      >
+                        Tentar de novo
+                      </button>
+                    )}
+                  </div>
                 )}
 
                 {/*
@@ -660,24 +695,17 @@ const CadastroEmpresaPage = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                  <div>
-                    <label className={labelCls}>URL do logo</label>
-                    <div className={fieldBox}>
-                      <ImageIcon size={14} className="shrink-0 text-muted" />
-                      <input {...register("urlLogo")} placeholder="Opcional" className={inputCls} />
-                    </div>
-                    <p role="alert" className={errCls}>{errors.urlLogo?.message}</p>
+                {/* Só o logo. A "URL da imagem" ao lado apontava para um
+                    campo que nenhuma tela usava — e, num cadastro, um campo
+                    sem destino é trabalho pedido à toa. A logo em si se envia
+                    depois, por arquivo, em Configurações › Empresa. */}
+                <div>
+                  <label className={labelCls}>URL do logo</label>
+                  <div className={fieldBox}>
+                    <ImageIcon size={14} className="shrink-0 text-muted" />
+                    <input {...register("urlLogo")} placeholder="Opcional" className={inputCls} />
                   </div>
-
-                  <div>
-                    <label className={labelCls}>URL da imagem</label>
-                    <div className={fieldBox}>
-                      <ImageIcon size={14} className="shrink-0 text-muted" />
-                      <input {...register("urlImagem")} placeholder="Opcional" className={inputCls} />
-                    </div>
-                    <p role="alert" className={errCls}>{errors.urlImagem?.message}</p>
-                  </div>
+                  <p role="alert" className={errCls}>{errors.urlLogo?.message}</p>
                 </div>
               </>
             )}

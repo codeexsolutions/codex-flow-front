@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   Wallet, TrendingUp, TrendingDown, Trash2, AlertTriangle, RotateCw, Receipt,
-  ArrowLeftRight, Plus, CreditCard, Banknote,
+  ArrowLeftRight, Plus, CreditCard, Banknote, CalendarClock, ArrowDownCircle, ArrowUpCircle,
 } from "lucide-react";
 
 import { TabelaCard, TabelaHead, TabelaRow, TabelaVazia, type Coluna } from "@/shared/ui/DataTable";
@@ -19,6 +19,9 @@ import { useIsMobile } from "@/shared/hooks/useIsMobile";
 import FinanceiroMobile from "@/features/financeiro/components/FinanceiroMobile";
 import { Rosca } from "@/shared/ui/Rosca";
 import FiltroPeriodo, { dentroDoPeriodo, periodoPadrao, rotuloPeriodo, type Periodo } from "@/features/financeiro/components/FiltroPeriodo";
+import ListaContas from "@/features/financeiro/components/ListaContas";
+import ContaForm from "@/features/financeiro/components/ContaForm";
+import ContaService, { type Conta, type NovaConta, type ResumoContas, type TipoConta } from "@/features/financeiro/services/conta.service";
 
 /**
  * Financeiro — o dinheiro que entrou e saiu, num período.
@@ -83,6 +86,23 @@ export default function FinanceiroPage() {
   const [salvando, setSalvando] = useState(false);
   const [detalhe, setDetalhe] = useState<NotaFinanceiroType | null>(null);
 
+  /*
+   * As guias.
+   *
+   * A tela respondia uma pergunta só ("quanto entrou e saiu") e agora responde
+   * quatro, de pesos diferentes: o panorama, o que a empresa deve, o que ela
+   * tem a receber e o livro-caixa. Empilhar as quatro numa página faria a
+   * pessoa rolar para achar a que abriu para ver — como guias, cada uma abre
+   * inteira e o resto sai da frente.
+   */
+  const [guia, setGuia] = useState<"geral" | "pagar" | "receber" | "caixa">("geral");
+
+  const [contas, setContas] = useState<Conta[]>([]);
+  const [resumoContas, setResumoContas] = useState<ResumoContas | null>(null);
+  const [carregandoContas, setCarregandoContas] = useState(true);
+  const [novaConta, setNovaConta] = useState<TipoConta | null>(null);
+  const [salvandoConta, setSalvandoConta] = useState(false);
+
   const [novaMovimentacao, setNovaMovimentacao] = useState<NovaMovimentacaoType>({
     tipo: "ENTRADA",
     categoria: "",
@@ -95,7 +115,50 @@ export default function FinanceiroPage() {
     fetchFinanceiro();
   }, [fetchFinanceiro]);
 
-  const carregar = () => fetchFinanceiro(true);
+  /* Contas e resumo vêm juntos: os dois alimentam o cabeçalho, e buscar em
+     dois momentos faria os números aparecerem em tempos diferentes. */
+  const carregarContas = useCallback(async () => {
+    setCarregandoContas(true);
+
+    try {
+      const [lista, resumo] = await Promise.all([ContaService.listar(), ContaService.resumo()]);
+      setContas(lista);
+      setResumoContas(resumo);
+    } catch {
+      /* Falha aqui não derruba o financeiro inteiro: o caixa e os
+         recebimentos continuam na tela, e as guias mostram lista vazia. */
+      setContas([]);
+    } finally {
+      setCarregandoContas(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    carregarContas();
+  }, [carregarContas]);
+
+  const carregar = () => {
+    fetchFinanceiro(true);
+    carregarContas();
+  };
+
+  const criarConta = async (dados: NovaConta) => {
+    setSalvandoConta(true);
+
+    try {
+      await ContaService.criar(dados);
+      setNovaConta(null);
+      await carregarContas();
+      alert.success("Conta criada!", dados.parcelas && dados.parcelas > 1 ? `${dados.parcelas} parcelas geradas com os vencimentos.` : "O vencimento já está na lista.");
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível criar a conta."));
+    } finally {
+      setSalvandoConta(false);
+    }
+  };
+
+  const contasPagar = useMemo(() => contas.filter((c) => c.tipo === "PAGAR"), [contas]);
+  const contasReceber = useMemo(() => contas.filter((c) => c.tipo === "RECEBER"), [contas]);
 
   /* ---------------- Recorte do período ---------------- */
 
@@ -398,35 +461,110 @@ export default function FinanceiroPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-[17px] leading-none text-ink">Financeiro</h1>
-          <p className="mt-1 text-[12px] text-faint">Tudo que entrou e saiu · {rotulo}</p>
+          <p className="mt-1 text-[12px] text-faint">
+            {guia === "pagar" ? "O que a empresa deve" : guia === "receber" ? "O que a empresa tem a receber" : `Tudo que entrou e saiu · ${rotulo}`}
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <FiltroPeriodo valor={periodo} onChange={setPeriodo} datas={datasConhecidas} />
+          {/* O período recorta o que já aconteceu. As guias de contas olham o
+              FUTURO, por vencimento — filtrar "agosto" ali esconderia a
+              parcela de setembro que é justamente a próxima a vencer. */}
+          {(guia === "geral" || guia === "caixa") && <FiltroPeriodo valor={periodo} onChange={setPeriodo} datas={datasConhecidas} />}
 
           <button onClick={carregar} disabled={loading} className="focus-ring flex h-9 w-9 items-center justify-center rounded-xl border border-fg/[0.1] text-mist transition-colors hover:text-ink disabled:opacity-50" title="Atualizar">
             <RotateCw size={14} className={loading ? "animate-spin" : ""} />
           </button>
 
-          <button onClick={() => setShowNovaMovimentacao(true)} className="focus-ring flex h-9 items-center gap-1.5 rounded-xl bg-accent px-3.5 text-[12.5px] text-white transition-all hover:brightness-110 active:scale-[0.99]">
-            <Plus size={14} />
-            Movimentação
-          </button>
+          {(guia === "geral" || guia === "caixa") && (
+            <button onClick={() => setShowNovaMovimentacao(true)} className="focus-ring flex h-9 items-center gap-1.5 rounded-xl bg-accent px-3.5 text-[12.5px] text-white transition-all hover:brightness-110 active:scale-[0.99]">
+              <Plus size={14} />
+              Movimentação
+            </button>
+          )}
         </div>
       </div>
 
+      {/* ---------- Guias ---------- */}
+      <div className="glass-subtle flex w-fit shrink-0 items-center gap-1 rounded-xl p-1">
+        {([
+          { id: "geral", label: "Visão geral", icone: <Wallet size={14} /> },
+          { id: "pagar", label: "A pagar", icone: <ArrowUpCircle size={14} />, alerta: (resumoContas?.vencidoPagar ?? 0) > 0 },
+          { id: "receber", label: "A receber", icone: <ArrowDownCircle size={14} />, alerta: (resumoContas?.vencidoReceber ?? 0) > 0 },
+          { id: "caixa", label: "Caixa", icone: <ArrowLeftRight size={14} /> },
+        ] as const).map((g) => (
+          <button
+            key={g.id}
+            type="button"
+            onClick={() => setGuia(g.id)}
+            aria-pressed={guia === g.id}
+            className={`focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] transition-colors ${
+              guia === g.id ? "bg-accent text-white shadow-glow" : "text-mist hover:text-ink"
+            }`}
+          >
+            {g.icone}
+            {g.label}
+            {/* O ponto vermelho só existe quando há coisa vencida: alerta que
+                está sempre aceso deixa de ser alerta em uma semana. */}
+            {"alerta" in g && g.alerta && guia !== g.id && <span className="h-1.5 w-1.5 rounded-full bg-danger" />}
+          </button>
+        ))}
+      </div>
+
       {/* ---------- Totais do período ---------- */}
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className={guia === "geral" ? "grid grid-cols-2 gap-3 xl:grid-cols-4" : "hidden"}>
         <ResumoCard tone="success" icon={<Receipt size={17} />} label="Recebido em vendas" value={money(totais.recebidoVendas)} hint={`${recebimentos.length} ${recebimentos.length === 1 ? "recebimento" : "recebimentos"}`} />
         <ResumoCard tone="accent" icon={<TrendingUp size={17} />} label="Entradas no caixa" value={money(totais.entradas)} hint="Lançamentos manuais" />
         <ResumoCard tone="danger" icon={<TrendingDown size={17} />} label="Saídas" value={money(totais.saidas)} hint="Despesas do período" />
         <ResumoCard tone={totais.saldo >= 0 ? "success" : "danger"} icon={<Wallet size={17} />} label="Saldo do período" value={money(totais.saldo)} hint={resumo ? `Caixa acumulado ${money(resumo.saldoCaixa)}` : undefined} />
       </div>
 
+      {/* ---------- A pagar / A receber ---------- */}
+      {(guia === "pagar" || guia === "receber") && (
+        <>
+          {/* Os três números que decidem o dia: o total em aberto, o que já
+              venceu e o que vence nos próximos sete dias. */}
+          <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-3">
+            <ResumoCard
+              tone={guia === "pagar" ? "danger" : "success"}
+              icon={guia === "pagar" ? <ArrowUpCircle size={17} /> : <ArrowDownCircle size={17} />}
+              label={guia === "pagar" ? "Total a pagar" : "Total a receber"}
+              value={money(guia === "pagar" ? resumoContas?.aPagar ?? 0 : resumoContas?.aReceber ?? 0)}
+              hint="Parcelas em aberto"
+            />
+            <ResumoCard
+              tone="warning"
+              icon={<AlertTriangle size={17} />}
+              label="Vencido"
+              value={money(guia === "pagar" ? resumoContas?.vencidoPagar ?? 0 : resumoContas?.vencidoReceber ?? 0)}
+              hint="Já passou do vencimento"
+            />
+            <ResumoCard
+              tone="accent"
+              icon={<CalendarClock size={17} />}
+              label="Próximos 7 dias"
+              value={money(guia === "pagar" ? resumoContas?.pagarSemana ?? 0 : resumoContas?.receberSemana ?? 0)}
+              hint="Vence nesta semana"
+            />
+          </div>
+
+          <ListaContas
+            tipo={guia === "pagar" ? "PAGAR" : "RECEBER"}
+            contas={guia === "pagar" ? contasPagar : contasReceber}
+            carregando={carregandoContas}
+            onRecarregar={() => void carregarContas()}
+            onNova={() => setNovaConta(guia === "pagar" ? "PAGAR" : "RECEBER")}
+          />
+        </>
+      )}
+
       {/* ---------- Visão geral + listas ---------- */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
-        {/* Coluna esquerda — como o dinheiro entrou */}
-        <section className="card glass-sheen flex min-h-0 flex-col overflow-hidden">
+      <div className={guia === "geral" || guia === "caixa" ? "grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]" : "hidden"}>
+        {/* Coluna esquerda — como o dinheiro entrou.
+            Só na visão geral: é um panorama do período, não uma ferramenta de
+            trabalho. Ao lado do livro-caixa ela roubava metade da largura da
+            lista que a pessoa foi ali usar. */}
+        <section className={guia === "geral" ? "card glass-sheen flex min-h-0 flex-col overflow-hidden" : "hidden"}>
           <header className="flex items-center gap-2.5 border-b border-fg/[0.07] px-4 py-3">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-success/[0.14] text-success ring-1 ring-inset ring-success/20">
               <Banknote size={15} />
@@ -467,6 +605,7 @@ export default function FinanceiroPage() {
             `TabelaCard` traz o cabeçalho, a contagem e a moldura: é o mesmo
             componente das outras telas de lista, e é o que mantém o padrão. */}
         <div className="flex min-h-0 flex-col gap-4">
+          <div className={guia === "geral" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
           <TabelaCard
             title="Recebimentos de vendas"
             icon={<Receipt size={15} />}
@@ -490,7 +629,9 @@ export default function FinanceiroPage() {
               </>
             )}
           </TabelaCard>
+          </div>
 
+          <div className={guia === "caixa" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
           <TabelaCard
             title="Caixa"
             icon={<ArrowLeftRight size={15} />}
@@ -514,8 +655,18 @@ export default function FinanceiroPage() {
               </>
             )}
           </TabelaCard>
+          </div>
         </div>
       </div>
+
+      {novaConta && (
+        <ContaForm
+          tipo={novaConta}
+          salvando={salvandoConta}
+          onFechar={() => setNovaConta(null)}
+          onSalvar={criarConta}
+        />
+      )}
 
       {modais}
     </div>

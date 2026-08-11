@@ -13,9 +13,31 @@ const HeaderInterprise = () => {
 
   return (
     <div className="flex items-start gap-5">
-      {/* Logo — quadrada 24x24 */}
+      {/*
+        Logo — quadrada 24x24.
+
+        Dois defeitos moravam nesta linha. O arquivo padrão era `logo.jpg`,
+        que não existe em `public/` (o que existe é `logo.png`), e o caminho
+        vinha SEM a barra inicial: em `/pdv/orcamentos` o browser procurava
+        `/pdv/logo.jpg`. Ou seja, quem ainda não subiu logo via um ícone
+        quebrado na própria nota que manda para o cliente.
+
+        `object-contain`, e não `cover`: logo é marca, não foto de capa —
+        `cover` cortava as bordas de qualquer logo que não fosse quadrada.
+      */}
       <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-fg/10 bg-fg/5">
-        <img src={enterprise.urlLogo || "logo.jpg"} alt="Logo" className="h-full w-full object-cover p-1" />
+        <img
+          src={enterprise.urlLogo || "/logo.png"}
+          alt={enterprise.nomeFantasia ? `Logo de ${enterprise.nomeFantasia}` : "Logo da empresa"}
+          className="h-full w-full object-contain p-1.5"
+          /* Logo de storage pode ter sido apagada por fora; o padrão evita o
+             ícone de imagem quebrada dentro da nota. */
+          onError={(ev) => {
+            const img = ev.currentTarget;
+            if (img.src.endsWith("/logo.png")) return;
+            img.src = "/logo.png";
+          }}
+        />
       </div>
 
       <div className="flex flex-col gap-3">

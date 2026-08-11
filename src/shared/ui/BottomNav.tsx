@@ -19,7 +19,15 @@ import usePlano from "@/shared/plano/plano.store";
  * aparece apagado e não recebe toque: no celular o alvo é o dedo, e um
  * destino que só leva a uma tela de venda é pior aqui do que no computador.
  */
-type Item = { rota: string; label: string; icon: React.ReactNode; familia?: string; recurso?: string };
+type Item = {
+  rota: string;
+  label: string;
+  icon: React.ReactNode;
+  familia?: string;
+  recurso?: string;
+  /** Tela que ainda não existe — diferente de módulo fora do plano. */
+  emBreve?: boolean;
+};
 
 /**
  * Navegação do celular — dock flutuante, com a aba ativa expandida.
@@ -110,17 +118,19 @@ const BottomNav = () => {
     { rota: "/clientes", label: "Clientes", icon: <Users size={18} />, familia: "Cadastros" },
     // Equipe é do dono e só existe em plano que comporta mais de um usuário.
     ...(gestor && planoTemEquipe(equipe) ? [{ rota: "/funcionarios", label: "Minha equipe", icon: <UserCircle size={18} /> }] : []),
-    { rota: "/estoque", label: "Estoque e serviços", icon: <Package size={18} /> },
+    /* O mesmo rótulo da sidebar: quem usou o computador precisa achar o item
+       pelo nome que já conhece quando abrir no celular. */
+    { rota: "/estoque", label: "Estoque/Serviços", icon: <Package size={18} /> },
 
     // Financeiro virou aba de Vendas — deixou de ser destino próprio.
     ...(gestor ? [{ rota: "/vendas/financeiro", label: "Caixa e contas", icon: <Wallet size={18} />, recurso: "financeiro", familia: "Dinheiro" }] : []),
     { rota: "/relatorios", label: "Relatórios", icon: <BarChart3 size={18} />, recurso: "relatorios" },
 
-    // Correios deixou de ser "em breve" e passou a ser módulo de plano. Fica
-    // na folha mesmo para quem não contratou — apagado, com o cadeado: some
-    // do menu e ninguém descobre que existe; clicável, vira convite que a
-    // pessoa não pediu.
-    { rota: "/correios", label: "Correios", icon: <Truck size={18} />, recurso: "correios", familia: "Entregas" },
+    // Correios voltou para "em breve" enquanto o módulo é finalizado. Fica na
+    // folha, apagado: some do menu e ninguém descobre que existe. O selo é
+    // "Em breve", não o cadeado de plano — o cadeado promete uma tela que o
+    // upgrade destrava hoje, e essa ainda não está de pé.
+    { rota: "/correios", label: "Correios", icon: <Truck size={18} />, emBreve: true, familia: "Entregas" },
 
     // Uma ferramenta só para a produção — o quadro de etapas saiu.
     { rota: "/planilhas", label: "Planilhas", icon: <Table2 size={18} />, familia: "Produção" },
@@ -253,7 +263,15 @@ const BottomNav = () => {
                 </p>
               )}
 
-              {it.recurso && !temRecurso(it.recurso) ? (
+              {it.emBreve ? (
+                <div className="flex min-h-[48px] w-full cursor-not-allowed items-center gap-3 rounded-xl px-3 text-left text-[14px] text-mist opacity-45">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-fg/[0.05] text-faint">{it.icon}</span>
+                  <span className="flex-1">{it.label}</span>
+                  <span className="rounded-full border border-fg/[0.08] bg-fg/[0.03] px-2 py-0.5 text-[9px] uppercase tracking-wider text-faint">
+                    Em breve
+                  </span>
+                </div>
+              ) : it.recurso && !temRecurso(it.recurso) ? (
                 <div className="flex min-h-[48px] w-full cursor-not-allowed items-center gap-3 rounded-xl px-3 text-left text-[14px] text-mist opacity-55">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-fg/[0.05] text-faint">{it.icon}</span>
                   <span className="flex-1">{it.label}</span>

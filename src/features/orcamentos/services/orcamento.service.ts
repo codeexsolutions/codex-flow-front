@@ -47,6 +47,11 @@ const OrcamentoService = {
     return String(r.data?.data?.[0] ?? "");
   },
 
+  /** Reescreve a proposta. A API só aceita enquanto o orçamento está ABERTO. */
+  async atualizar(id: string, dados: NovoOrcamento): Promise<void> {
+    await sysgrafix.put(`/orcamentos/${id}`, dados);
+  },
+
   async alterarStatus(id: string, status: StatusOrcamento): Promise<void> {
     await sysgrafix.patch(`/orcamentos/${id}/status`, { status });
   },

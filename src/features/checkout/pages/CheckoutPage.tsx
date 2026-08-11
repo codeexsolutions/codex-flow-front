@@ -21,9 +21,9 @@ import CardPlano from "@/features/assinatura/components/CardPlano";
 import { baixarFaturaPdf } from "@/features/assinatura/utils/faturaPdf";
 import { competenciaBr, prazoAte } from "@/features/assinatura/utils/fatura.format";
 import ExtratoFaturas from "@/features/checkout/components/ExtratoFaturas";
+import useCatalogo from "@/shared/plano/catalogo.store";
 import {
   CICLO_LABEL, FaturaMeta, ehPagavel, type CobrancaPix, type Fatura, type MinhaAssinatura,
-  type Plano,
 } from "@/features/assinatura/types/assinatura.types";
 
 /* ================================================================== */
@@ -95,7 +95,11 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
   const [trocandoPlano, setTrocandoPlano] = useState(false);
   /** Código do plano cuja troca está em andamento — trava só aquele cartão. */
   const [salvandoPlano, setSalvandoPlano] = useState<string | null>(null);
-  const [planos, setPlanos] = useState<Plano[]>([]);
+  /* A vitrine da troca vem do catálogo compartilhado — o mesmo que a página
+     pública mostra. Duas listas de plano no mesmo produto dariam duas
+     respostas para "o que existe à venda". */
+  const planos = useCatalogo((s) => s.planos);
+  const carregarCatalogo = useCatalogo((s) => s.carregar);
 
   const carregar = useCallback(async () => {
     try {
@@ -165,7 +169,17 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
   const troca = assinatura?.trocaDePlano;
   const trocaLiberada = troca?.liberada ?? true;
   const trocaLiberaEm = troca?.liberaEm ?? null;
-  const podeTrocarPlano = Boolean(assinatura?.plano);
+  /*
+   * Não existe "trocar" quando não há para onde ir.
+   *
+   * Com um plano em catálogo, o botão abriria um modal com o cartão do plano
+   * que a pessoa já tem — uma porta que só leva de volta. A checagem é pelo
+   * que o catálogo REALMENTE trouxe: catálogo vazio (rede caída) mantém o
+   * botão, porque aí não sabemos, e sumir por falha de rede lê como defeito.
+   */
+  const temParaOndeTrocar = planos.length === 0 || planos.some((p) => p.codigo !== assinatura?.plano?.codigo);
+
+  const podeTrocarPlano = Boolean(assinatura?.plano) && temParaOndeTrocar;
 
   /* ------------------------- Ações ------------------------- */
 
@@ -257,14 +271,7 @@ const CheckoutPage = ({ embutido = false }: { embutido?: boolean }) => {
 
   const abrirTrocaDePlano = async () => {
     setTrocandoPlano(true);
-
-    if (planos.length === 0) {
-      try {
-        setPlanos(await AssinaturaService.listarPlanos());
-      } catch {
-        alert.error("Falha ao carregar planos", "Tente novamente em instantes.");
-      }
-    }
+    await carregarCatalogo();
   };
 
   const trocarPlano = async (codigo: string) => {
