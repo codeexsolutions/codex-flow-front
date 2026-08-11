@@ -23,7 +23,7 @@ type EmpresaIdentificacaoProps = {
  * imagem, vê a prévia trocar, sai da tela e perde tudo.
  */
 const EmpresaIdentificacao = ({ register, errors, setValue, watch }: EmpresaIdentificacaoProps) => {
-  const definir = (campo: "urlLogo" | "urlImagem" | "notaBackground") => (url: string | null) =>
+  const definir = (campo: "urlLogo" | "notaBackground") => (url: string | null) =>
     setValue(campo, url ?? "", { shouldDirty: true });
 
   return (
@@ -33,10 +33,11 @@ const EmpresaIdentificacao = ({ register, errors, setValue, watch }: EmpresaIden
       <Field label="CPF ou CNPJ" icon={<FileText size={15} />} hint="Não editável" disabled readOnly {...register("cpfCnpj")} />
       <Field label="Inscrição municipal" icon={<Hash size={15} />} placeholder="Opcional" error={fieldError(errors.inscMunicipal)} {...register("inscMunicipal")} />
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <UploadImagem tipo="logo" rotulo="Logo" valor={watch("urlLogo")} onChange={definir("urlLogo")} />
-        <UploadImagem tipo="logo" rotulo="Imagem da empresa" valor={watch("urlImagem")} onChange={definir("urlImagem")} />
-      </div>
+      {/* Uma imagem só. Havia uma segunda caixa, "Imagem da empresa", que
+          não aparecia em lugar nenhum além de servir de reserva para a
+          própria logo — duas caixas iguais lado a lado, e a pergunta
+          inevitável de qual das duas é a que sai na nota. */}
+      <UploadImagem tipo="logo" rotulo="Logo" valor={watch("urlLogo")} onChange={definir("urlLogo")} />
 
       <div className="flex flex-col gap-1.5">
         <UploadImagem

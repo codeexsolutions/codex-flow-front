@@ -1,17 +1,17 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, type Path } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  BadgeCheck, Cake, Home, IdCard, Mail, MapPin, MessageCircle, Phone, Search,
-  Smartphone, Loader2, UserRound, Users,
+  BadgeCheck, Cake, Check, Home, IdCard, Mail, MapPin,
+  MessageCircle, Phone, Save, Search, Smartphone, Loader2, UserRound, Users,
 } from "lucide-react";
 
 import ClientType, { eSexo, eStatus, SEXO_LABEL } from "@/shared/domain/cliente";
 import { Modal } from "@/shared/ui/Modal";
 import { useAlert } from "@/shared/ui/Alert";
-import { FormActions, FormSection, SelectBox, TextField } from "@/shared/ui/form/FormKit";
+import { FormSection, SelectBox, TextField } from "@/shared/ui/form/FormKit";
 import { useBuscaCep } from "@/shared/hooks/useBuscaCep";
-import { getInitials, onlyDigits } from "@/shared/utils/format";
+import { onlyDigits } from "@/shared/utils/format";
 import { maskCep, maskCpfCnpj, maskPhone, UFS } from "@/shared/validation/masks";
 import { clienteSchema, type ClienteFormData, type ClienteFormInput } from "@/features/clientes/schema/cliente.schema";
 
@@ -25,12 +25,27 @@ import { clienteSchema, type ClienteFormData, type ClienteFormInput } from "@/fe
  * significa edição.
  *
  * A regra da tela: **só o nome é obrigatório**. Documento, nascimento, sexo,
- * contato e endereço são o que se descobre sobre o cliente com o tempo — e o
- * medidor do topo mostra o quanto da ficha já existe, em vez de barrar o
- * cadastro por um campo que ninguém tem no balcão.
+ * contato e endereço são o que se descobre sobre o cliente com o tempo, não
+ * um pedágio para o cadastro acontecer.
+ *
+ * As catorze perguntas vêm em TRÊS ABAS, não numa coluna só: catorze campos
+ * de uma vez leem como formulário de banco, e quem está com cliente no balcão
+ * olha a pilha e adia o cadastro.
+ *
+ * As abas NÃO são um caminho obrigatório. Não há "Continuar": o botão de
+ * cadastrar está disponível desde a primeira, e as outras duas são para quem
+ * tem o dado na mão agora. Fatiar um formulário e depois obrigar a atravessar
+ * as três telas seria trocar uma pilha por um corredor.
  */
 
-const toDefaults = (c?: ClientType | null): ClienteFormInput => ({
+/** As três perguntas do cadastro, na ordem em que a loja as responde. */
+const ETAPAS = [
+  { titulo: "Identificação", resumo: "Quem é o cliente", icone: UserRound },
+  { titulo: "Contato", resumo: "Como falar com ele", icone: Phone },
+  { titulo: "Endereço", resumo: "Onde ele está", icone: MapPin },
+] as const;
+
+const toDefaults = (c?: Partial<ClientType> | null): ClienteFormInput => ({
   nome: c?.nome ?? "",
   cpfCnpj: c?.cpfCnpj ? maskCpfCnpj(c.cpfCnpj) : "",
   status: c?.status ?? eStatus.ATIVO,
@@ -58,15 +73,26 @@ type Props = {
   open?: boolean;
   /** Presente = edição. Ausente = cadastro novo. */
   cliente?: ClientType | null;
+  /**
+   * Campos com que um cadastro NOVO já nasce preenchido.
+   *
+   * Diferente de `cliente`: aqui continua sendo cadastro, com o título e o
+   * botão de cadastro. Serve para quem chega de um orçamento feito para nome
+   * livre — o nome e o telefone já estão escritos na proposta, e pedir para
+   * redigitá-los é o tipo de trabalho que faz o cadastro não acontecer.
+   */
+  prefill?: Partial<ClientType> | null;
   saving?: boolean;
   onClose: () => void;
   onSubmit: (data: ClienteFormData) => void | Promise<void>;
 };
 
-const ClienteForm = ({ open = true, cliente, saving = false, onClose, onSubmit }: Props) => {
+const ClienteForm = ({ open = true, cliente, prefill, saving = false, onClose, onSubmit }: Props) => {
   const alert = useAlert();
   const { buscar, buscando } = useBuscaCep();
   const editando = Boolean(cliente);
+
+  const [etapa, setEtapa] = useState(0);
 
   const {
     register,
@@ -75,14 +101,18 @@ const ClienteForm = ({ open = true, cliente, saving = false, onClose, onSubmit }
     watch,
     setValue,
     getValues,
+    trigger,
     formState: { errors },
   } = useForm<ClienteFormInput, unknown, ClienteFormData>({
     resolver: zodResolver(clienteSchema),
-    defaultValues: toDefaults(cliente),
+    defaultValues: toDefaults(cliente ?? prefill),
   });
 
   useEffect(() => {
-    if (open) reset(toDefaults(cliente));
+    if (open) {
+      reset(toDefaults(cliente ?? prefill));
+      setEtapa(0);
+    }
     // `cliente` é reconstruído a cada recarga da página; comparar por objeto
     // reabriria o formulário com os campos limpos no meio da digitação.
   }, [open, cliente?.id]);
@@ -102,24 +132,42 @@ const ClienteForm = ({ open = true, cliente, saving = false, onClose, onSubmit }
   const valores = watch();
 
   /*
-   * Medidor da ficha.
+   * O que cada etapa já tem.
    *
-   * Não é enfeite: com um único campo obrigatório, a pessoa precisa de algum
-   * sinal de que vale a pena preencher o resto. O medidor responde isso sem
-   * transformar nada em obrigatório.
+   * Alimenta o tique verde na navegação — que é o que permite pular direto
+   * para a etapa que falta em vez de reler as três. Numa ficha editada meses
+   * depois, essa é a diferença entre "onde estava o e-mail?" e um clique.
+   *
+   * É o que sobrou do medidor de preenchimento: a informação útil (o que já
+   * está respondido) sem a barra de progresso, que só media o quanto ainda
+   * faltava de campos que ninguém é obrigado a preencher.
    */
-  const completude = useMemo(() => {
-    const marcos = [
-      Boolean(valores.cpfCnpj?.trim()),
-      Boolean(valores.contato?.whatsapp?.trim() || valores.contato?.celular?.trim() || valores.contato?.telefone?.trim()),
-      Boolean(valores.contato?.email?.trim()),
-      Boolean(valores.dataNascimento?.trim()),
-      Boolean(valores.endereco?.cidade?.trim() || valores.endereco?.logradouro?.trim() || valores.endereco?.cep?.trim()),
+  const preenchida = useMemo(() => {
+    const contato = valores.contato ?? {};
+    const endereco = valores.endereco ?? {};
+    const algum = (obj: Record<string, unknown>) => Object.values(obj).some((v) => String(v ?? "").trim() !== "");
+
+    return [
+      Boolean(valores.cpfCnpj?.trim() || valores.dataNascimento?.trim() || valores.sexo?.trim()),
+      algum(contato),
+      algum(endereco),
     ];
-    return Math.round((marcos.filter(Boolean).length / marcos.length) * 100);
   }, [valores]);
 
-  const nome = valores.nome?.trim() ?? "";
+  /**
+   * Sair da primeira etapa valida o nome, e só ele.
+   *
+   * É o único campo obrigatório da ficha: exigir qualquer outro para trocar
+   * de aba seria inventar obrigatoriedade que o cadastro não tem. Descobrir o
+   * nome vazio depois de digitar o endereço é que sairia caro.
+   */
+  const irPara = async (destino: number) => {
+    if (destino === etapa) return;
+    // Voltar nunca valida: quem clica em "Identificação" quer justamente
+    // corrigir o que está lá.
+    if (destino > 0 && !(await trigger("nome"))) return setEtapa(0);
+    setEtapa(destino);
+  };
 
   const preencherPeloCep = async () => {
     const cep = onlyDigits(getValues("endereco.cep") ?? "");
@@ -141,14 +189,32 @@ const ClienteForm = ({ open = true, cliente, saving = false, onClose, onSubmit }
     setValue("endereco.uf", endereco.uf, { shouldValidate: true });
   };
 
-  const onInvalid = () => alert.error("Campos inválidos", "Revise os campos destacados e tente de novo.");
+  /**
+   * Erro numa etapa fechada é erro invisível.
+   *
+   * Com o formulário fatiado, um campo inválido pode estar em outra tela — e
+   * o aviso mandaria "revise os campos destacados" sem nada destacado à
+   * vista. Então a submissão inválida leva junto para onde está o problema.
+   */
+  const onInvalid = (erros: typeof errors) => {
+    const etapaDoErro = erros.nome || erros.status || erros.cpfCnpj || erros.dataNascimento || erros.sexo
+      ? 0
+      : erros.contato
+        ? 1
+        : erros.endereco
+          ? 2
+          : etapa;
+
+    setEtapa(etapaDoErro);
+    alert.error("Campos inválidos", "Revise os campos destacados e tente de novo.");
+  };
 
   return (
     <Modal
       open={open}
       onClose={() => !saving && onClose()}
       title={editando ? "Editar cliente" : "Novo cliente"}
-      subtitle={editando ? "Atualize a ficha e salve" : "Só o nome é obrigatório — o resto você completa quando souber"}
+      subtitle={editando ? undefined : "Só o nome é obrigatório"}
       size="lg"
       /*
        * Um pouco mais largo que o `lg` padrão (672px).
@@ -160,39 +226,46 @@ const ClienteForm = ({ open = true, cliente, saving = false, onClose, onSubmit }
        */
       maxWidth="sm:max-w-3xl"
     >
-      <form onSubmit={handleSubmit((data) => onSubmit(data), onInvalid)} className="flex flex-col gap-5" noValidate>
-        {/* ---------- Cabeçalho vivo: quem está sendo cadastrado ---------- */}
-        {/* As iniciais e o medidor reagem à digitação: o formulário deixa de
-            ser uma pilha de campos e passa a mostrar a ficha se formando. */}
-        <div className="flex items-center gap-3.5 rounded-2xl border border-fg/[0.07] bg-fg/[0.02] px-4 py-3.5">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-accent/25 bg-gradient-to-br from-accent/25 to-accent-soft/10 text-[13px] text-accent-soft">
-            {getInitials(nome)}
-          </span>
+      <form onSubmit={handleSubmit((data) => onSubmit(data), onInvalid)} className="flex flex-col gap-4" noValidate>
+        {/* ---------- Navegação das etapas ---------- */}
+        {/*
+          As abas são a navegação inteira — não há mais "Voltar"/"Continuar".
 
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[13.5px] text-ink">{nome || "Novo cliente"}</p>
-            <p className="mt-0.5 truncate text-[11.5px] text-faint">
-              {editando ? "Editando a ficha" : "Novo cadastro"}
-              {/* No celular não há largura para a barra ao lado; o número
-                  sozinho mantém o retorno de "o quanto já preenchi". */}
-              <span className="sm:hidden"> · {completude}% preenchida</span>
-            </p>
-          </div>
+          Com o botão de cadastrar disponível o tempo todo, o "Continuar" era
+          um segundo caminho para a mesma tela e dava a impressão de que a
+          ficha só termina no fim das três etapas. Clicar na aba faz o mesmo,
+          em qualquer ordem, e não compete com o botão que fecha o cadastro.
 
-          {/* O medidor à direita, e não embaixo do nome: na largura nova ele
-              cabe na mesma linha, e a faixa deixa de ter duas alturas. */}
-          <div className="hidden w-[188px] shrink-0 sm:block">
-            <div className="flex items-baseline justify-between">
-              <span className="text-[10px] uppercase tracking-[0.12em] text-muted">Ficha</span>
-              <span className="text-[11.5px] tabular-nums text-mist">{completude}%</span>
-            </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-fg/[0.07]">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-accent-soft to-accent transition-[width] duration-500"
-                style={{ width: `${Math.max(completude, 4)}%` }}
-              />
-            </div>
-          </div>
+          Saiu também o cabeçalho com iniciais e medidor de preenchimento: era
+          decoração ocupando 70px acima de um formulário que a pessoa abriu
+          para digitar um nome.
+        */}
+        <div className="grid grid-cols-3 gap-1 rounded-xl border border-fg/[0.07] bg-fg/[0.02] p-1">
+          {ETAPAS.map((e, i) => {
+            const Icone = e.icone;
+            const atual = i === etapa;
+
+            return (
+              <button
+                key={e.titulo}
+                type="button"
+                onClick={() => void irPara(i)}
+                aria-current={atual ? "step" : undefined}
+                className={`focus-ring flex min-h-[38px] cursor-pointer items-center justify-center gap-2 rounded-lg px-2 text-[12.5px] transition-colors ${
+                  atual ? "bg-accent/[0.14] text-ink ring-1 ring-inset ring-accent/30" : "text-mist hover:bg-fg/[0.04] hover:text-ink"
+                }`}
+              >
+                <span className={atual ? "text-accent-soft" : "text-faint"}>
+                  {preenchida[i] && !atual ? <Check size={13} /> : <Icone size={13} />}
+                </span>
+
+                {/* No celular só a etapa atual mostra o rótulo: três nomes
+                    lado a lado em 360px quebram linha e a barra dobra de
+                    altura. O ícone continua identificando as outras. */}
+                <span className={`min-w-0 truncate ${atual ? "" : "hidden sm:inline"}`}>{e.titulo}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* ---------- Identificação ---------- */}
@@ -201,6 +274,18 @@ const ClienteForm = ({ open = true, cliente, saving = false, onClose, onSubmit }
           cliente" própria: são a mesma pergunta — quem é essa pessoa. Duas
           seções para cinco campos davam mais título do que conteúdo.
         */}
+        {/*
+          As três etapas ficam MONTADAS e escondidas com `hidden`, em vez de
+          serem trocadas por renderização condicional.
+
+          Campo desmontado é campo que some do formulário — e, na volta, a
+          pessoa encontra o que digitou em branco. Escondido no CSS o valor
+          continua no react-hook-form, o estado de erro continua de pé e a
+          submissão enxerga a ficha inteira, esteja qual etapa estiver aberta.
+          Elemento com `display: none` também não recebe foco, então o Tab não
+          passeia por campos invisíveis.
+        */}
+        <div className={etapa === 0 ? "flex flex-col gap-5" : "hidden"}>
         <FormSection title="Identificação" icon={<UserRound className="h-3.5 w-3.5" />}>
           <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-3">
             <div className="sm:col-span-2">
@@ -208,7 +293,6 @@ const ClienteForm = ({ open = true, cliente, saving = false, onClose, onSubmit }
                 label="Nome"
                 icon={<Users className="h-3.5 w-3.5" />}
                 placeholder="Como o cliente é chamado"
-                hint="Único campo obrigatório"
                 autoFocus={!editando}
                 error={errors.nome?.message}
                 {...register("nome")}
@@ -225,19 +309,18 @@ const ClienteForm = ({ open = true, cliente, saving = false, onClose, onSubmit }
             <TextField
               label="CPF / CNPJ"
               icon={<IdCard className="h-3.5 w-3.5" />}
-              placeholder="Deixe em branco se não tiver"
+              placeholder="Opcional"
               inputMode="numeric"
               error={errors.cpfCnpj?.message}
               {...masked("cpfCnpj", maskCpfCnpj)}
             />
 
-            {/* Nascimento e sexo não entram por burocracia: são o que permite
-                felicitar no aniversário e entender para quem a loja vende. */}
+            {/* Nascimento vira o lembrete de aniversário na tela de Clientes —
+                é por isso que ele está aqui, e não por burocracia. */}
             <TextField
               label="Nascimento"
               type="date"
               icon={<Cake className="h-3.5 w-3.5" />}
-              hint="Vira lembrete de aniversário"
               max={new Date().toISOString().slice(0, 10)}
               error={errors.dataNascimento?.message}
               {...register("dataNascimento")}
@@ -253,10 +336,12 @@ const ClienteForm = ({ open = true, cliente, saving = false, onClose, onSubmit }
             </SelectBox>
           </div>
         </FormSection>
+        </div>
 
         {/* ---------- Contato ---------- */}
         {/* Os três números na mesma linha, na ordem em que a loja usa: o
             WhatsApp primeiro, que é por onde se fala com o cliente. */}
+        <div className={etapa === 1 ? "flex flex-col gap-5" : "hidden"}>
         <FormSection title="Contato" icon={<Phone className="h-3.5 w-3.5" />}>
           <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-3">
             <TextField label="WhatsApp" icon={<MessageCircle className="h-3.5 w-3.5" />} placeholder="(00) 00000-0000" inputMode="tel" error={errors.contato?.whatsapp?.message} {...masked("contato.whatsapp", maskPhone)} />
@@ -266,8 +351,10 @@ const ClienteForm = ({ open = true, cliente, saving = false, onClose, onSubmit }
 
           <TextField label="E-mail" icon={<Mail className="h-3.5 w-3.5" />} placeholder="email@exemplo.com" inputMode="email" error={errors.contato?.email?.message} {...register("contato.email")} />
         </FormSection>
+        </div>
 
         {/* ---------- Endereço ---------- */}
+        <div className={etapa === 2 ? "flex flex-col gap-5" : "hidden"}>
         <FormSection title="Endereço" icon={<MapPin className="h-3.5 w-3.5" />}>
           {/* O CEP e o que ele preenche na mesma linha: digitar rua, bairro,
               cidade e UF à mão é onde o cadastro de endereço morre. */}
@@ -314,8 +401,36 @@ const ClienteForm = ({ open = true, cliente, saving = false, onClose, onSubmit }
             </SelectBox>
           </div>
         </FormSection>
+        </div>
 
-        <FormActions onCancel={onClose} saving={saving} submitText={editando ? "Salvar alterações" : "Cadastrar cliente"} />
+        {/*
+          Dois botões, e o de cadastrar em destaque desde a primeira etapa.
+
+          Antes eram quatro (Voltar, Cancelar, Salvar agora, Continuar), e o
+          destaque estava no "Continuar" — o que ensinava que a ficha só
+          termina depois de três telas, justamente o contrário da regra desta
+          tela. Agora o botão que fecha o cadastro é o único em destaque, e as
+          abas acima levam a quem quiser preencher o resto.
+        */}
+        <div className="flex items-center justify-end gap-2 border-t border-fg/[0.07] pt-3.5">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="focus-ring inline-flex min-h-[38px] cursor-pointer items-center rounded-lg px-3 text-[12.5px] text-mist transition-colors hover:bg-fg/[0.05] hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+
+          <button
+            type="submit"
+            disabled={saving}
+            className="focus-ring inline-flex min-h-[38px] cursor-pointer items-center gap-1.5 rounded-lg bg-gradient-to-br from-accent-soft to-accent px-4 text-[12.5px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            {saving ? "Salvando…" : editando ? "Salvar" : "Cadastrar"}
+          </button>
+        </div>
       </form>
     </Modal>
   );

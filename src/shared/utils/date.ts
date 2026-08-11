@@ -132,6 +132,40 @@ export function isSameMonth(value: DateInput, ref: DateInput = new Date()): bool
 
 export const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"] as const;
 
+export const MESES_EXTENSO = [
+  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+] as const;
+
+/**
+ * O dia como se fala: "terça-feira, 11 de agosto".
+ *
+ * `11/08/2026` obriga quem lê a traduzir, e o que a loja quer saber de um dia
+ * é se ele foi uma terça ou um sábado — o movimento é diferente nos dois.
+ * "Hoje" e "Ontem" vêm na frente porque são os dois dias que se olha toda
+ * hora, e para eles o nome do dia da semana não acrescenta nada.
+ *
+ * O ano só aparece quando não é o corrente: escrevê-lo sempre gastaria a
+ * largura do rótulo com a informação que menos muda.
+ */
+export function diaExtenso(dia: Date): string {
+  const hoje = new Date();
+  const ontem = new Date(hoje);
+  ontem.setDate(ontem.getDate() - 1);
+
+  const mesmo = (a: Date, b: Date) => a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
+
+  const diaEMes = `${dia.getDate()} de ${MESES_EXTENSO[dia.getMonth()]}`;
+
+  if (mesmo(dia, hoje)) return `Hoje, ${diaEMes}`;
+  if (mesmo(dia, ontem)) return `Ontem, ${diaEMes}`;
+
+  const semana = dia.toLocaleDateString("pt-BR", { weekday: "long" });
+  const ano = dia.getFullYear() === hoje.getFullYear() ? "" : ` de ${dia.getFullYear()}`;
+
+  return `${semana}, ${diaEMes}${ano}`;
+}
+
 /**
  * Data como as tabelas escrevem: vazio vira "-", e não o travessão do `EMPTY`.
  * A diferença importa numa coluna estreita, onde "—" e uma data têm larguras

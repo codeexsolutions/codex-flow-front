@@ -255,8 +255,12 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
       </div>
 
       {/* Controles próprios: os do pacote não seguem o tema e ficavam
-          cinza-claro sobre fundo claro — invisíveis no tema claro. */}
-      <div className="flex items-center justify-between gap-3">
+          cinza-claro sobre fundo claro — invisíveis no tema claro.
+
+          Com um plano só eles somem: duas setas apagadas e um pontinho
+          sozinho anunciam uma navegação que não existe, e a primeira coisa
+          que a pessoa faz é clicar nelas procurando o que não tem. */}
+      <div className={`items-center justify-between gap-3 ${planos.length > 1 ? "flex" : "hidden"}`}>
         <button type="button" aria-label="Plano anterior" className={seta} disabled={indice === 0} onClick={() => irPara(indice - 1)}>
           <ChevronLeft size={15} />
         </button>

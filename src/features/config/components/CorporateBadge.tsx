@@ -21,8 +21,8 @@ const CorporateBadge = () => {
         <div className="relative">
           <div className="absolute -inset-2 rounded-3xl bg-accent/20 blur-lg" />
           <div className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-accent/30 bg-canvas shadow-[0_12px_40px_-16px_rgb(var(--accent)/0.7)]">
-            {enterprise.urlLogo || enterprise.urlImagem ? (
-              <img src={enterprise.urlLogo || enterprise.urlImagem} alt={enterprise.nomeFantasia} className="h-full w-full object-cover" />
+            {enterprise.urlLogo ? (
+              <img src={enterprise.urlLogo} alt={enterprise.nomeFantasia} className="h-full w-full object-cover" />
             ) : (
               <Building2 className="h-8 w-8 text-accent-soft" />
             )}

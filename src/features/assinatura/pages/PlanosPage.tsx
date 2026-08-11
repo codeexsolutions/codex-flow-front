@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, ArrowRight, Loader2, Sparkles, ShieldCheck, Smartphone, WifiOff,
+  ArrowLeft, Loader2, Sparkles, ShieldCheck, Smartphone, WifiOff,
 } from "lucide-react";
 
-import AssinaturaService from "@/features/assinatura/services/assinatura.service";
 import CardPlano from "@/features/assinatura/components/CardPlano";
+import useCatalogo from "@/shared/plano/catalogo.store";
 import { type Plano } from "@/features/assinatura/types/assinatura.types";
 
 /** O que vale para todo plano — dito uma vez, embaixo, em vez de repetido em cada cartão. */
@@ -18,25 +18,18 @@ const INCLUSO = [
 const PlanosPage = () => {
   const navigate = useNavigate();
 
-  const [planos, setPlanos] = useState<Plano[]>([]);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState("");
+  const planos = useCatalogo((s) => s.planos);
+  const carregando = useCatalogo((s) => !s.carregado);
+  const erro = useCatalogo((s) => s.erro);
+  const carregarCatalogo = useCatalogo((s) => s.carregar);
 
+  /* A lista já vem do catálogo carregado no boot; a chamada aqui só cobre
+     quem abre `/planos` direto, e a store ignora o pedido repetido. */
   useEffect(() => {
-    let ativo = true;
+    carregarCatalogo();
+  }, [carregarCatalogo]);
 
-    // `true`: esta é a página da comparação completa — quem chegou aqui pediu
-    // para ver tudo. A venda normal acontece no diagnóstico do cadastro, que
-    // mostra um plano só.
-    AssinaturaService.listarPlanos(true)
-      .then((lista) => ativo && setPlanos(lista))
-      .catch(() => ativo && setErro("Não foi possível carregar os planos. Tente novamente em instantes."))
-      .finally(() => ativo && setCarregando(false));
-
-    return () => {
-      ativo = false;
-    };
-  }, []);
+  const umPlanoSo = planos.length === 1;
 
   /** O plano escolhido viaja na URL — o cadastro lê e já abre marcado. */
   const escolher = (plano: Plano) => navigate(`/cadastro?plano=${encodeURIComponent(plano.codigo)}`);
@@ -57,28 +50,32 @@ const PlanosPage = () => {
 
         <div className="flex flex-col items-center text-center">
           <img src="/logo.png" alt="CodeEx Flow" width={48} height={48} className="h-12 w-12 rounded-xl shadow-e2" />
-          <h1 className="mt-5 text-2xl tracking-tight text-ink sm:text-[28px]">Todos os planos, lado a lado</h1>
+          {/*
+           * O título acompanha o catálogo.
+           *
+           * "Todos os planos, lado a lado" em cima de um cartão só promete uma
+           * comparação que a página não entrega — e a primeira coisa que o
+           * visitante faz é procurar os outros. Com um plano em catálogo a
+           * página deixa de ser tabela e vira a apresentação do produto.
+           */}
+          <h1 className="mt-5 text-2xl tracking-tight text-ink sm:text-[28px]">
+            {umPlanoSo ? "O Flow, por um preço só" : "Todos os planos, lado a lado"}
+          </h1>
           <p className="mt-2.5 max-w-lg text-[13px] leading-relaxed text-mist">
-            Do empreendedor que vende sozinho à operação com mais de uma loja. Você troca de plano quando quiser,
-            pagando só a diferença.
+            {umPlanoSo
+              ? "Um plano, o sistema inteiro: PDV, clientes, produtos, financeiro, planilhas e relatórios. Sem pacote para destravar depois."
+              : "Do empreendedor que vende sozinho à operação com mais de uma loja. Você troca de plano quando quiser, pagando só a diferença."}
           </p>
 
-          {/*
-           * A saída para quem abriu esta página e travou.
-           *
-           * Seis colunas de preço é informação demais para quem nunca usou um
-           * ERP — foi por isso que o cadastro passou a perguntar em vez de
-           * mostrar. Quem chegou aqui pela curiosidade e não sabe decidir tem
-           * o caminho curto a um clique, em vez de fechar a aba.
-           */}
+          {/* A saída para quem abriu esta página e travou: o caminho curto para
+              a conta, em vez de fechar a aba. */}
           <button
             type="button"
             onClick={() => navigate("/cadastro")}
             className="focus-ring group mt-6 inline-flex items-center gap-2 rounded-xl border border-accent/25 bg-accent/[0.08] px-4 py-2.5 text-[13px] text-accent-soft transition hover:bg-accent/[0.14]"
           >
             <Sparkles size={14} />
-            Não sabe qual? Responda 3 perguntas
-            <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" />
+            Criar minha conta
           </button>
         </div>
 
@@ -114,8 +111,18 @@ const PlanosPage = () => {
 
               Três colunas só a partir de `xl`: em 1024px, três cartões
               espremem o preço e a lista de recursos.
+
+              Com um plano só a grade sai de cena: o cartão sozinho na
+              primeira coluna de três fica estreito e encostado à esquerda,
+              lendo como sobra de uma fileira que não veio.
             */}
-            <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-3">
+            <div
+              className={
+                umPlanoSo
+                  ? "mx-auto mt-10 w-full max-w-sm"
+                  : "mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:grid-cols-3"
+              }
+            >
               {planos.map((plano) => (
                 <CardPlano key={plano.id} plano={plano} onEscolher={escolher} />
               ))}
@@ -123,7 +130,7 @@ const PlanosPage = () => {
 
             {/* O que não varia entre planos fica aqui, dito uma vez só. */}
             <div className="mt-8 rounded-2xl border border-fg/[0.07] bg-fg/[0.02] p-6">
-              <p className="text-[11px] uppercase tracking-[1.6px] text-faint">Em todos os planos</p>
+              <p className="text-[11px] uppercase tracking-[1.6px] text-faint">{umPlanoSo ? "Já incluído" : "Em todos os planos"}</p>
 
               <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {INCLUSO.map(({ icone: Icone, texto }) => (

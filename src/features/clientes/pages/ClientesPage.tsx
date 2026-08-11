@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users, UserPlus, Search, AlertTriangle, ChevronRight, Cake, RotateCw, MapPin, MessageCircle, Phone, ClipboardList } from "lucide-react";
+import { Users, UserPlus, Search, AlertTriangle, ChevronRight, Cake, RotateCw, MapPin, MessageCircle, Pencil, Phone, ClipboardList } from "lucide-react";
 import CustomerService from "@/features/clientes/services/client.service";
 import useClienteStore from "@/features/clientes/store/cliente.store";
 import useSincronizacao from "@/shared/realtime/useSincronizacao";
@@ -20,7 +20,7 @@ import { SkeletonTableRows, SkeletonIdentityCell } from "@/shared/ui/skeleton";
 import { useAutoPageSize, ROW_HEIGHT } from "@/shared/hooks/useAutoPageSize";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { PageScreen } from "@/shared/ui/PageShell";
-import { ListaCabecalho, ListaFantasmas, ListaLinha, TabelaPaginacao } from "@/shared/ui/DataTable";
+import { ListaAcao, ListaCabecalho, ListaFantasmas, ListaLinha, TabelaPaginacao } from "@/shared/ui/DataTable";
 import { aniversarioBr, diaAniversario, ehAniversarianteDoMes, ehAniversarioHoje } from "@/features/clientes/utils/aniversario";
 
 type Filtro = "todos" | "ativo" | "inativo" | "incompletos";
@@ -43,9 +43,9 @@ const FILTROS: { value: Filtro; label: string }[] = [
  * numa base de clientes: como falar com ele, onde ele está e o quanto a ficha
  * está preenchida.
  */
-const COLS = "grid-cols-[minmax(0,1fr)_148px_152px_84px_104px]";
+const COLS = "grid-cols-[minmax(0,1fr)_148px_152px_84px_104px_104px]";
 /** Soma das colunas fixas + folga para a flexível: abaixo disso a tabela rola. */
-const TABLE_MIN_WIDTH = 720;
+const TABLE_MIN_WIDTH = 824;
 
 function contactDigits(contato?: ContactType) {
   if (!contato) return "";
@@ -70,6 +70,7 @@ const SkeletonRows = ({ count }: { count: number }) => (
     <div className="h-3 w-20 rounded bg-fg/[0.05]" />
     <div className="h-3 w-12 rounded bg-fg/[0.05]" />
     <div className="h-5 w-16 rounded-full bg-fg/[0.05]" />
+    <div className="ml-auto h-7 w-[68px] rounded-lg bg-fg/[0.05]" />
   </SkeletonTableRows>
 );
 
@@ -105,6 +106,9 @@ const Clientes = () => {
   const [page, setPage] = useState(1);
 
   const [showCreate, setShowCreate] = useState(false);
+  /* Cliente em edição pela própria lista — antes era preciso abrir a ficha,
+     achar "Editar" e voltar, três telas para corrigir um telefone. */
+  const [editando, setEditando] = useState<ClientType | null>(null);
   const [saving, setSaving] = useState(false);
 
   const { bodyRef, perPage } = useAutoPageSize<HTMLDivElement>();
@@ -210,6 +214,37 @@ const Clientes = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleUpdate = async (data: ClienteFormData) => {
+    if (!editando?.id) return;
+
+    setSaving(true);
+    try {
+      await CustomerService.update(String(editando.id), data);
+      setEditando(null);
+      await load();
+      alert.success("Cliente atualizado", "As alterações foram salvas com sucesso.");
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível atualizar o cliente."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /**
+   * Abre a conversa no WhatsApp já com o número do cliente.
+   *
+   * É a ação que mais se faz com uma base de clientes e a que mais custava:
+   * abrir a ficha, selecionar o número, copiar, trocar de aplicativo. O `55`
+   * entra só quando falta — número já salvo com DDI não pode virar `5555…`.
+   */
+  const abrirWhatsapp = (c: ClientType) => {
+    const digitos = onlyDigits(String(numeroDeContato(c)));
+    if (!digitos) return;
+
+    const destino = digitos.length <= 11 ? `55${digitos}` : digitos;
+    window.open(`https://wa.me/${destino}`, "_blank", "noopener,noreferrer");
   };
 
   const hasFilters = Boolean(search) || filtro !== "todos";
@@ -326,6 +361,7 @@ const Clientes = () => {
                 <p>Local</p>
                 <p>Ficha</p>
                 <p className="text-right">Situação</p>
+                <p className="text-right">Ações</p>
               </ListaCabecalho>
 
               {/* Corpo: sem scroll — o que não cabe vai pra próxima página */}
@@ -364,6 +400,35 @@ const Clientes = () => {
                           altura={ROW_HEIGHT}
                           onClick={() => c.id && navigate(`/clientes/${c.id}`)}
                           ariaLabel={`Abrir cliente ${c.nome}`}
+                          /*
+                           * Três ações, e não um menu de três pontinhos.
+                           *
+                           * Um menu esconde as ações atrás de um clique e de
+                           * uma leitura; com três itens ele custa mais do que
+                           * economiza. WhatsApp só aparece para quem tem
+                           * número — botão que não faz nada ensina a não
+                           * clicar nos que fazem.
+                           */
+                          acoes={
+                            <>
+                              {numero && (
+                                <ListaAcao
+                                  icon={<MessageCircle size={14} />}
+                                  label="WhatsApp"
+                                  tone="success"
+                                  onClick={() => abrirWhatsapp(c)}
+                                />
+                              )}
+
+                              <ListaAcao icon={<Pencil size={14} />} label="Editar" onClick={() => setEditando(c)} />
+
+                              <ListaAcao
+                                icon={<ChevronRight size={14} />}
+                                label="Abrir ficha"
+                                onClick={() => c.id && navigate(`/clientes/${c.id}`)}
+                              />
+                            </>
+                          }
                         >
                           <div className="flex min-w-0 items-center gap-3">
                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent/25 bg-gradient-to-br from-accent/25 to-accent-soft/10 text-[11px] text-accent-soft">{getInitials(c.nome)}</div>
@@ -418,6 +483,10 @@ const Clientes = () => {
                           <span className="flex justify-end">
                             <StatusBadge status={c.status} />
                           </span>
+
+                          {/* Célula vazia: reserva a largura das ações, que
+                              são desenhadas sobrepostas pela `ListaLinha`. */}
+                          <span aria-hidden />
                         </ListaLinha>
                       );
                     })}
@@ -515,6 +584,9 @@ const Clientes = () => {
       </section>
 
       {showCreate && <ClienteForm saving={saving} onClose={() => setShowCreate(false)} onSubmit={handleCreate} />}
+
+      {/* Edição pela lista: mesma ficha da tela de detalhe, sem sair daqui. */}
+      {editando && <ClienteForm cliente={editando} saving={saving} onClose={() => setEditando(null)} onSubmit={handleUpdate} />}
     </PageScreen>
   );
 };

@@ -63,7 +63,7 @@ const Sidebar = () => {
 
   const userInitials = getInitials(user?.nome, "U");
   const companyInitial = (enterprise?.nomeFantasia || "E").trim().charAt(0).toUpperCase();
-  const companyImage = enterprise?.urlLogo || enterprise?.urlImagem || "";
+  const companyImage = enterprise?.urlLogo || "";
 
   /** Dono ou administrador promovido: vê o sistema inteiro. */
   const gestor = ehGestor(user);
@@ -438,7 +438,7 @@ const Sidebar = () => {
                 {/* "e serviços" no rótulo: é a mesma tela de sempre, mas quem
                     presta serviço cadastra serviço nela, e sem isso metade dos
                     clientes procurava um menu que não existe. */}
-                {item("estoque", <Package size={17} />, "Estoque e serviços")}
+                {item("estoque", <Package size={17} />, "Estoque/Serviços")}
 
                 {cat("Dinheiro")}
                 {/*
@@ -454,7 +454,10 @@ const Sidebar = () => {
                 {item("relatorios", <BarChart3 size={17} />, "Relatórios", false, !temRecurso("relatorios"))}
 
                 {cat("Entregas")}
-                {item("correios", <Truck size={17} />, "Correios", false, !temRecurso("correios"))}
+                {/* Correios volta para "Em breve" enquanto o módulo é
+                    finalizado. Não é "Plano": o cadeado promete uma tela que
+                    o upgrade destrava hoje, e essa ainda não está de pé. */}
+                {item("correios", <Truck size={17} />, "Correios", true)}
               </>
             ) : (
               <>

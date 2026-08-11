@@ -8,7 +8,6 @@ import { formatCurrency } from "@/shared/utils/currency";
 import { formatDate } from "@/shared/utils/date";
 import { SkeletonListaPainel } from "@/shared/ui/skeleton";
 import { PageScreen } from "@/shared/ui/PageShell";
-import { TabsPdv } from "@/features/vendas/components/TabsPdv";
 import { handleDownload } from "@/shared/ui/DownloadButton";
 import MenuDownloadNota from "@/shared/ui/MenuDownloadNota";
 import { Modal } from "@/shared/ui/Modal";
@@ -143,7 +142,7 @@ const OrcamentosPage = () => {
   };
 
   return (
-    <PageScreen icon={<ShoppingCart className="h-5 w-5" />} title="Ponto de Venda" subtitle="Registre vendas e monte orçamentos" tabs={TabsPdv}>
+    <PageScreen icon={<ShoppingCart className="h-5 w-5" />} title="Ponto de Venda" subtitle="Registre vendas e monte orçamentos">
     <div className="flex h-full min-h-0 flex-col gap-3">
       {/* Explica a regra uma vez, onde ela importa. */}
       <div className="flex shrink-0 items-start gap-2.5 rounded-xl border border-fg/[0.07] bg-fg/[0.02] px-4 py-2.5">

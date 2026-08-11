@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ImagePlus, Loader2, Trash2, Check } from "lucide-react";
+import { ImagePlus, Loader2, Trash2 } from "lucide-react";
 
 import sysgrafix from "@/shared/api/sysgrafix";
 
@@ -26,17 +26,13 @@ type Props = {
   formato?: "quadrado" | "largo";
 };
 
-const kb = (b: number) => (b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : `${Math.round(b / 1024)} kB`);
-
 const UploadImagem = ({ tipo, valor, onChange, rotulo = "Imagem", formato = "quadrado" }: Props) => {
   const entrada = useRef<HTMLInputElement>(null);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
-  const [ganho, setGanho] = useState<{ de: number; para: number } | null>(null);
 
   const enviar = async (arquivo: File) => {
     setErro("");
-    setGanho(null);
     setEnviando(true);
 
     try {
@@ -52,7 +48,6 @@ const UploadImagem = ({ tipo, valor, onChange, rotulo = "Imagem", formato = "qua
       if (!salva?.url) throw new Error(data?.message || "Falha ao enviar.");
 
       onChange(salva.url);
-      setGanho({ de: salva.bytesOriginais, para: salva.bytesFinais });
 
     } catch (e) {
       const err = e as { response?: { data?: { message?: string } }; message?: string };
@@ -108,7 +103,7 @@ const UploadImagem = ({ tipo, valor, onChange, rotulo = "Imagem", formato = "qua
             {valor && (
               <button
                 type="button"
-                onClick={() => { onChange(null); setGanho(null); }}
+                onClick={() => onChange(null)}
                 className="focus-ring flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12px] text-muted transition-colors hover:text-danger"
               >
                 <Trash2 size={13} /> Remover
@@ -116,23 +111,27 @@ const UploadImagem = ({ tipo, valor, onChange, rotulo = "Imagem", formato = "qua
             )}
           </div>
 
-          {ganho ? (
-            <p className="flex items-center gap-1.5 text-[11px] text-success">
-              <Check size={12} />
-              {kb(ganho.de)} → {kb(ganho.para)} em WebP
-            </p>
-          ) : (
-            <p className="text-[11px] text-faint">JPG, PNG ou WebP · até 10 MB</p>
-          )}
-
+          {/* Sem placar de compressão.
+              O "de 4,2 MB para 180 kB" era informação sobre o SISTEMA, não
+              sobre a imagem: quem sobe a logo quer ver a logo. A conversão
+              para WebP continua acontecendo — calada. */}
           {erro && <p className="text-[11px] text-danger">{erro}</p>}
         </div>
       </div>
 
+      {/*
+        `image/*`, e não uma lista de extensões.
+
+        A lista fixa que estava aqui deixava arquivos CINZAS no seletor do
+        sistema: a foto do iPhone (HEIC) e a logo do designer (SVG) apareciam
+        sem poder ser escolhidas, sem nenhuma explicação do porquê. O servidor
+        aceita tudo que sabe converter, então o seletor não pode ser mais
+        restrito que ele.
+      */}
       <input
         ref={entrada}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+        accept="image/*"
         className="hidden"
         onChange={(e) => {
           const arquivo = e.target.files?.[0];

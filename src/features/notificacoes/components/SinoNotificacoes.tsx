@@ -21,6 +21,7 @@ const LOOK: Record<TipoNotificacao, { icon: React.ReactNode; cls: string }> = {
   CLIENTE_CADASTRADO: { icon: <UserPlus size={14} />, cls: "bg-accent/15 text-accent-soft" },
   PAGAMENTO_RECEBIDO: { icon: <BadgeCheck size={14} />, cls: "bg-success/15 text-success" },
   CAIXA_LANCAMENTO: { icon: <Wallet size={14} />, cls: "bg-accent/15 text-accent-soft" },
+  CONTA_CRIADA: { icon: <Wallet size={14} />, cls: "bg-warning/15 text-warning" },
   CAIXA_EXCLUSAO: { icon: <Trash2 size={14} />, cls: "bg-danger/15 text-danger" },
   FUNCIONARIO_CADASTRADO: { icon: <Users size={14} />, cls: "bg-accent/15 text-accent-soft" },
   FUNCIONARIO_ALTERADO: { icon: <Users size={14} />, cls: "bg-accent/15 text-accent-soft" },

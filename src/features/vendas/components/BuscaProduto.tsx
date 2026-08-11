@@ -116,7 +116,7 @@ const BuscaProduto = ({ produtos, carregando = false, onAdicionar }: Props) => {
 
   return (
     <div className="relative">
-      <div className="flex items-center gap-2.5 rounded-xl border border-fg/[0.08] bg-fg/[0.03] px-3 transition-colors focus-within:border-accent/60">
+      <div className="flex items-center gap-2.5 rounded-xl border border-fg/[0.08] bg-fg/[0.03] py-0 pl-3 pr-1.5 transition-colors focus-within:border-accent/60">
         {/* O ícone vira spinner enquanto procura: o mesmo lugar responde pela
             busca parada e pela busca em andamento, sem a linha pular de
             largura. */}
@@ -156,6 +156,37 @@ const BuscaProduto = ({ produtos, carregando = false, onAdicionar }: Props) => {
             Limpar
           </button>
         )}
+
+        {/*
+         * O "+" ao lado do campo.
+         *
+         * Até aqui só havia dois caminhos para lançar um produto: apertar
+         * Enter ou clicar na sugestão certa da lista suspensa. Os dois exigem
+         * saber que a lista existe e mirar dentro dela — quem opera com mouse,
+         * com a tela em pé no balcão ou com leitor de tela não tem um alvo
+         * fixo para "adicionar".
+         *
+         * Este botão é esse alvo: fica sempre no mesmo lugar, tem 34px e
+         * adiciona o produto em destaque (o mesmo que o Enter adicionaria), o
+         * que mantém teclado e toque respondendo à mesma regra.
+         *
+         * Desabilitado enquanto não há escolha — em vez de escondido: um botão
+         * que aparece e some ao lado de um campo de digitação faz a linha
+         * pular de largura a cada letra.
+         */}
+        <button
+          type="button"
+          onClick={() => {
+            const escolhido = sugestoes[indice] ?? sugestoes[0];
+            if (escolhido) adicionar(escolhido);
+          }}
+          disabled={!mostrarLista}
+          title={mostrarLista ? `Adicionar ${(sugestoes[indice] ?? sugestoes[0])?.nome ?? "produto"}` : "Digite para encontrar o produto"}
+          aria-label={mostrarLista ? `Adicionar ${(sugestoes[indice] ?? sugestoes[0])?.nome ?? "produto"} à nota` : "Adicionar produto à nota"}
+          className="focus-ring my-1.5 grid h-[34px] w-[34px] shrink-0 cursor-pointer place-items-center rounded-lg bg-success text-white transition-all hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:bg-fg/[0.06] disabled:text-faint"
+        >
+          <Plus size={17} />
+        </button>
       </div>
 
       {/* Barra de progresso fina sob o campo — o "puxando os produtos". */}

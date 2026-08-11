@@ -7,7 +7,7 @@ import { formatDate } from "@/shared/utils/date";
 import { maskPhone } from "@/shared/validation/masks";
 import useEnterprise from "@/features/empresa/store/enterprise.store";
 
-import type { Orcamento, StatusOrcamento } from "@/features/orcamentos/services/orcamento.service";
+import type { Orcamento } from "@/features/orcamentos/services/orcamento.service";
 
 /**
  * O orçamento como o cliente recebe.
@@ -20,13 +20,6 @@ import type { Orcamento, StatusOrcamento } from "@/features/orcamentos/services/
  * O componente é 100% estático: não há nada editável. É só o que vai para o
  * PNG no download (o botão da linha o rasteriza com `handleDownload`).
  */
-
-const STATUS_LABEL: Record<StatusOrcamento, string> = {
-  ABERTO: "Aguardando",
-  APROVADO: "Aprovado",
-  RECUSADO: "Recusado",
-  EXPIRADO: "Expirado",
-};
 
 type Props = {
   orcamento: Orcamento;
@@ -56,30 +49,31 @@ const OrcamentoNota = ({ orcamento: o, refNota }: Props) => {
         </div>
       </div>
 
-      {/* Identificação — quem é o cliente, quem fez e até quando vale */}
-      <div className="flex flex-col gap-4 px-6 pt-6 sm:flex-row sm:items-start sm:gap-8">
-        <dl className="flex min-w-0 flex-1 flex-col gap-3.5">
-          {[
-            { rotulo: "Cliente", valor: o.clienteNome || "—" },
-            { rotulo: "Telefone", valor: telefone || "Não informado" },
-            { rotulo: "Vendedor", valor: o.vendedorNome || "—" },
-            { rotulo: "Validade", valor: o.validade ? formatDate(o.validade) : "—" },
-          ].map((linha) => (
-            <div key={linha.rotulo} className="min-w-0">
-              <dt className="text-[10.5px] uppercase tracking-[0.1em] text-faint">{linha.rotulo}</dt>
-              <dd className="mt-0.5 min-w-0 truncate text-[14.5px] leading-snug text-ink">{linha.valor}</dd>
-            </div>
-          ))}
-        </dl>
+      {/*
+        Identificação — quem é o cliente, quem fez e até quando vale.
 
-        {/* Selo de situação — o que o orçamento está esperando */}
-        <div className="shrink-0 sm:w-[176px]">
-          <div className="flex flex-col items-center gap-1 rounded-2xl border border-dashed border-fg/[0.12] px-3 py-4 text-center">
-            <span className="text-[10.5px] uppercase tracking-[0.1em] text-faint">Situação</span>
-            <span className="text-[14px] font-medium text-ink">{STATUS_LABEL[o.status] ?? o.status}</span>
-            <span className="text-[10.5px] leading-relaxed text-faint">Orçamento não é venda — não baixa estoque e não gera cobrança.</span>
+        Aqui havia, à direita, uma caixa tracejada de 176px com a situação da
+        proposta: mesma posição, mesmo tamanho e mesma moldura do QR da nota de
+        venda. Na tela isso lia como um QR que não carregou, e no documento que
+        o cliente recebe ela não tinha o que fazer — a situação é informação de
+        quem vende (está na tabela, com selo colorido), não de quem recebe a
+        proposta.
+
+        Sem ela, os dados ocupam a largura toda em duas colunas: menos altura,
+        e nada de vão à direita.
+      */}
+      <div className="grid grid-cols-1 gap-x-8 gap-y-3.5 px-6 pt-6 sm:grid-cols-2">
+        {[
+          { rotulo: "Cliente", valor: o.clienteNome || "—" },
+          { rotulo: "Telefone", valor: telefone || "Não informado" },
+          { rotulo: "Vendedor", valor: o.vendedorNome || "—" },
+          { rotulo: "Validade", valor: o.validade ? formatDate(o.validade) : "—" },
+        ].map((linha) => (
+          <div key={linha.rotulo} className="min-w-0">
+            <dt className="text-[10.5px] uppercase tracking-[0.1em] text-faint">{linha.rotulo}</dt>
+            <dd className="mt-0.5 min-w-0 truncate text-[14.5px] leading-snug text-ink">{linha.valor}</dd>
           </div>
-        </div>
+        ))}
       </div>
 
       {/* Tabela de itens */}

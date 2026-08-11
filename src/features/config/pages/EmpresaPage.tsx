@@ -24,7 +24,6 @@ type EnterpriseLike = {
   cpfCnpj?: string;
   inscMunicipal?: string;
   urlLogo?: string;
-  urlImagem?: string;
   notaBackground?: string;
   contato?: { email?: string; celular?: string | number; telefone?: string | number; whatsapp?: string | number };
   endereco?: {
@@ -71,7 +70,6 @@ const EmpresaPage = () => {
       cpfCnpj: formatDocument(ent.cpfCnpj ?? ""),
       inscMunicipal: ent.inscMunicipal ?? "",
       urlLogo: ent.urlLogo ?? "",
-      urlImagem: ent.urlImagem ?? "",
       notaBackground: ent.notaBackground ?? "",
       email: ent.contato?.email ?? "",
       celular: maskPhone(String(ent.contato?.celular ?? "")),
@@ -141,7 +139,6 @@ const EmpresaPage = () => {
       cpfCnpj: onlyDigits(data.cpfCnpj),
       inscMunicipal: data.inscMunicipal,
       urlLogo: data.urlLogo,
-      urlImagem: data.urlImagem,
       notaBackground: data.notaBackground,
     });
   };
