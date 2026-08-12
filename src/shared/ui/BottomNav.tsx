@@ -103,7 +103,7 @@ const BottomNav = () => {
    * O resto vai para a folha "Mais" — não cabe e não é de uso constante.
    *
    * Os grupos e a ordem acompanham a sidebar — Meu dia, Cadastros,
-   * Dinheiro, Entregas, Produção, Relacionamento. O que muda é a moldura: lá os dois
+   * Dinheiro, Entregas, Conta. O que muda é a moldura: lá os dois
    * grandes blocos são abas, aqui tudo desce numa lista. Numa folha que já
    * custou um toque para abrir, esconder metade dos destinos atrás de uma
    * segunda troca cobraria caro demais; os títulos separam o suficiente, e a
@@ -115,6 +115,10 @@ const BottomNav = () => {
    * nome duas vezes numa lista corrida só pareceria engano.
    */
   const secundarios: Item[] = [
+    /* Planilhas abre a folha, como na sidebar: subiu para "Meu dia" porque é
+       ferramenta do trabalho do dia, não de administração. */
+    { rota: "/planilhas", label: "Planilhas", icon: <Table2 size={18} />, familia: "Meu dia" },
+
     { rota: "/clientes", label: "Clientes", icon: <Users size={18} />, familia: "Cadastros" },
     // Equipe é do dono e só existe em plano que comporta mais de um usuário.
     ...(gestor && planoTemEquipe(equipe) ? [{ rota: "/funcionarios", label: "Minha equipe", icon: <UserCircle size={18} /> }] : []),
@@ -131,9 +135,6 @@ const BottomNav = () => {
     // "Em breve", não o cadeado de plano — o cadeado promete uma tela que o
     // upgrade destrava hoje, e essa ainda não está de pé.
     { rota: "/correios", label: "Correios", icon: <Truck size={18} />, emBreve: true, familia: "Entregas" },
-
-    // Uma ferramenta só para a produção — o quadro de etapas saiu.
-    { rota: "/planilhas", label: "Planilhas", icon: <Table2 size={18} />, familia: "Produção" },
 
     { rota: "/configuracoes", label: "Configurações", icon: <Settings size={18} />, familia: "Conta" },
   ];

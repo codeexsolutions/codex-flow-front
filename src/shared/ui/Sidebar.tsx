@@ -17,9 +17,23 @@ import BotaoInstalar from "@/shared/pwa/BotaoInstalar";
 
 type AbaId = "gerenciamento" | "atendimento";
 
-const ABAS: { id: AbaId; titulo: string; icone: typeof Users }[] = [
-  { id: "gerenciamento", titulo: "Gerenciamento", icone: Building2 },
-  { id: "atendimento", titulo: "Atendimento", icone: Headset },
+/**
+ * Atendimento está desligado.
+ *
+ * A aba fica visível e apagada, não sumida: quem já a conhece precisa ver que
+ * ela continua existindo e está fora do ar — uma aba que desaparece parece
+ * defeito do menu, e a pessoa procura o que não vai achar. Com a Planilhas
+ * promovida para "Meu dia", o que sobra atrás dela é Clientes (que também está
+ * em Gerenciamento) e o WhatsApp, que ainda não tem tela.
+ *
+ * Para religar: `true` aqui, e devolver `["/planilhas", "atendimento"]` ao
+ * `ABA_DA_ROTA` se a planilha voltar para dentro da aba.
+ */
+const ATENDIMENTO_ATIVO = false;
+
+const ABAS: { id: AbaId; titulo: string; icone: typeof Users; ativa: boolean }[] = [
+  { id: "gerenciamento", titulo: "Gerenciamento", icone: Building2, ativa: true },
+  { id: "atendimento", titulo: "Atendimento", icone: Headset, ativa: ATENDIMENTO_ATIVO },
 ];
 
 /**
@@ -41,7 +55,8 @@ const ABA_DA_ROTA: [string, AbaId][] = [
   ["/correios", "gerenciamento"],
   ["/vendas", "gerenciamento"],
   ["/relatorios", "gerenciamento"],
-  ["/planilhas", "atendimento"],
+  /* Planilhas saiu daqui junto com a mudança para "Meu dia": o grupo fica fora
+     das abas, então abrir a planilha não deve mexer em qual delas está aberta. */
   ["/whatsapp", "atendimento"],
   ["/pdv/orcamentos", "atendimento"],
 ];
@@ -80,12 +95,18 @@ const Sidebar = () => {
    * ficar sem sidebar por causa de uma preferência cosmética não se paga.
    */
   const [aba, setAba] = useState<AbaId>(() => {
-    const daRota = abaDaRota(pathname);
+    /* Aba desligada não pode ser aberta nem pela rota nem pela preferência
+       guardada — quem estava em Atendimento na sessão passada voltaria para um
+       painel que o clique não alcança mais. */
+    const permitida = (id: AbaId | null): AbaId | null =>
+      id && (id !== "atendimento" || ATENDIMENTO_ATIVO) ? id : null;
+
+    const daRota = permitida(abaDaRota(pathname));
     if (daRota) return daRota;
 
     try {
       const salva = localStorage.getItem(CHAVE_ABA);
-      if (salva === "gerenciamento" || salva === "atendimento") return salva;
+      if (salva === "gerenciamento" || salva === "atendimento") return permitida(salva) ?? "gerenciamento";
     } catch {
       /* sem preferência salva: cai no padrão */
     }
@@ -115,7 +136,7 @@ const Sidebar = () => {
     ultimaRota.current = pathname;
 
     const daRota = abaDaRota(pathname);
-    if (daRota) setAba(daRota);
+    if (daRota && (daRota !== "atendimento" || ATENDIMENTO_ATIVO)) setAba(daRota);
   }, [pathname]);
 
   useEffect(() => {
@@ -368,9 +389,11 @@ const Sidebar = () => {
                   type="button"
                   role="tab"
                   aria-selected={on}
-                  onClick={() => setAba(a.id)}
+                  disabled={!a.ativa}
+                  title={a.ativa ? undefined : `${a.titulo} está em breve`}
+                  onClick={() => a.ativa && setAba(a.id)}
                   className={`focus-ring relative flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11.5px] transition-colors duration-200 ${
-                    on ? "text-ink" : "text-mist hover:text-ink"
+                    !a.ativa ? "cursor-not-allowed text-faint opacity-50" : on ? "text-ink" : "text-mist hover:text-ink"
                   }`}
                 >
                   {/*
@@ -410,6 +433,18 @@ const Sidebar = () => {
               que é de onde a proposta nasce. Duplicar no menu daria dois
               caminhos para a mesma tela e a dúvida de qual é o certo. */}
           {item("pdv", <ShoppingCart size={17} />, "PDV")}
+          {/*
+           * Planilhas subiu para cá, junto de Início e PDV.
+           *
+           * É ferramenta de trabalho do dia, não de administração: quem
+           * acompanha produção abre a planilha na mesma frequência com que abre
+           * o PDV, e ela estava atrás de uma troca de aba. Aqui fica fora das
+           * abas, alcançável dos dois lados.
+           *
+           * O cadeado continua vindo do plano — entra a partir do Standard, com
+           * teto de quantidade.
+           */}
+          {item("planilhas", <Table2 size={17} />, "Planilhas", false, !temRecurso("planilhas"))}
         </div>
 
         <nav className="relative flex-1 overflow-y-auto px-3 pb-3 pt-2" role="tabpanel">
@@ -461,21 +496,8 @@ const Sidebar = () => {
               </>
             ) : (
               <>
-                {/*
-                  * Uma ferramenta só para a produção: a planilha.
-                  *
-                  * O quadro de etapas saiu. Ter as duas coisas obrigava a
-                  * equipe a decidir onde registrar cada avanço, e resposta
-                  * dividida em dois lugares é resposta que ninguém confia —
-                  * sempre falta a metade que está no outro. A planilha faz o
-                  * mesmo trabalho e é configurável pelo dono.
-                  *
-                  * Entra a partir do Standard, com teto de quantidade — por
-                  * isso o cadeado depende da flag, e não da existência da tela.
-                  */}
-                {cat("Produção")}
-                {item("planilhas", <Table2 size={17} />, "Planilhas", false, !temRecurso("planilhas"))}
-
+                {/* Produção saiu daqui: a planilha subiu para "Meu dia", acima
+                    das abas, e era o único item do grupo. */}
                 {cat("Relacionamento")}
                 {item("clientes", <Users size={17} />, "Clientes")}
 
