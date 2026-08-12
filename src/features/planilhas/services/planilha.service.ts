@@ -29,6 +29,14 @@ export type Modelo = {
   coluna_prazo_fk: string | null;
   total_colunas: number;
   total_registros: number;
+  /**
+   * Linhas COM valor — não é o mesmo que `total_registros`.
+   *
+   * A planilha nasce com dez linhas em branco, então contar registros diria
+   * que toda planilha tem conteúdo. É este número que decide se ela pode ser
+   * excluída.
+   */
+  total_preenchidas: number;
 };
 
 export type Opcao = { valor: string; cor?: string };
@@ -55,6 +63,20 @@ export type Registro = {
 
 export type Pagina = { periodicidade: Periodicidade; de: string; ate: string; registros: Registro[] };
 
+/** Um modelo pronto do catálogo — a receita, antes de virar planilha. */
+export type ModeloCatalogo = {
+  id: string;
+  nome: string;
+  descricao: string | null;
+  categoria: string | null;
+  periodicidade: Periodicidade;
+  colunas: { nome: string; tipo: TipoColuna; opcoes?: Opcao[]; valorPadrao?: string | null }[];
+  publicado: boolean;
+  /** Compartilhado com esta empresa em particular, e não com todas. */
+  exclusivo: boolean;
+};
+
+
 const lista = <T>(r: { data?: { data?: T[] } }): T[] => r.data?.data ?? [];
 const um = <T>(r: { data?: { data?: T[] } }): T => (r.data?.data ?? [])[0] as T;
 
@@ -69,6 +91,16 @@ const PlanilhaService = {
 
   async alterarModelo(id: string, dados: Record<string, unknown>) {
     await sysgrafix.patch(`/planilhas/${id}`, dados);
+  },
+
+  /** Os modelos prontos que esta empresa recebeu. */
+  async catalogo() {
+    return lista<ModeloCatalogo>(await sysgrafix.get("/planilhas/catalogo"));
+  },
+
+  /** Cria a planilha a partir de um modelo do catálogo. Devolve o id novo. */
+  async usarModelo(catalogoId: string, nome?: string) {
+    return um<string>(await sysgrafix.post(`/planilhas/catalogo/${catalogoId}/usar`, { nome }));
   },
 
   /** Copia a ESTRUTURA da planilha — colunas, não registros. */

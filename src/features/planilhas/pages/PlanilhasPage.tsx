@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import useSincronizacao from "@/shared/realtime/useSincronizacao";
-import { Table2, Plus, ChevronLeft, ChevronRight, Settings2, Trash2, X, Loader2, ArrowLeft, Copy, History } from "lucide-react";
+import { Table2, Plus, ChevronLeft, ChevronRight, Settings2, Trash2, X, Loader2, ArrowLeft, Copy, History, LayoutTemplate } from "lucide-react";
 
-import PlanilhaService, { type Alteracao, type Coluna, type Modelo, type Pagina, type Periodicidade, type Periodo, type TipoColuna } from "@/features/planilhas/services/planilha.service";
+import PlanilhaService, { type Alteracao, type Coluna, type Modelo, type ModeloCatalogo, type Pagina, type Periodicidade, type Periodo, type TipoColuna } from "@/features/planilhas/services/planilha.service";
 import { PageScreen } from "@/shared/ui/PageShell";
 import { Modal } from "@/shared/ui/Modal";
 import { useAlert } from "@/shared/ui/Alert";
@@ -80,6 +80,15 @@ function rotuloAba(de: string, periodicidade: Periodicidade | undefined): string
   return `${d.getDate()}/${d.getMonth() + 1}`;
 }
 
+/**
+ * As alternativas da coluna, sempre como lista.
+ *
+ * `opcoes` vem de um JSONB e o banco tem colunas antigas gravadas com `{}` em
+ * vez de `[]`. O tipo promete `Opcao[]`, a realidade nem sempre cumpre — e
+ * `{}.map` derruba o render inteiro.
+ */
+const listaDeOpcoes = (c: Coluna) => (Array.isArray(c.opcoes) ? c.opcoes : []);
+
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 /**
@@ -137,6 +146,17 @@ const PlanilhasPage = () => {
   const [configAberta, setConfigAberta] = useState(false);
   const [salvando, setSalvando] = useState(false);
 
+  /* Modelos prontos — os que publicamos para todos e os desenhados para esta
+     empresa. Carregam junto da lista: são a resposta para a planilha vazia. */
+  const [catalogo, setCatalogo] = useState<ModeloCatalogo[]>([]);
+  const [modelosAberto, setModelosAberto] = useState(false);
+  const [usando, setUsando] = useState<string | null>(null);
+
+  /* Planilha na mira da lixeira. Excluir é o único caminho sem volta desta
+     tela — pede uma confirmação, mesmo estando vazia. */
+  const [excluindo, setExcluindo] = useState<Modelo | null>(null);
+  const [removendo, setRemovendo] = useState(false);
+
   const [formModelo, setFormModelo] = useState<{ nome: string; periodicidade: Periodicidade }>({ nome: "", periodicidade: "DIARIA" });
   const [formColuna, setFormColuna] = useState<{ nome: string; tipo: TipoColuna; opcoes: string; valorPadrao: string }>({ nome: "", tipo: "TEXTO", opcoes: "", valorPadrao: "" });
 
@@ -169,14 +189,14 @@ const PlanilhasPage = () => {
      própria operação — verde para "pronto" e vermelho para "atrasado" são
      convenções da casa, não do sistema. */
   const definirCor = async (c: Coluna, indice: number, cor: string) => {
-    const opcoes = c.opcoes.map((op, i) => (i === indice ? { ...op, cor } : op));
+    const opcoes = listaDeOpcoes(c).map((op, i) => (i === indice ? { ...op, cor } : op));
 
     setColunas((prev) => prev.map((x) => (x.id === c.id ? { ...x, opcoes } : x)));
     await PlanilhaService.alterarColuna(c.id, { opcoes });
   };
 
   const removerOpcao = async (c: Coluna, indice: number) => {
-    const opcoes = c.opcoes.filter((_, i) => i !== indice);
+    const opcoes = listaDeOpcoes(c).filter((_, i) => i !== indice);
 
     setColunas((prev) => prev.map((x) => (x.id === c.id ? { ...x, opcoes } : x)));
     await PlanilhaService.alterarColuna(c.id, { opcoes });
@@ -203,6 +223,74 @@ const PlanilhasPage = () => {
   useEffect(() => {
     carregarModelos();
   }, [carregarModelos]);
+
+  /* O catálogo não bloqueia a tela: falhar aqui deixa a lista sem modelos
+     prontos, e criar do zero continua funcionando. */
+  useEffect(() => {
+    let vivo = true;
+
+    PlanilhaService.catalogo()
+      .then((lista) => vivo && setCatalogo(lista))
+      .catch(() => vivo && setCatalogo([]));
+
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  /**
+   * Exclui a planilha vazia.
+   *
+   * A trava de "tem dados" existe nos dois lados: aqui o botão nem acende, e o
+   * servidor recusa de novo (`RemoverModelo`). Botão escondido não é controle
+   * de acesso — a rota responde a quem a chamar direto. Se o servidor recusar,
+   * a mensagem dele vai para a tela: ela diz quantas linhas estão preenchidas.
+   */
+  const excluirPlanilha = async () => {
+    if (!excluindo) return;
+
+    setRemovendo(true);
+
+    try {
+      await PlanilhaService.removerModelo(excluindo.id);
+
+      setModelos((ms) => ms.filter((m) => m.id !== excluindo.id));
+      setExcluindo(null);
+      alert.success("Planilha excluída.", "Ela saiu da lista.");
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível excluir a planilha."));
+    } finally {
+      setRemovendo(false);
+    }
+  };
+
+  /** Cria a planilha a partir de um modelo pronto e já entra nela. */
+  const usarModelo = async (m: ModeloCatalogo) => {
+    if (usando) return;
+
+    setUsando(m.id);
+
+    try {
+      const novoId = await PlanilhaService.usarModelo(m.id);
+      const lista = await PlanilhaService.modelos();
+
+      setModelos(lista);
+      setModelosAberto(false);
+
+      /* Entrar direto é o passo seguinte óbvio — quem escolheu o modelo quer
+         começar a preencher, não voltar para a lista e procurá-lo. */
+      const nova = lista.find((x) => x.id === novoId);
+
+      if (nova) {
+        setAberta(nova);
+        setDataAtual(iso(new Date()));
+      }
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível criar a planilha a partir do modelo."));
+    } finally {
+      setUsando(null);
+    }
+  };
 
   const carregarPlanilha = useCallback(async (modelo: Modelo, data: string) => {
     setCarregando(true);
@@ -507,57 +595,206 @@ const PlanilhasPage = () => {
   if (!aberta) {
     return (
       <PageScreen icon={<Table2 className="h-5 w-5" />} title="Planilhas" subtitle="Modelos que a sua operação usa">
+        {/*
+         * A barra de cima tem só o que se faz aqui: começar uma planilha.
+         *
+         * "Usar modelo" vem ANTES de "Nova planilha", e não é ordem
+         * decorativa: montar quinze colunas do zero é meia hora de trabalho, e
+         * quem chega a esta tela quase sempre quer algo que já existe pronto.
+         * O caminho em branco continua ali, um botão ao lado, para quem sabe
+         * exatamente o que quer.
+         */}
         <div className="flex shrink-0 items-center justify-between gap-2">
           <span className="text-[11.5px] text-faint">
             {modelos.length} {modelos.length === 1 ? "planilha" : "planilhas"}
           </span>
 
           {gestor && (
-            <button onClick={() => setNovaAberta(true)} className="focus-ring flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2 text-[12.5px] text-white transition-all hover:brightness-110">
-              <Plus size={15} /> Nova planilha
-            </button>
+            <div className="flex items-center gap-2">
+              {catalogo.length > 0 && (
+                <button
+                  onClick={() => setModelosAberto(true)}
+                  className="focus-ring flex items-center gap-1.5 rounded-xl border border-fg/[0.1] px-3.5 py-2 text-[12.5px] text-mist transition-colors hover:border-accent/40 hover:text-accent-soft"
+                >
+                  <LayoutTemplate size={15} /> Usar modelo
+                </button>
+              )}
+
+              <button onClick={() => setNovaAberta(true)} className="focus-ring flex items-center gap-1.5 rounded-xl bg-accent px-4 py-2 text-[12.5px] text-white transition-all hover:brightness-110">
+                <Plus size={15} /> Nova planilha
+              </button>
+            </div>
           )}
         </div>
 
-        <div className="card glass-sheen min-h-0 flex-1 overflow-y-auto">
+        {/*
+         * Cada planilha é um quadrado, não uma linha de lista.
+         *
+         * Uma planilha não é um item de cadastro que se lê em sequência: são
+         * três ou quatro por empresa, cada uma um lugar de trabalho diferente.
+         * Em cards elas viram destinos — o olho pega qual é qual pelo formato e
+         * pela posição, e a mão acerta um alvo grande em vez de uma faixa de
+         * 44px. Em lista, "Camisaria" e "Estamparia" pareciam duas linhas do
+         * mesmo relatório.
+         */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {carregando ? (
             <SkeletonListaPainel linhas={4} />
           ) : modelos.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+            <div className="card glass-sheen flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
               <span className="grid h-14 w-14 place-items-center rounded-2xl border border-fg/[0.08] bg-fg/[0.03] text-faint">
                 <Table2 size={22} />
               </span>
               <p className="text-[14px] text-ink">Nenhuma planilha ainda</p>
               <p className="max-w-sm text-[12.5px] leading-relaxed text-faint">
-                Crie um modelo, escolha as colunas que a sua operação usa e diga se ele é diário, semanal ou mensal. A partir daí é só preencher.
+                Comece por um modelo pronto — produção, estamparia, entregas — ou monte a sua do zero, escolhendo as colunas e o recorte de período.
               </p>
+
+              {gestor && catalogo.length > 0 && (
+                <button onClick={() => setModelosAberto(true)} className="mt-1 flex items-center gap-1.5 rounded-xl bg-accent px-5 py-2 text-[13px] text-white transition-all hover:brightness-110">
+                  <LayoutTemplate size={15} /> Ver modelos prontos
+                </button>
+              )}
             </div>
           ) : (
-            modelos.map((m) => (
-              <button
-                key={m.id}
-                onClick={() => {
-                  setAberta(m);
-                  setDataAtual(iso(new Date()));
-                }}
-                className="flex w-full items-center gap-3 border-b border-fg/[0.04] px-4 py-3 text-left transition-colors last:border-0 hover:bg-fg/[0.03]"
-              >
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-accent/[0.14] text-accent-soft">
-                  <Table2 size={16} />
-                </span>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {modelos.map((m) => {
+                const temDados = m.total_preenchidas > 0;
 
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13.5px] text-ink">{m.nome}</span>
-                  <span className="block truncate text-[11.5px] text-faint">
-                    {PERIODICIDADES.find((p) => p.id === m.periodicidade)?.label} · {m.total_colunas} {m.total_colunas === 1 ? "coluna" : "colunas"} · {m.total_registros} {m.total_registros === 1 ? "linha" : "linhas"}
-                  </span>
-                </span>
+                return (
+                  /*
+                   * O card é um `div`, não um `button`.
+                   *
+                   * A lixeira precisa ser um botão de verdade — e botão dentro
+                   * de botão é HTML inválido: o clique em "excluir" abriria a
+                   * planilha junto. A área de abrir virou um botão próprio,
+                   * ocupando o corpo do card, e a lixeira fica fora dele.
+                   */
+                  <div key={m.id} className="card glass-sheen group relative flex flex-col gap-3 p-4 transition-all hover:border-accent/30">
+                    <button
+                      onClick={() => {
+                        setAberta(m);
+                        setDataAtual(iso(new Date()));
+                      }}
+                      className="focus-ring flex flex-col items-start gap-3 rounded-lg text-left"
+                    >
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent/[0.14] text-accent-soft">
+                        <Table2 size={18} />
+                      </span>
 
-                <ChevronRight size={16} className="shrink-0 text-muted" />
-              </button>
-            ))
+                      <span className="w-full min-w-0">
+                        <span className="block truncate text-[14px] text-ink">{m.nome}</span>
+                        <span className="mt-0.5 block truncate text-[11.5px] text-faint">
+                          {m.total_colunas} {m.total_colunas === 1 ? "coluna" : "colunas"} · {m.total_registros} {m.total_registros === 1 ? "linha" : "linhas"}
+                          {temDados ? ` · ${m.total_preenchidas} preenchida${m.total_preenchidas === 1 ? "" : "s"}` : ""}
+                        </span>
+                      </span>
+
+                      <span className="flex items-center gap-1 text-[11.5px] text-muted transition-colors group-hover:text-accent-soft">
+                        Abrir <ChevronRight size={13} />
+                      </span>
+                    </button>
+
+                    {/* Canto de cima: o período à esquerda da lixeira. */}
+                    <div className="absolute right-3 top-3 flex items-center gap-1.5">
+                      <span className="shrink-0 rounded-full border border-fg/[0.08] bg-fg/[0.03] px-2 py-0.5 text-[10.5px] text-mist">
+                        {PERIODICIDADES.find((p) => p.id === m.periodicidade)?.label}
+                      </span>
+
+                      {gestor && (
+                        /*
+                         * Desabilitada quando há linha preenchida, não escondida.
+                         *
+                         * Some, e a pessoa procura o botão achando que o sistema
+                         * não exclui. Apagada com o motivo no `title`, ela
+                         * aprende a regra de uma vez: esvazie a planilha e a
+                         * lixeira acende.
+                         */
+                        <button
+                          onClick={() => !temDados && setExcluindo(m)}
+                          disabled={temDados}
+                          aria-label={temDados ? `${m.nome} tem linhas preenchidas e não pode ser excluída` : `Excluir ${m.nome}`}
+                          title={
+                            temDados
+                              ? `Não dá para excluir: ${m.total_preenchidas} ${m.total_preenchidas === 1 ? "linha preenchida" : "linhas preenchidas"}. Apague as linhas primeiro.`
+                              : "Excluir planilha"
+                          }
+                          className="focus-ring grid h-7 w-7 shrink-0 place-items-center rounded-lg text-faint transition-colors hover:bg-danger/15 hover:text-danger disabled:cursor-not-allowed disabled:text-faint/40 disabled:hover:bg-transparent disabled:hover:text-faint/40"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
+
+        {/* Confirmação da exclusão. Só chega aqui planilha sem linha
+            preenchida — a lixeira nem acende nas outras. */}
+        <Modal open={!!excluindo} onClose={() => setExcluindo(null)} title="Excluir planilha" subtitle={excluindo?.nome} accent="rgb(var(--danger))" maxWidth="max-w-sm">
+          <p className="text-[13px] leading-relaxed text-mist">
+            A planilha sai da lista com as colunas que você montou. Não há linha preenchida nela, então nenhum trabalho se perde — mas a estrutura terá de ser refeita.
+          </p>
+
+          <div className="mt-5 flex justify-end gap-2">
+            <button onClick={() => setExcluindo(null)} className="min-h-[40px] rounded-xl bg-fg/[0.05] px-4 text-[13px] text-ink transition-colors hover:bg-fg/[0.1]">
+              Cancelar
+            </button>
+            <button
+              onClick={() => void excluirPlanilha()}
+              disabled={removendo}
+              className="flex min-h-[40px] items-center gap-2 rounded-xl bg-danger px-4 text-[13px] text-white transition-all hover:brightness-110 disabled:opacity-50"
+            >
+              {removendo && <Loader2 size={14} className="animate-spin" />}
+              Excluir
+            </button>
+          </div>
+        </Modal>
+
+        {/* Modelos prontos — o catálogo que publicamos e o que foi desenhado
+            para esta empresa em particular. */}
+        <Modal open={modelosAberto} onClose={() => setModelosAberto(false)} title="Modelos prontos" subtitle="A planilha nasce com as colunas já definidas" size="lg">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            {catalogo.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => void usarModelo(m)}
+                disabled={Boolean(usando)}
+                className="focus-ring flex flex-col items-start gap-2 rounded-xl border border-fg/[0.08] bg-fg/[0.02] p-3.5 text-left transition-colors hover:border-accent/40 hover:bg-fg/[0.04] disabled:opacity-50"
+              >
+                <span className="flex w-full items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-[13.5px] text-ink">{m.nome}</span>
+
+                  {/* Desenhado para esta empresa, não parte do catálogo geral —
+                      vale dizer, porque muda o que a pessoa espera encontrar. */}
+                  {m.exclusivo && !m.publicado && (
+                    <span className="shrink-0 rounded-full bg-accent/[0.14] px-2 py-0.5 text-[10px] text-accent-soft">seu</span>
+                  )}
+
+                  {usando === m.id ? <Loader2 size={14} className="shrink-0 animate-spin text-accent" /> : null}
+                </span>
+
+                {m.descricao && <span className="line-clamp-2 text-[11.5px] leading-relaxed text-faint">{m.descricao}</span>}
+
+                <span className="flex flex-wrap gap-1">
+                  {m.colunas.slice(0, 4).map((c) => (
+                    <span key={c.nome} className="rounded-md bg-fg/[0.05] px-1.5 py-0.5 text-[10.5px] text-mist">
+                      {c.nome}
+                    </span>
+                  ))}
+                  {m.colunas.length > 4 && <span className="px-1 text-[10.5px] text-faint">+{m.colunas.length - 4}</span>}
+                </span>
+
+                <span className="text-[10.5px] uppercase tracking-[0.08em] text-faint">
+                  {PERIODICIDADES.find((p) => p.id === m.periodicidade)?.label}
+                </span>
+              </button>
+            ))}
+          </div>
+        </Modal>
 
         <Modal open={novaAberta} onClose={() => setNovaAberta(false)} title="Nova planilha" subtitle="Você define as colunas depois">
           <div className="flex flex-col gap-3">
@@ -895,9 +1132,9 @@ const PlanilhasPage = () => {
             <div key={"cfg-" + c.id} className="flex flex-col gap-2 rounded-xl border border-fg/[0.06] bg-fg/[0.02] p-3">
               <p className="text-[11.5px] text-ink">{c.nome}</p>
 
-              {c.tipo === "SELECAO" && c.opcoes.length > 0 && (
+              {c.tipo === "SELECAO" && listaDeOpcoes(c).length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
-                  {c.opcoes.map((op, i) => (
+                  {listaDeOpcoes(c).map((op, i) => (
                     <span key={op.valor} className="inline-flex items-center gap-1 rounded-full border border-fg/[0.1] px-2 py-0.5 text-[11px] text-mist">
                       {/* `type="color"` abre o seletor nativo — qualquer cor,
                           sem componente extra no bundle. */}

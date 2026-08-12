@@ -80,7 +80,18 @@ const Celula = ({ coluna, valor, onSalvar, editavel = true }: Props) => {
   }
 
   if (coluna.tipo === "SELECAO") {
-    const escolhida = coluna.opcoes.find((o) => o.valor === rascunho);
+    /*
+     * `Array.isArray` antes de usar, e não confiança no tipo.
+     *
+     * O tipo diz `Opcao[]`, mas o que chega vem de um JSONB: havia colunas
+     * gravadas com `{}` no lugar de `[]`, e `{}.find` não existe. O erro
+     * estourava no meio do render e derrubava a planilha inteira — uma coluna
+     * malformada não pode custar a tela toda. A API também normaliza
+     * (`ListarColunas`); isto aqui é o cinto de segurança para o dado que já
+     * está no navegador de alguém.
+     */
+    const opcoes = Array.isArray(coluna.opcoes) ? coluna.opcoes : [];
+    const escolhida = opcoes.find((o) => o.valor === rascunho);
 
     return (
       /* A cor fica num ponto ao lado, não no fundo do `<select>`: fundo colorido
@@ -99,7 +110,7 @@ const Celula = ({ coluna, valor, onSalvar, editavel = true }: Props) => {
           className={`${base} cursor-pointer disabled:cursor-not-allowed ${escolhida?.cor ? "pl-6" : ""}`}
         >
           <option value="">—</option>
-          {coluna.opcoes.map((o) => (
+          {opcoes.map((o) => (
             <option key={o.valor} value={o.valor}>
               {o.valor}
             </option>
