@@ -45,62 +45,142 @@ async function embutir(img: HTMLImageElement): Promise<boolean> {
   }
 }
 
+/** Um quadro pintado de verdade — `rAF` sozinho ainda é antes da pintura. */
+const proximoQuadro = () =>
+  new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+
+/**
+ * Espera as imagens do nó estarem realmente decodificadas.
+ *
+ * `complete` diz que o download terminou, não que o navegador já sabe desenhar
+ * a imagem. Rasterizar antes do `decode()` era o que produzia o documento
+ * cortado: a logo e o wallpaper entravam no meio da captura e a metade de baixo
+ * saía em branco. Falha de decodificação não interrompe nada — a imagem some do
+ * PNG e o resto do documento continua saindo.
+ */
+const esperarImagens = async (node: HTMLElement) => {
+  const imgs = Array.from(node.querySelectorAll("img"));
+
+  await Promise.all(
+    imgs.map(async (img) => {
+      try {
+        if (!img.complete) {
+          await new Promise<void>((resolve) => {
+            img.addEventListener("load", () => resolve(), { once: true });
+            img.addEventListener("error", () => resolve(), { once: true });
+          });
+        }
+
+        await img.decode?.();
+      } catch {
+        /* Imagem quebrada não impede o download do documento. */
+      }
+    }),
+  );
+};
+
+/** Largura fixa do documento gerado — a mesma do `max-w-[900px]` da nota. */
+const LARGURA_DOCUMENTO = 900;
+
+/**
+ * Copia o que o usuário digitou para a cópia da nota.
+ *
+ * `cloneNode` duplica os atributos, não o estado: a quantidade e o preço que
+ * foram digitados vivem na PROPRIEDADE `value` do input, e a cópia nasceria com
+ * o valor original do atributo. Sem isto, o arquivo sairia com números
+ * diferentes dos que estão na tela — pior que sair cortado.
+ */
+const copiarValores = (origem: HTMLElement, copia: HTMLElement) => {
+  const campos = origem.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select");
+  const copias = copia.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select");
+
+  campos.forEach((campo, i) => {
+    const alvo = copias[i];
+    if (!alvo) return;
+
+    alvo.value = campo.value;
+    alvo.setAttribute("value", campo.value);
+
+    if (campo instanceof HTMLInputElement && alvo instanceof HTMLInputElement) {
+      alvo.checked = campo.checked;
+      if (campo.checked) alvo.setAttribute("checked", "");
+      else alvo.removeAttribute("checked");
+    }
+  });
+};
+
 /**
  * Rasteriza o nó da nota para um blob PNG.
  *
  * Fica separado do download: quem precisa do PNG (download) e quem precisa
- * dele para gerar um PDF usam o mesmo blob. Toda a preparação — rolar ao
- * topo, embutir imagens cross-origin, esconder `data-sem-foto` — e a limpeza
- * acontecem aqui.
+ * dele para gerar um PDF usam o mesmo blob.
+ *
+ * **A foto sai de uma CÓPIA fora da tela, nunca do nó visível.** O nó visível
+ * da nota mora dentro do corpo rolável de um modal, com a largura que sobrar na
+ * janela, sob um painel que tem `transform` e `overflow-hidden`. Fotografá-lo
+ * ali amarra o arquivo ao estado da tela — e era isso que entregava a nota
+ * cortada quando se abria pelo "editar". A cópia vive solta no `body`, com 900px
+ * fixos, sem scroller acima, sem recorte e sem rolagem: o arquivo sai igual em
+ * qualquer aparelho, independente do que a pessoa estava vendo.
+ *
+ * De quebra, a nota na tela não é mais tocada — nada de trocar `src` para
+ * embutir imagem e devolver depois.
  */
 export const gerarBlobNota = async (ref: RefObject<HTMLDivElement>): Promise<Blob> => {
   const node = ref.current;
   if (!node) throw new Error("Nota não encontrada.");
 
-  /* Qualquer elemento rolado — um scroller acima da nota ou aninhado dentro
-     dela — mostra só um pedaço do conteúdo, e é esse pedaço que vai para o PNG.
-     Zeramos todos antes de fotografar e devolvemos depois.
+  /* O palco: fora do viewport e fora de qualquer ancestral que recorte ou
+     transforme. `left` negativo em vez de `display:none` — o navegador precisa
+     calcular o layout de verdade para a foto existir. */
+  const palco = document.createElement("div");
 
-     Subir por TODOS os ancestrais, e não só pelo pai, é o que corrige a nota
-     cortada pela metade: dentro de um modal a nota fica a dois ou três níveis
-     do scroller de verdade (o corpo do modal), então olhar apenas
-     `node.parentElement` acertava um `<div>` que nunca rola e deixava o
-     scroller real intacto. Quem tivesse rolado até o total antes de clicar em
-     baixar levava o topo da nota cortado. */
-  const rolados: { el: HTMLElement; top: number; left: number }[] = [];
+  palco.setAttribute("aria-hidden", "true");
+  palco.style.cssText = `position:fixed;left:-20000px;top:0;width:${LARGURA_DOCUMENTO}px;pointer-events:none;z-index:-1;`;
 
-  const guardarERolarAoTopo = (el: HTMLElement | null) => {
-    if (!el || (el.scrollTop === 0 && el.scrollLeft === 0)) return;
+  const copia = node.cloneNode(true) as HTMLElement;
 
-    rolados.push({ el, top: el.scrollTop, left: el.scrollLeft });
-    el.scrollTop = 0;
-    el.scrollLeft = 0;
-  };
+  /* A cópia manda na própria altura: qualquer teto herdado da tela viraria
+     corte no arquivo. */
+  copia.style.width = `${LARGURA_DOCUMENTO}px`;
+  copia.style.maxWidth = "none";
+  copia.style.height = "auto";
+  copia.style.maxHeight = "none";
+  copia.style.margin = "0";
+  copia.style.transform = "none";
 
-  for (let pai = node.parentElement; pai; pai = pai.parentElement) {
-    guardarERolarAoTopo(pai);
-  }
-
-  node.querySelectorAll<HTMLElement>("*").forEach(guardarERolarAoTopo);
-
-  await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
-
-  const imgs = Array.from(node.querySelectorAll<HTMLImageElement>("img"));
-
-  const embutidas = await Promise.all(imgs.map(embutir));
-
-  /* Só some quem não deu para embutir — assim o resto da nota sai completo. */
-  const escondidas: { el: HTMLImageElement; display: string }[] = [];
-
-  imgs.forEach((img, i) => {
-    if (embutidas[i]) return;
-
-    escondidas.push({ el: img, display: img.style.display });
-    img.style.display = "none";
-  });
+  copiarValores(node, copia);
+  palco.appendChild(copia);
+  document.body.appendChild(palco);
 
   try {
-    const blob = await toBlob(node, {
+    /* Imagens embutidas NA CÓPIA — a nota na tela fica intacta. */
+    const imgs = Array.from(copia.querySelectorAll<HTMLImageElement>("img"));
+    const embutidas = await Promise.all(imgs.map(embutir));
+
+    /* Só some quem não deu para embutir — assim o resto da nota sai completo. */
+    imgs.forEach((img, i) => {
+      if (!embutidas[i]) img.style.display = "none";
+    });
+
+    /* Fontes e imagens prontas ANTES de medir: uma fonte que chega no meio da
+       captura reflui o documento inteiro, e a altura medida deixa de valer. */
+    await document.fonts?.ready;
+    await esperarImagens(copia);
+    await proximoQuadro();
+
+    /*
+     * Medida pelo retângulo real, arredondando para cima.
+     *
+     * `scrollHeight` é inteiro: um documento de 1240.6px virava 1240, e a
+     * fração perdida corta a última linha. `getBoundingClientRect` devolve o
+     * valor fracionário — o `ceil` garante que sobre pixel, nunca falte.
+     */
+    const caixa = copia.getBoundingClientRect();
+    const largura = Math.ceil(Math.max(copia.scrollWidth, caixa.width));
+    const altura = Math.ceil(Math.max(copia.scrollHeight, caixa.height));
+
+    const opcoes = {
       /*
        * Tudo marcado com `data-sem-foto` fica de fora do PNG.
        *
@@ -110,41 +190,42 @@ export const gerarBlobNota = async (ref: RefObject<HTMLDivElement>): Promise<Blo
        * mostrar por CSS: não há intervalo em que o elemento pisca, e não
        * depende de o `finally` conseguir devolver o estilo se algo falhar.
        */
-      filter: (no) => !(no instanceof HTMLElement && no.dataset.semFoto !== undefined),
+      filter: (no: Node) => !(no instanceof HTMLElement && no.dataset.semFoto !== undefined),
       backgroundColor: resolveToken("--surface", "#15132a"),
-      width: node.scrollWidth,
-      height: node.scrollHeight,
+      width: largura,
+      height: altura,
       pixelRatio: 2,
       cacheBust: true,
       style: {
         transform: "none",
         transformOrigin: "top left",
       },
-    });
+    };
+
+    /*
+     * Duas passagens, e é a SEGUNDA que vale.
+     *
+     * `html-to-image` monta um SVG com o documento inteiro e o carrega numa
+     * `<img>`. Nessa primeira montagem as imagens embutidas (logo, wallpaper)
+     * ainda estão sendo decodificadas pelo navegador, e o que ele pinta é o que
+     * já deu tempo — daí o arquivo sair pela metade, com o rodapé em branco.
+     * A primeira passagem serve só para aquecer esse cache; na segunda tudo já
+     * está decodificado e o documento sai inteiro.
+     *
+     * O custo é uma rasterização a mais, invisível para quem clica: o botão já
+     * mostra "Gerando...".
+     */
+    await toBlob(copia, opcoes).catch(() => null);
+
+    const blob = await toBlob(copia, opcoes);
 
     if (!blob) throw new Error("Falha ao gerar a imagem da nota.");
 
     return blob;
 
   } finally {
-    escondidas.forEach(({ el, display }) => {
-      el.style.display = display;
-    });
-
-    // Devolve o `src` original: a nota continua na tela depois do download.
-    imgs.forEach((img) => {
-      const original = img.getAttribute("data-src-original");
-
-      if (original) {
-        img.setAttribute("src", original);
-        img.removeAttribute("data-src-original");
-      }
-    });
-
-    rolados.forEach(({ el, top, left }) => {
-      el.scrollTop = top;
-      el.scrollLeft = left;
-    });
+    /* O palco inteiro sai de cena — sem estilo para restaurar na nota real. */
+    palco.remove();
   }
 };
 

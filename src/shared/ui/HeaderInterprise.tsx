@@ -14,7 +14,12 @@ const HeaderInterprise = () => {
   return (
     <div className="flex items-start gap-5">
       {/*
-        Logo — quadrada 24x24.
+        Logo — 32x32, sem moldura.
+
+        A caixa com borda e fundo cinza enquadrava a marca como se fosse um
+        avatar: numa nota impressa, esse retângulo aparece em volta da logo e
+        denuncia a "caixinha do sistema". Sem borda, sem fundo e sem padding, a
+        logo assenta direto no papel — e ganha o espaço que a moldura ocupava.
 
         Dois defeitos moravam nesta linha. O arquivo padrão era `logo.jpg`,
         que não existe em `public/` (o que existe é `logo.png`), e o caminho
@@ -25,11 +30,11 @@ const HeaderInterprise = () => {
         `object-contain`, e não `cover`: logo é marca, não foto de capa —
         `cover` cortava as bordas de qualquer logo que não fosse quadrada.
       */}
-      <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-fg/10 bg-fg/5">
+      <div className="flex h-32 w-32 shrink-0 items-center justify-center">
         <img
           src={enterprise.urlLogo || "/logo.png"}
           alt={enterprise.nomeFantasia ? `Logo de ${enterprise.nomeFantasia}` : "Logo da empresa"}
-          className="h-full w-full object-contain p-1.5"
+          className="h-full w-full object-contain"
           /* Logo de storage pode ter sido apagada por fora; o padrão evita o
              ícone de imagem quebrada dentro da nota. */
           onError={(ev) => {

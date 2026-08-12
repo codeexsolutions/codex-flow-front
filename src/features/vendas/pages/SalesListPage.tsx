@@ -190,7 +190,10 @@ const totalEmAberto = useMemo(() => {
       </div>
 
       <Modal open={!!notaAberta} onClose={fecharNota} title={notaAberta?.id ? "Venda" : "Nova venda"} subtitle={notaAberta?.nome} size="full">
-        {notaAberta && <Invoice id={notaAberta.id} clienteId={notaAberta.clienteId} nome={notaAberta.nome} />}
+        {/* `onSaved` também aqui: sem ele, salvar a alteração ou cancelar a nota
+            no desktop não recarregava a lista nem fechava o modal — a tela
+            ficava mostrando o estado antigo até um F5. */}
+        {notaAberta && <Invoice id={notaAberta.id} clienteId={notaAberta.clienteId} nome={notaAberta.nome} onSaved={fecharNota} />}
       </Modal>
 
       {/* Nó de nota fora da tela para o download rápido. */}

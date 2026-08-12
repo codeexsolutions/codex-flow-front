@@ -44,6 +44,20 @@ const calcularResumo = (lista: PedidoClienteType[]): ResumoVendas => {
   };
 };
 
+/*
+ * A busca em andamento.
+ *
+ * Antes o `fetchVendas` só olhava a flag `loading` e desistia calado quando já
+ * havia uma busca no ar. Isso derrubava justamente a recarga que mais importa:
+ * fechar a nota dispara `fetchVendas(true)` e, se o socket tivesse pedido a
+ * lista um instante antes, a resposta que chegava era a ANTIGA — a venda
+ * recém-salva só aparecia depois de atualizar a página na mão.
+ *
+ * Guardando a promessa, uma recarga forçada espera a anterior terminar e busca
+ * de novo, em vez de ser descartada.
+ */
+let buscaEmCurso: Promise<void> | null = null;
+
 const useVendaStore = create<VendaState>((set, get) => ({
   vendas: [],
   loading: false,
@@ -51,20 +65,33 @@ const useVendaStore = create<VendaState>((set, get) => ({
   carregado: false,
 
   async fetchVendas(force = false) {
-    if (get().loading) return;
+    if (buscaEmCurso) {
+      /* Sem `force`, a busca que já está no ar resolve — é o caso das telas que
+         pedem a lista ao montar. Com `force`, quem chamou quer o estado de
+         AGORA: espera a atual e vai buscar de novo. */
+      if (!force) return buscaEmCurso;
+      await buscaEmCurso.catch(() => {});
+    }
+
     if (get().carregado && !force) return;
 
     set({ loading: true, error: null });
-    try {
-      const { data } = await NoteService.getAll();
-      set({ vendas: unwrapList<PedidoClienteType>(data).filter(isPedidoValido), carregado: true });
-    } catch {
-      // Diferente do commit remoto, uma resposta vazia zera a lista em vez de
-      // manter dados antigos na tela.
-      set({ vendas: [], error: "Não foi possível carregar as vendas." });
-    } finally {
-      set({ loading: false });
-    }
+
+    buscaEmCurso = (async () => {
+      try {
+        const { data } = await NoteService.getAll();
+        set({ vendas: unwrapList<PedidoClienteType>(data).filter(isPedidoValido), carregado: true });
+      } catch {
+        // Diferente do commit remoto, uma resposta vazia zera a lista em vez de
+        // manter dados antigos na tela.
+        set({ vendas: [], error: "Não foi possível carregar as vendas." });
+      } finally {
+        set({ loading: false });
+        buscaEmCurso = null;
+      }
+    })();
+
+    return buscaEmCurso;
   },
 
   async removerVenda(pedidoId) {

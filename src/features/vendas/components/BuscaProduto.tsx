@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { PackageSearch, Plus, Loader2, CornerDownLeft } from "lucide-react";
+import { PackageSearch, PackagePlus, Plus, Loader2, CornerDownLeft } from "lucide-react";
 
 import ProductType from "@/shared/domain/produto";
 import { formatCurrency } from "@/shared/utils/currency";
@@ -23,6 +23,15 @@ type Props = {
   produtos: ProductType[];
   carregando?: boolean;
   onAdicionar: (produto: ProductType) => void;
+  /**
+   * Abre o cadastro de produto já com o que foi digitado.
+   *
+   * O balcão descobre que o produto não existe exatamente aqui: a busca não
+   * acha e a venda para. Mandar a pessoa até Estoque e voltar é o que faz a
+   * nota ser abandonada no meio. Opcional porque nem todo lugar que usa esta
+   * busca tem para onde cadastrar.
+   */
+  onCadastrar?: (nome: string) => void;
 };
 
 /**
@@ -35,7 +44,7 @@ type Props = {
  */
 const ESPERA_MS = 180;
 
-const BuscaProduto = ({ produtos, carregando = false, onAdicionar }: Props) => {
+const BuscaProduto = ({ produtos, carregando = false, onAdicionar, onCadastrar }: Props) => {
   const [busca, setBusca] = useState("");
   const [procurando, setProcurando] = useState(false);
   /* Qual sugestão está sob o cursor do teclado. */
@@ -158,35 +167,38 @@ const BuscaProduto = ({ produtos, carregando = false, onAdicionar }: Props) => {
         )}
 
         {/*
-         * O "+" ao lado do campo.
+         * Cadastrar produto sem sair da nota.
          *
-         * Até aqui só havia dois caminhos para lançar um produto: apertar
-         * Enter ou clicar na sugestão certa da lista suspensa. Os dois exigem
-         * saber que a lista existe e mirar dentro dela — quem opera com mouse,
-         * com a tela em pé no balcão ou com leitor de tela não tem um alvo
-         * fixo para "adicionar".
-         *
-         * Este botão é esse alvo: fica sempre no mesmo lugar, tem 34px e
-         * adiciona o produto em destaque (o mesmo que o Enter adicionaria), o
-         * que mantém teclado e toque respondendo à mesma regra.
-         *
-         * Desabilitado enquanto não há escolha — em vez de escondido: um botão
-         * que aparece e some ao lado de um campo de digitação faz a linha
-         * pular de largura a cada letra.
+         * Posição fixa, do lado de dentro do campo: o momento em que se
+         * descobre que o produto não existe é este, com o cursor na busca. O
+         * ícone não muda de lugar conforme o que foi digitado, então quem opera
+         * decora o alvo. O CTA com o nome digitado, logo abaixo, é o mesmo
+         * caminho para quem só percebe no "nenhum produto encontrado".
          */}
-        <button
-          type="button"
-          onClick={() => {
-            const escolhido = sugestoes[indice] ?? sugestoes[0];
-            if (escolhido) adicionar(escolhido);
-          }}
-          disabled={!mostrarLista}
-          title={mostrarLista ? `Adicionar ${(sugestoes[indice] ?? sugestoes[0])?.nome ?? "produto"}` : "Digite para encontrar o produto"}
-          aria-label={mostrarLista ? `Adicionar ${(sugestoes[indice] ?? sugestoes[0])?.nome ?? "produto"} à nota` : "Adicionar produto à nota"}
-          className="focus-ring my-1.5 grid h-[34px] w-[34px] shrink-0 cursor-pointer place-items-center rounded-lg bg-success text-white transition-all hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:bg-fg/[0.06] disabled:text-faint"
-        >
-          <Plus size={17} />
-        </button>
+        {onCadastrar && (
+          <button
+            type="button"
+            onClick={() => {
+              onCadastrar(busca.trim());
+              setBusca("");
+            }}
+            title="Cadastrar um produto novo"
+            aria-label="Cadastrar um produto novo"
+            className="focus-ring my-1.5 grid h-[34px] w-[34px] shrink-0 cursor-pointer place-items-center rounded-lg border border-fg/[0.1] text-mist transition-colors hover:bg-fg/[0.06] hover:text-ink"
+          >
+            <PackagePlus size={16} />
+          </button>
+        )}
+
+        {/*
+         * Aqui havia um "+" verde que adicionava a sugestão em destaque.
+         *
+         * Ele não tinha o que fazer: cada linha da lista já é um botão inteiro,
+         * com o próprio "+" à direita, e o Enter faz o mesmo sem tirar a mão do
+         * teclado. Na prática passava a vida desabilitado — só acendia com a
+         * lista aberta — e, quando acendia, era o alvo mais distante dos três.
+         * Ficou só o cadastro, que é o caminho que a lista não oferece.
+         */}
       </div>
 
       {/* Barra de progresso fina sob o campo — o "puxando os produtos". */}
@@ -207,7 +219,24 @@ const BuscaProduto = ({ produtos, carregando = false, onAdicionar }: Props) => {
         )}
       </AnimatePresence>
 
-      {semResultado && <p className="mt-2 px-3 text-[12px] text-faint">Nenhum produto encontrado.</p>}
+      {semResultado && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 px-3 text-[12px] text-faint">
+          <span>Nenhum produto encontrado.</span>
+          {onCadastrar && (
+            <button
+              type="button"
+              onClick={() => {
+                onCadastrar(busca.trim());
+                setBusca("");
+              }}
+              className="focus-ring inline-flex items-center gap-1 rounded-md text-accent-soft underline-offset-2 hover:underline"
+            >
+              <PackagePlus size={13} />
+              Cadastrar “{busca.trim()}”
+            </button>
+          )}
+        </div>
+      )}
 
       <AnimatePresence>
         {mostrarLista && (

@@ -111,7 +111,11 @@ const Modal = memo(({ open, onClose, title, subtitle, accent = "rgb(var(--accent
             padding próprio, e sem ele o conteúdo encostava na borda.
             Exceção é o size="full", usado pela nota — essa desenha as
             próprias margens e dobraria a moldura. */}
-        <div className={`flex-1 overflow-y-auto ${isFull ? "" : "p-4 sm:p-5"}`}>{children}</div>
+        {/* `min-h-0`: sem ele o corpo se recusa a encolher abaixo do conteúdo
+            (é o `min-height: auto` de todo item flex) e empurra o painel para
+            além da tela — o que sobra some no `overflow-hidden` do painel. Com
+            ele, conteúdo grande rola em vez de ser cortado. */}
+        <div className={`min-h-0 flex-1 overflow-y-auto ${isFull ? "" : "p-4 sm:p-5"}`}>{children}</div>
       </div>
     </div>
   );

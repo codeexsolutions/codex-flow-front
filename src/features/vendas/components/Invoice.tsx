@@ -17,13 +17,15 @@ import { Modal } from "@/shared/ui/Modal";
 import { useAlert } from "@/shared/ui/Alert";
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import BuscaProduto from "@/features/vendas/components/BuscaProduto";
+import { ProdutoForm } from "@/features/estoque/components/ProdutoForm";
+import type { ProductFormData } from "@/features/estoque/schema/product.schema";
 import MenuDownloadNota from "@/shared/ui/MenuDownloadNota";
 import BotaoRecibo from "@/shared/ui/BotaoRecibo";
 import FundoNota from "@/shared/ui/FundoNota";
 import useEnterprise from "@/features/empresa/store/enterprise.store";
 import OrcamentoService from "@/features/orcamentos/services/orcamento.service";
 
-import { Save, Trash2, QrCode, Loader2, FileText } from "lucide-react";
+import { Save, Trash2, QrCode, Loader2, FileText, Copy, Check } from "lucide-react";
 import { Skeleton, SkeletonInvoiceCard, SkeletonInvoiceHeader, SkeletonInvoiceRow, SkeletonSummary } from "@/shared/ui/skeleton";
 
 import { generatePixPayload, getQrCodeDataUrl } from "@/shared/utils/pix";
@@ -107,6 +109,16 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
     return numero ? maskPhone(String(numero)) : "";
   })();
 
+  /*
+   * Cadastro de produto sem sair da nota.
+   *
+   * `null` = fechado; string = aberto com o nome que estava na busca (pode ser
+   * vazia, quando se abre pelo ícone). Guardar o nome é o que faz o cadastro
+   * continuar de onde a venda parou, em vez de pedir para digitar de novo.
+   */
+  const [novoProduto, setNovoProduto] = useState<string | null>(null);
+  const [salvandoProduto, setSalvandoProduto] = useState(false);
+
   /* ─── Loading states ─── */
   const [loadingProdutos, setLoadingProdutos] = useState(true);
   const [loadingPedido, setLoadingPedido] = useState(!!idInicial);
@@ -141,6 +153,9 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
   const [percentual, setPercentual] = useState(100);
   const [percentualLivre, setPercentualLivre] = useState("");
   const [qrCodeNota, setQrCodeNota] = useState("");
+
+  /* Confirmação do copia-e-cola — volta ao normal sozinha em 2s. */
+  const [pixCopiado, setPixCopiado] = useState(false);
   const [modalCancelar, setModalCancelar] = useState(false);
   const [cancelando, setCancelando] = useState(false);
 
@@ -185,7 +200,10 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
   }, [id]);
 
   /* ─── Produtos ─── */
-  const adicionarProduto = (produtoHandle: ProductType) => {
+  /* `avisar` existe para o cadastro feito de dentro da nota: lá o produto entra
+     na nota junto do "Produto cadastrado!", e dois avisos seguidos para o mesmo
+     gesto só atrapalham quem está atendendo. */
+  const adicionarProduto = (produtoHandle: ProductType, avisar = true) => {
     setItens((prev) => {
       // Mesmo produto já está na nota → soma a quantidade na linha existente
       // em vez de criar uma segunda linha (duas linhas do mesmo produto
@@ -209,7 +227,42 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
         },
       ];
     });
-    alert.toast("success", "Produto adicionado!", undefined, { position: "bottom-right", timer: 2000 });
+
+    if (avisar) alert.toast("success", "Produto adicionado!", undefined, { position: "bottom-right", timer: 2000 });
+  };
+
+  /**
+   * Cadastra o produto e já o lança na nota.
+   *
+   * Faltar um produto no meio da venda é rotina — e mandar quem atende até
+   * Estoque e de volta é o que faz a nota ser abandonada pela metade. O
+   * cadastro acontece aqui, a lista da busca é relida e o item entra na nota
+   * sozinho: é para isso que se cadastrou agora, e não depois.
+   */
+  const handleNovoProduto = async (dados: ProductFormData) => {
+    setSalvandoProduto(true);
+
+    try {
+      await ProductService.create(dados);
+
+      /* Relê a lista em vez de confiar no retorno do POST: é a mesma fonte que
+         a busca usa, então o produto novo aparece nela também. */
+      const { data } = await ProductService.getAll();
+      const lista: ProductType[] = data.data ?? [];
+
+      setProducts(lista);
+      setNovoProduto(null);
+
+      const criado = lista.find((p) => p.nome?.trim().toLowerCase() === dados.nome.trim().toLowerCase());
+
+      if (criado) adicionarProduto(criado, false);
+
+      alert.success("Produto cadastrado!", criado ? "Ele já entrou na nota." : "Ele já pode ser lançado na busca.");
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível cadastrar o produto."));
+    } finally {
+      setSalvandoProduto(false);
+    }
   };
 
   const atualizarLinha = (uid: string, patch: Partial<ItemPedidoType>) => setItens((prev) => prev.map((l) => (l.itemPedidoId === uid ? { ...l, ...patch } : l)));
@@ -268,6 +321,41 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
     };
   }, [pixPayload]);
 
+
+  /**
+   * Copia o código Pix (o "copia e cola") para a área de transferência.
+   *
+   * É o que se manda no WhatsApp junto da foto da nota: o cliente que recebe a
+   * imagem no próprio celular não tem como apontar a câmera para o QR que está
+   * na tela dele — ou cola o código, ou não paga.
+   *
+   * `execCommand` como reserva: a API moderna exige contexto seguro, e a loja
+   * que roda o sistema em `http://` na rede local ficaria sem copiar nada.
+   */
+  const copiarPix = async () => {
+    if (!pixPayload) return;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(pixPayload);
+      } else {
+        const campo = document.createElement("textarea");
+
+        campo.value = pixPayload;
+        campo.style.cssText = "position:fixed;left:-9999px;top:0;";
+        document.body.appendChild(campo);
+        campo.select();
+        document.execCommand("copy");
+        campo.remove();
+      }
+
+      setPixCopiado(true);
+      setTimeout(() => setPixCopiado(false), 2000);
+      alert.toast("success", "Código Pix copiado!", "Cole na conversa com o cliente.", { position: "bottom-right", timer: 2200 });
+    } catch {
+      alert.error("Não foi possível copiar", "O navegador bloqueou o acesso à área de transferência.");
+    }
+  };
 
   /* ─── Nota CRUD ─── */
   const montarItens = () =>
@@ -482,10 +570,38 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
   const valResumo = "mt-1 block truncate text-sm text-ink";
 
   return (
-    <div className="flex h-full flex-col">
+    /*
+     * `min-h-0` em toda a corrente de altura.
+     *
+     * Sem ele, a nota que nasce cheia — é o caso de editar um orçamento, que
+     * abre com os itens da proposta — era recortada pela metade em vez de
+     * rolar: cada caixa flex herda `min-height: auto`, se recusa a encolher
+     * abaixo do próprio conteúdo e estoura a altura do modal, que corta o
+     * excedente no `overflow-hidden`. A venda nova não mostrava o defeito
+     * porque abre vazia e só cresce um item por vez.
+     */
+    <div className="flex h-full min-h-0 flex-col">
 
 
       {/* ════════════ MODAL: PAGAMENTOS ════════════ */}
+
+      {/* ════════════ MODAL: NOVO PRODUTO ════════════
+          Cadastro sem sair da nota: abre pela busca de produtos, já com o nome
+          que estava digitado. */}
+      <Modal open={novoProduto !== null} onClose={() => setNovoProduto(null)} title="Novo produto" subtitle="Ele entra na nota assim que for salvo">
+        {novoProduto !== null && (
+          <ProdutoForm
+            /* `key` com o termo: reabrir a busca com outro nome precisa
+               remontar o formulário — `defaultValues` do react-hook-form só
+               vale na montagem. */
+            key={novoProduto}
+            defaultValues={novoProduto ? { nome: novoProduto } : undefined}
+            submitText={salvandoProduto ? "Salvando..." : "Cadastrar produto"}
+            onCancel={() => setNovoProduto(null)}
+            onSubmit={handleNovoProduto}
+          />
+        )}
+      </Modal>
 
       {/* ════════════ MODAL: CANCELAR ════════════ */}
       <Modal open={modalCancelar} onClose={() => setModalCancelar(false)} title="Cancelar nota" subtitle="A nota sai da operação, mas fica no histórico" accent="rgb(var(--danger))" maxWidth="max-w-sm">
@@ -508,10 +624,13 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
       </Modal>
 
       {/* ════════════ NOTA ════════════ */}
-      <div className="flex h-full min-h-0 overflow-hidden rounded-2xl bg-surface ring-1 ring-fg/[0.06]">
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      {/* `flex-1` em vez de `h-full`: a altura vem da corrente flex, não de uma
+          porcentagem que depende do pai ter altura definida — dentro do `Sheet`
+          do celular ela não tem, e o `100%` virava altura automática. */}
+      <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl bg-surface ring-1 ring-fg/[0.06]">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {/* Toolbar */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-fg/[0.05] px-3 py-2.5">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-fg/[0.05] px-3 py-2.5">
           <div className="flex min-w-0 items-center gap-2">
             {loadingPedido ? (
               <Skeleton className="h-5 w-24 rounded-full" />
@@ -539,8 +658,8 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
           )}
         </div>
 
-        {/* Conteúdo da nota (capturado no PNG) */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Conteúdo da nota (capturado no PNG) — é ESTE que rola. */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {/* Largura limitada e centralizada.
               Sem teto, a nota acompanhava o monitor: em tela larga, o nome do
               cliente ficava a meia tela do valor, e a tabela de itens virava
@@ -633,6 +752,28 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
                     </div>
 
                     <span className="text-[10.5px] text-faint">Pix · {formatCurrency(valorCobranca)}</span>
+
+                    {/*
+                     * Copia e cola do Pix — para quem atende, não para o
+                     * documento.
+                     *
+                     * `data-sem-foto` mantém o botão FORA do PNG e do PDF: na
+                     * nota que o cliente recebe ele não teria o que fazer (a
+                     * imagem não tem onde clicar), e o código inteiro impresso
+                     * ocupava mais altura que o resumo da venda. Aqui é um
+                     * botão só: copia o mesmo código do QR, no mesmo valor
+                     * escolhido, pronto para colar na conversa.
+                     */}
+                    <button
+                      type="button"
+                      data-sem-foto
+                      onClick={() => void copiarPix()}
+                      title="Copiar o código Pix para mandar ao cliente"
+                      className="focus-ring flex w-full items-center justify-center gap-1.5 rounded-lg border border-fg/[0.1] py-1.5 text-[11px] text-mist transition-colors hover:border-accent/40 hover:text-accent-soft"
+                    >
+                      {pixCopiado ? <Check size={13} className="text-success" /> : <Copy size={13} />}
+                      {pixCopiado ? "Copiado!" : "Copiar código Pix"}
+                    </button>
                   </>
                 ) : (
                   /* Aviso de configuração é para quem atende, não para o cliente:
@@ -723,7 +864,7 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
             */}
             <div data-sem-foto className="hidden px-6 pt-6 md:block">
               <div className="max-w-md">
-                <BuscaProduto produtos={products} carregando={loadingProdutos} onAdicionar={adicionarProduto} />
+                <BuscaProduto produtos={products} carregando={loadingProdutos} onAdicionar={adicionarProduto} onCadastrar={setNovoProduto} />
               </div>
             </div>
 
@@ -801,7 +942,7 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
 
             {/* Mobile — busca de produtos, fora da foto da nota */}
             <div data-sem-foto className="px-6 pt-5 md:hidden">
-              <BuscaProduto produtos={products} carregando={loadingProdutos} onAdicionar={adicionarProduto} />
+              <BuscaProduto produtos={products} carregando={loadingProdutos} onAdicionar={adicionarProduto} onCadastrar={setNovoProduto} />
             </div>
 
             {/* Mobile */}
@@ -909,7 +1050,7 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
             rodapé empilha — total em cima, botões dividindo a linha de baixo —
             e a partir de `sm` volta a ser uma linha só. */}
         <footer
-          className="flex flex-col gap-3 border-t border-fg/[0.06] bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          className="flex shrink-0 flex-col gap-3 border-t border-fg/[0.06] bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
           style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
         >
           <div className="min-w-0">
