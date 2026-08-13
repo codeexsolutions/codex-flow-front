@@ -164,13 +164,25 @@ export default defineConfig(({ mode }) => {
       }),
     ],
 
+    /*
+     * `host: true` — escuta em todas as interfaces, inclusive o IP da VPN
+     * (`26.242.6.51:2000`), e não só no loopback.
+     *
+     * Antes isto lia `env.APPLICATION_ENVIRONMENT`, uma variável que NÃO existe
+     * no `.env` (lá o nome é `ENVIRONMENT_CONSOLE`). O valor chegava
+     * `undefined`, o Vite caía no padrão `localhost`, e o servidor recusava
+     * conexão de qualquer outra máquina — sem erro nenhum no terminal, porque
+     * do ponto de vista dele estava tudo certo.
+     *
+     * `APPLICATION_HOST` continua podendo restringir, para quem precisar.
+     */
     server: {
-      host: env.APPLICATION_ENVIRONMENT,
+      host: env.APPLICATION_HOST || true,
       port: Number(env.APPLICATION_PORT),
     },
 
     preview: {
-      host: env.APPLICATION_ENVIRONMENT,
+      host: env.APPLICATION_HOST || true,
       port: Number(env.APPLICATION_PORT),
     },
   };

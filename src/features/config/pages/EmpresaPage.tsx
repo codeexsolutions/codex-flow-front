@@ -6,6 +6,8 @@ import { Building2, MessageCircle, MapPin, Save, CircleCheck } from "lucide-reac
 import useEnterprise from "@/features/empresa/store/enterprise.store";
 import { useAlert } from "@/shared/ui/Alert";
 import { onlyDigits, formatDocument } from "@/shared/utils/format";
+import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
+import { ehCpf } from "@/shared/utils/documento";
 import { maskCep, maskPhone } from "@/shared/validation/masks";
 
 import { SettingsCard } from "@/features/config/components/ConfigUI";
@@ -25,6 +27,7 @@ type EnterpriseLike = {
   inscMunicipal?: string;
   urlLogo?: string;
   notaBackground?: string;
+  ocultarCpfNota?: boolean;
   contato?: { email?: string; celular?: string | number; telefone?: string | number; whatsapp?: string | number };
   endereco?: {
     cep?: string;
@@ -46,7 +49,7 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
 ];
 
 const EmpresaPage = () => {
-  const { enterprise, updateEnterprise } = useEnterprise();
+  const { enterprise, updateEnterprise, changeDocument } = useEnterprise();
   const ent = (enterprise ?? {}) as EnterpriseLike;
   const alert = useAlert();
   const [tab, setTab] = useState<TabId>("identificacao");
@@ -112,7 +115,10 @@ const EmpresaPage = () => {
       setTimeout(() => setSavedTab(null), 2500);
     } catch (err) {
       if (!(err instanceof Error && err.message === "VALIDATION_HANDLED")) {
-        alert.error("Erro ao salvar", "Não foi possível salvar.");
+        /* A frase do servidor vem primeiro: as recusas do documento ("já existe
+           empresa com este documento", "informe 11 ou 14 dígitos") dizem o que
+           corrigir, e "Não foi possível salvar" não diz nada. */
+        alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível salvar."));
       }
     } finally {
       setSaving(null);
@@ -133,14 +139,32 @@ const EmpresaPage = () => {
     }
 
     const data = parsed.data;
+
     await updateEnterprise(id, {
       nomeFantasia: data.nomeFantasia,
       nomeRepresentante: data.nomeRepresentante,
-      cpfCnpj: onlyDigits(data.cpfCnpj),
       inscMunicipal: data.inscMunicipal,
       urlLogo: data.urlLogo,
       notaBackground: data.notaBackground,
     });
+
+    /*
+     * O documento vai por outra rota, e só quando muda.
+     *
+     * Ele saiu do PATCH geral porque é a identidade da empresa: a rota própria
+     * valida o formato, recusa um documento já usado por outro cadastro e
+     * preserva o `codigo_empresa` — a chave que liga a empresa aos seus dados
+     * em trinta tabelas e que não pode se mover. É o que permite abrir a conta
+     * no CPF e passar para o CNPJ depois sem perder nada.
+     *
+     * Fica DEPOIS do update geral: se o documento for recusado, o resto já foi
+     * salvo e o erro fala só do que falhou.
+     */
+    const documento = onlyDigits(data.cpfCnpj);
+
+    if (documento && documento !== onlyDigits(ent.cpfCnpj ?? "")) {
+      await changeDocument(id, documento);
+    }
   };
 
   const salvarContato = async () => {
@@ -225,6 +249,38 @@ const EmpresaPage = () => {
         {tab === "identificacao" && (
           <SettingsCard icon={<Building2 className="h-4 w-4" />} title="Identificação" desc="Dados principais da empresa" footer={<SaveBtn tabId="identificacao" onClick={() => doSave("identificacao", salvarIdentificacao)} />}>
             <EmpresaIdentificacao register={register} errors={errors} setValue={setValue} watch={watch} />
+
+            {/*
+             * A opção só aparece quando o documento É um CPF.
+             *
+             * Para quem tem CNPJ ela não decide nada — o CNPJ sempre sai na
+             * nota — e um interruptor que não muda nada é pior que ausente:
+             * quem o vê passa a duvidar do que está impresso.
+             */}
+            {ehCpf(ent.cpfCnpj) && (
+              <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-fg/[0.08] p-3">
+                <input
+                  type="checkbox"
+                  checked={ent.ocultarCpfNota !== false}
+                  onChange={(e) => {
+                    if (ent.id) {
+                      updateEnterprise(ent.id, { ocultarCpfNota: e.target.checked }).catch((err) =>
+                        alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível salvar.")),
+                      );
+                    }
+                  }}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-[rgb(var(--accent))]"
+                />
+
+                <span className="min-w-0">
+                  <span className="block text-[13px] text-ink">Esconder o CPF nas notas</span>
+                  <span className="mt-0.5 block text-[11.5px] leading-relaxed text-faint">
+                    Vale para o seu CPF e para o do cliente. A nota circula por WhatsApp e balcão — CNPJ é público, CPF
+                    não. Desmarque se precisar do documento impresso.
+                  </span>
+                </span>
+              </label>
+            )}
           </SettingsCard>
         )}
 

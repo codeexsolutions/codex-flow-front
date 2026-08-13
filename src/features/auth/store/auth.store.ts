@@ -23,6 +23,11 @@ const deSessaoParaUsuario = (sessao: UsuarioSessao) => ({
   nome: sessao.nome ?? undefined,
   email: sessao.email,
   cargo: sessao.cargo,
+  /* `UserType` sempre declarou `image`, e este mapeamento nunca o preencheu:
+     a foto chegava do servidor e era descartada aqui. Era por isso que a tela
+     de perfil abria sempre sem foto, mesmo depois de uma gravação bem
+     sucedida — ela lê `user.image` para o estado inicial. */
+  image: sessao.imagem || undefined,
   permissao: sessao.permissao ?? "",
   root: Boolean(sessao.root),
   codigoEmpresa: sessao.codigoEmpresa,
@@ -37,6 +42,15 @@ type AuthStore = useAuthProps & {
   setAuth: (usuario: UsuarioSessao, accessToken?: string, refreshToken?: string) => void;
   clearAuth: () => void;
   atualizarAtivo: (ativo: boolean) => void;
+  /**
+   * Reflete na sessão o que a tela de perfil acabou de gravar.
+   *
+   * Sem isto a foto só apareceria no próximo login: a sessão é montada uma vez,
+   * na entrada, e nada a reconstrói depois de um PATCH. A pessoa salvava, via a
+   * prévia trocar no cartão do perfil e continuava com a foto antiga na barra
+   * lateral — o que parece, com toda razão, que a gravação não funcionou.
+   */
+  atualizarPerfil: (dados: { nome?: string; cargo?: string; image?: string }) => void;
 };
 
 const useAuth = create<AuthStore>((set, get) => ({
@@ -57,6 +71,23 @@ const useAuth = create<AuthStore>((set, get) => ({
       token: accessToken ?? lerToken(),
       isLogged: true,
       loading: false,
+    });
+  },
+
+  atualizarPerfil(dados) {
+    const atual = get().user;
+
+    if (!atual) return;
+
+    /* `image: ""` limpa a foto; ausente preserva. São coisas diferentes, e
+       tratar as duas como `undefined` faria a remoção não pegar até o F5. */
+    set({
+      user: {
+        ...atual,
+        ...(dados.nome !== undefined ? { nome: dados.nome } : {}),
+        ...(dados.cargo !== undefined ? { cargo: dados.cargo } : {}),
+        ...(dados.image !== undefined ? { image: dados.image || undefined } : {}),
+      },
     });
   },
 

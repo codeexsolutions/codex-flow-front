@@ -30,17 +30,26 @@ const MAX_PHOTO = 10 * 1024 * 1024;
 
 const ProfilePage = () => {
   const { user } = useAuth();
+  const atualizarPerfil = useAuth((s) => s.atualizarPerfil);
   const alert = useAlert();
   const profileSaver = useSaver(async () => {
     const data = watchProfile();
+    const cargo = data.role ?? "";
+
     await ProfileService.updateProfile({
       nome: data.name,
-      cargo: data.role ?? "",
+      cargo,
       /* `""` e não `undefined` ao remover: `undefined` some no
          `JSON.stringify` e o servidor só sobrescreve o que chega — a foto
          antiga voltaria na próxima carga da tela. */
       imagem: photo ?? "",
     });
+
+    /* A sessão é montada no login e nada a reconstrói depois de um PATCH. Sem
+       este aviso a foto nova ficava só no estado local desta tela: a barra
+       lateral seguia com a antiga até o próximo login, e a impressão era de
+       que salvar não tinha funcionado. */
+    atualizarPerfil({ nome: data.name, cargo, image: photo ?? "" });
   });
   const pwdSaver = useSaver();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -88,6 +97,41 @@ const ProfilePage = () => {
   const pwdValues = watchPwd();
   const canUpdatePwd = Boolean(pwdValues.current && pwdValues.next && pwdValues.next === pwdValues.confirm);
 
+  /**
+   * Grava a foto no usuário na hora, sem esperar o "Salvar" do cartão.
+   *
+   * Era o "Salvar" que gravava — e essa era a causa de "a imagem não está sendo
+   * guardada". O upload já tinha acontecido e a foto JÁ APARECIA na tela, então
+   * não havia nada indicando que faltava um passo: a pessoa trocava a foto, via
+   * a foto nova, saía da tela e voltava para a antiga.
+   *
+   * Escolher uma foto é a ação completa; não existe "rascunho de foto" que
+   * justifique confirmar depois. Nome e cargo continuam no botão, porque ali o
+   * rascunho existe de verdade — quem está digitando o nome pode desistir no
+   * meio.
+   *
+   * O nome vai junto porque o servidor o exige, e o do formulário é o que a
+   * pessoa está vendo; mandar o da sessão sobrescreveria uma edição em curso.
+   */
+  const gravarFoto = async (url: string | null) => {
+    const nome = watchProfile("name") || user?.nome || "";
+    const cargo = watchProfile("role") ?? user?.cargo ?? "";
+
+    const anterior = photo;
+
+    setPhoto(url);
+
+    try {
+      await ProfileService.updateProfile({ nome, cargo, imagem: url ?? "" });
+      atualizarPerfil({ image: url ?? "" });
+    } catch (e) {
+      setPhoto(anterior);
+
+      const err = e as { response?: { data?: { message?: string } }; message?: string };
+      alert.error("Não foi possível salvar a foto", err?.response?.data?.message ?? err?.message ?? "Tente de novo em instantes.");
+    }
+  };
+
   const onPick = async (ev: React.ChangeEvent<HTMLInputElement>) => {
     const file = ev.target.files?.[0];
 
@@ -115,9 +159,7 @@ const ProfilePage = () => {
 
       if (!url) throw new Error(data?.message || "Falha ao enviar a foto.");
 
-      /* A URL entra na tela na hora; o PATCH que a grava no usuário é o
-         "Salvar" do cartão — o mesmo botão que salva nome e cargo. */
-      setPhoto(url);
+      await gravarFoto(url);
     } catch (e) {
       const err = e as { response?: { data?: { message?: string } }; message?: string };
       alert.error("Não foi possível enviar a foto", err?.response?.data?.message ?? err?.message ?? "Tente de novo em instantes.");
@@ -174,7 +216,10 @@ const ProfilePage = () => {
                   <Camera size={14} /> {enviandoFoto ? "Enviando…" : "Trocar"}
                 </button>
                 {photo && (
-                  <button type="button" onClick={() => setPhoto(null)} className="flex items-center gap-1.5 rounded-lg border border-danger/25 bg-danger/20 px-3 py-1.5 text-[12px] text-danger hover:bg-danger/30">
+                  /* Remover também grava na hora, pelo mesmo motivo de trocar:
+                     apagar e ver a foto voltar depois é o mesmo defeito ao
+                     contrário. */
+                  <button type="button" disabled={enviandoFoto} onClick={() => void gravarFoto(null)} className="flex items-center gap-1.5 rounded-lg border border-danger/25 bg-danger/20 px-3 py-1.5 text-[12px] text-danger transition-colors hover:bg-danger/30 disabled:opacity-50">
                     <Trash2 size={14} />
                   </button>
                 )}

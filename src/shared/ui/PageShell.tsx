@@ -39,6 +39,7 @@ export const PageScreen = ({
   subtitle,
   icon,
   tabs,
+  actions,
   children,
   bodyClassName = "",
   headerClassName,
@@ -47,6 +48,8 @@ export const PageScreen = ({
   subtitle?: string;
   icon?: ReactNode;
   tabs?: HeaderTab[];
+  /** Controles no cabeçalho — só para telas que precisam da altura. Ver `HeaderPage`. */
+  actions?: ReactNode;
   children: ReactNode;
   bodyClassName?: string;
   /** Envolve o cabeçalho — usado por Relatórios para escondê-lo na impressão. */
@@ -65,10 +68,10 @@ export const PageScreen = ({
 
     {headerClassName ? (
       <div className={headerClassName}>
-        <HeaderPage title={title} subtitle={subtitle} icon={icon} tabs={tabs} />
+        <HeaderPage title={title} subtitle={subtitle} icon={icon} tabs={tabs} actions={actions} />
       </div>
     ) : (
-      <HeaderPage title={title} subtitle={subtitle} icon={icon} tabs={tabs} />
+      <HeaderPage title={title} subtitle={subtitle} icon={icon} tabs={tabs} actions={actions} />
     )}
 
     <PageBody className={bodyClassName}>{children}</PageBody>

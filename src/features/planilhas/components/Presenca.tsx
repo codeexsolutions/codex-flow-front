@@ -6,7 +6,7 @@ import { lerToken } from "@/shared/api/sessao";
 import { getInitials } from "@/shared/utils/format";
 import useAuth from "@/features/auth/store/auth.store";
 
-type Pessoa = { id: string; nome: string };
+type Pessoa = { id: string; nome: string; foto?: string | null };
 
 /**
  * Quem está olhando esta planilha agora.
@@ -20,6 +20,8 @@ type Pessoa = { id: string; nome: string };
  */
 const Presenca = ({ planilhaId }: { planilhaId: string }) => {
   const [pessoas, setPessoas] = useState<Pessoa[]>([]);
+  /** Fotos que não carregaram — caem para as iniciais. */
+  const [quebradas, setQuebradas] = useState<Set<string>>(new Set());
   const meuId = useAuth((s) => s.user?.id);
 
   useEffect(() => {
@@ -64,31 +66,47 @@ const Presenca = ({ planilhaId }: { planilhaId: string }) => {
   const visiveis = ordenadas.slice(0, 4);
   const resto = ordenadas.length - visiveis.length;
 
+  /*
+   * Só os avatares — o texto ao lado ("só você aqui", "2 na planilha") saiu.
+   *
+   * Ele repetia o que a fileira já mostra: quem olha três círculos não precisa
+   * ler "3 na planilha". E "só você aqui" era pior que redundante — gastava
+   * espaço permanente na barra para informar que não havia nada a informar,
+   * justamente no caso mais comum. Quem é quem continua no `title` de cada
+   * avatar, que é onde se procura o nome.
+   */
   return (
-    <div className="flex items-center gap-2" title={ordenadas.map((p) => p.nome).join(", ")}>
-      <div className="flex -space-x-2">
-        {visiveis.map((p) => {
-          const souEu = String(p.id) === String(meuId);
+    <div className="flex -space-x-2" title={ordenadas.map((p) => p.nome).join(", ")}>
+      {visiveis.map((p) => {
+        const souEu = String(p.id) === String(meuId);
+        const rotulo = souEu ? `${p.nome} (você)` : p.nome;
 
-          return (
-            <span
-              key={p.id}
-              className={`grid h-7 w-7 place-items-center rounded-full text-[10px] ring-2 ring-surface ${
-                souEu ? "bg-accent text-white" : "bg-fg/[0.12] text-mist"
-              }`}
-              title={souEu ? `${p.nome} (você)` : p.nome}
-            >
-              {getInitials(p.nome)}
-            </span>
-          );
-        })}
+        return p.foto && !quebradas.has(p.id) ? (
+          <img
+            key={p.id}
+            src={p.foto}
+            alt={rotulo}
+            title={rotulo}
+            className={`h-7 w-7 rounded-full object-cover ring-2 ring-surface ${souEu ? "ring-accent" : ""}`}
+            /* Foto apagada do storage por fora vira ícone quebrado no meio da
+               barra. Marcar em estado (e não mexer no DOM à mão) deixa o React
+               trocar pelo círculo de iniciais no próximo render. */
+            onError={() => setQuebradas((s) => new Set(s).add(p.id))}
+          />
+        ) : (
+          <span
+            key={p.id}
+            className={`grid h-7 w-7 place-items-center rounded-full text-[10px] ring-2 ring-surface ${
+              souEu ? "bg-accent text-white" : "bg-fg/[0.12] text-mist"
+            }`}
+            title={rotulo}
+          >
+            {getInitials(p.nome)}
+          </span>
+        );
+      })}
 
-        {resto > 0 && <span className="grid h-7 w-7 place-items-center rounded-full bg-fg/[0.08] text-[10px] text-faint ring-2 ring-surface">+{resto}</span>}
-      </div>
-
-      <span className="hidden text-[11px] text-faint sm:inline">
-        {pessoas.length === 1 ? "só você aqui" : `${pessoas.length} na planilha`}
-      </span>
+      {resto > 0 && <span className="grid h-7 w-7 place-items-center rounded-full bg-fg/[0.08] text-[10px] text-faint ring-2 ring-surface">+{resto}</span>}
     </div>
   );
 };

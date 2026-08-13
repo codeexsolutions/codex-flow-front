@@ -1,28 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import AliceCarousel from "react-alice-carousel";
 import "react-alice-carousel/lib/alice-carousel.css";
-import {
-  Check, ChevronLeft, ChevronRight, Sparkles, Users, UserRound, Package,
-  ShoppingCart, Infinity as InfinityIcon, Info, Table2, Bot, Headset,
-} from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Sparkles, Users, UserRound, Package, ShoppingCart, Infinity as InfinityIcon, Info, Table2, Bot, Headset } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { Modal } from "@/shared/ui/Modal";
 import { CICLO_LABEL, RECURSO_LABEL, type Plano } from "@/features/assinatura/types/assinatura.types";
 import { formatCurrencyFromCents } from "@/shared/utils/currency";
 import { formatNumber } from "@/shared/utils/format";
-
-/**
- * Os planos como cartões de KPI, num carrossel.
- *
- * O cadastro precisa de uma escolha rápida, não de uma tabela comparativa: a
- * pessoa está no meio de um formulário, e parar para ler cinco colunas de
- * recursos é onde ela desiste. Cada plano mostra nome, preço e os quatro
- * números que se comparam de relance; o resto vive atrás do "Saber mais".
- *
- * O detalhe é modal, e não uma página à parte, de propósito: sair do cadastro
- * para ler sobre um plano é sair do cadastro. Muita gente não volta.
- */
 
 const LIMITES: { chave: keyof Plano; rotulo: string; icone: LucideIcon }[] = [
   { chave: "limiteUsuarios", rotulo: "Usuários", icone: Users },
@@ -40,21 +25,9 @@ const LIMITES_EXTRA: { chave: keyof Plano; rotulo: string; icone: LucideIcon }[]
 
 const ORDEM_RECURSOS = Object.keys(RECURSO_LABEL);
 
-/**
- * Limite nulo no banco é "sem teto"; zero é "não tem este módulo".
- *
- * Mostrar `0` para um módulo indisponível faria a pessoa achar que o recurso
- * existe mas está zerado — e depois cobrar por ele.
- */
-const textoLimite = (valor: number | null) =>
-  valor === null ? "∞" : valor === 0 ? "—" : formatNumber(valor);
+const textoLimite = (valor: number | null) => (valor === null ? "∞" : valor === 0 ? "—" : formatNumber(valor));
 
-const Valor = ({ valor }: { valor: number | null }) =>
-  valor === null ? (
-    <InfinityIcon size={15} strokeWidth={2.4} className="text-accent-soft" aria-label="Sem limite" />
-  ) : (
-    <span className="text-[15px] leading-none tabular-nums text-ink">{formatNumber(valor)}</span>
-  );
+const Valor = ({ valor }: { valor: number | null }) => (valor === null ? <InfinityIcon size={15} strokeWidth={2.4} className="text-accent-soft" aria-label="Sem limite" /> : <span className="text-[15px] leading-none tabular-nums text-ink">{formatNumber(valor)}</span>);
 
 type Props = {
   planos: Plano[];
@@ -63,21 +36,16 @@ type Props = {
 };
 
 const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
-
-  /*
-   * Quem manda o carrossel andar é o `ref`, não a prop.
-   *
-   * `activeIndex` do Alice Carousel vale na PRIMEIRA renderização e ignora as
-   * mudanças seguintes. Como as setas e os pontinhos só mexiam nesse estado, o
-   * indicador andava e o cartão ficava parado — clicar no último ponto acendia
-   * o ponto e não trocava o plano. `slideTo` move de verdade; o estado local
-   * segue existindo só para desenhar setas e pontinhos.
-   */
   const carrossel = useRef<AliceCarousel>(null);
 
   const [indice, setIndice] = useState(() => {
     const i = planos.findIndex((p) => p.codigo === selecionado);
-    return i >= 0 ? i : Math.max(planos.findIndex((p) => p.destaque), 0);
+    return i >= 0
+      ? i
+      : Math.max(
+          planos.findIndex((p) => p.destaque),
+          0,
+        );
   });
 
   const irPara = (i: number) => {
@@ -89,20 +57,9 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
 
   const [detalhe, setDetalhe] = useState<Plano | null>(null);
 
-  /*
-   * Seleção vinda de fora traz o cartão para a frente.
-   *
-   * O plano pode ser escolhido sem tocar no carrossel — o link com `?plano=` na
-   * URL e o diagnóstico comercial fazem isso. Sem este sincronismo o cadastro
-   * abria mostrando um plano e com outro marcado, e a pessoa seguia achando
-   * que ia contratar o que estava vendo.
-   */
   useEffect(() => {
     const i = planos.findIndex((p) => p.codigo === selecionado);
     if (i >= 0) irPara(i);
-    // `irPara` é recriada a cada render; observá-la traria o efeito de volta a
-    // cada digitação do formulário e arrastaria o carrossel sozinho.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selecionado, planos]);
 
   const itens = useMemo(
@@ -111,39 +68,9 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
         const escolhido = plano.codigo === selecionado;
 
         return (
-          /*
-           * Altura mínima fixa em vez de `h-full`.
-           *
-           * O Alice Carousel põe cada item num `<li>` inline-block sem altura
-           * definida — `h-full` ali resolve para zero, os cartões colapsam e
-           * se sobrepõem. Foi o que fazia "não parecer um item cada um".
-           * Com `min-h` explícito, todos ficam iguais sem depender do
-           * layout interno da biblioteca.
-           *
-           * 356px é o cartão mais alto (título, preço, os quatro números e a
-           * descrição em três linhas). Estava em 420 e sobrava um vão vazio no
-           * meio de todo cartão — folga que, num formulário, é só distância a
-           * mais até o botão de continuar.
-           */
           <div key={plano.id} className="px-2 pb-1">
-            <div
-              className={`flex min-h-[356px] flex-col rounded-2xl border transition-all ${
-                escolhido
-                  ? "border-accent bg-accent/[0.08] shadow-[0_18px_50px_-24px_rgb(var(--accent))]"
-                  : "border-fg/[0.1] bg-fg/[0.02] hover:border-accent/40"
-              }`}
-            >
-              {/*
-                O corpo do cartão é o botão de escolher — alvo de 300px em vez
-                de um botãozinho de 40. No celular é a diferença entre
-                escolher e errar.
-              */}
-              <button
-                type="button"
-                onClick={() => onSelecionar(plano.codigo)}
-                aria-pressed={escolhido}
-                className="focus-ring flex flex-1 select-none flex-col rounded-t-2xl p-5 text-left"
-              >
+            <div className={`flex min-h-[356px] flex-col rounded-2xl border transition-all ${escolhido ? "border-accent bg-accent/[0.08] shadow-[0_18px_50px_-24px_rgb(var(--accent))]" : "border-fg/[0.1] bg-fg/[0.02] hover:border-accent/40"}`}>
+              <button type="button" onClick={() => onSelecionar(plano.codigo)} aria-pressed={escolhido} className="focus-ring flex flex-1 select-none flex-col rounded-t-2xl p-5 text-left">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-[17px] text-ink">{plano.nome}</p>
@@ -163,18 +90,10 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-baseline gap-x-1.5">
-                  <span className="text-[34px] leading-none tracking-tight text-ink">
-                    {formatCurrencyFromCents(plano.precoCentavos)}
-                  </span>
+                  <span className="text-[34px] leading-none tracking-tight text-ink">{formatCurrencyFromCents(plano.precoCentavos)}</span>
                   <span className="text-[12px] text-faint">{CICLO_LABEL[plano.ciclo]}</span>
                 </div>
 
-                {/* Os quatro números, como um KPI row. As divisórias são os
-                    vãos de 1px do próprio grid.
-
-                    Duas colunas: com quatro, num cartão de coluna única, cada
-                    célula ficava com ~70px e o rótulo "Vendas/mês" quebrava em
-                    três linhas de duas letras. */}
                 <div className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-fg/[0.08]">
                   {LIMITES.map(({ chave, rotulo, icone: Icone }) => (
                     <div key={rotulo} className="flex items-center justify-between gap-2 bg-surface px-3 py-2.5">
@@ -189,16 +108,10 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
 
                 <p className="mt-4 line-clamp-3 text-[12.5px] leading-relaxed text-mist">{plano.descricao}</p>
 
-                {/* `flex-1` aqui: empurra o rodapé para a base, deixando os
-                    botões dos cartões da fileira na mesma linha. */}
                 <span className="flex-1" />
               </button>
 
-              <button
-                type="button"
-                onClick={() => setDetalhe(plano)}
-                className="focus-ring flex items-center justify-center gap-1.5 rounded-b-2xl border-t border-fg/[0.08] px-4 py-3 text-[12.5px] text-mist transition-colors hover:bg-fg/[0.04] hover:text-accent-soft"
-              >
+              <button type="button" onClick={() => setDetalhe(plano)} className="focus-ring flex items-center justify-center gap-1.5 rounded-b-2xl border-t border-fg/[0.08] px-4 py-3 text-[12.5px] text-mist transition-colors hover:bg-fg/[0.04] hover:text-accent-soft">
                 <Info size={14} />
                 Saber mais sobre o {plano.nome}
               </button>
@@ -217,27 +130,8 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-[12px] text-faint">
-        {planos.length} planos · deslize para comparar, toque para escolher
-      </p>
+      <p className="text-[12px] text-faint">{planos.length} planos · deslize para comparar, toque para escolher</p>
 
-      {/*
-        SEMPRE um cartão por vez.
-
-        Havia uma regra `900: { items: 2 }`, e ela media a coisa errada: o
-        `responsive` do Alice Carousel olha a largura da JANELA, não a do
-        container. O cadastro é uma coluna de 576px — então num monitor comum
-        a janela passava de 900px, dois cartões entravam nessa coluna e cada um
-        ficava com ~280px: preço quebrando linha e o KPI row ilegível. Era o
-        mesmo defeito que a versão de três cartões já tinha tido.
-
-        Dois cartões também quebravam a navegação: com dois visíveis, o índice
-        para no penúltimo (não há como rolar além de `total - visíveis`), e o
-        último pontinho nunca acendia — clicar nele não fazia nada.
-
-        `-mx-2` compensa o padding dos itens, senão o primeiro nasce afastado
-        da borda e o carrossel parece desalinhado.
-      */}
       <div className="-mx-2">
         <AliceCarousel
           ref={carrossel}
@@ -254,12 +148,6 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
         />
       </div>
 
-      {/* Controles próprios: os do pacote não seguem o tema e ficavam
-          cinza-claro sobre fundo claro — invisíveis no tema claro.
-
-          Com um plano só eles somem: duas setas apagadas e um pontinho
-          sozinho anunciam uma navegação que não existe, e a primeira coisa
-          que a pessoa faz é clicar nelas procurando o que não tem. */}
       <div className={`items-center justify-between gap-3 ${planos.length > 1 ? "flex" : "hidden"}`}>
         <button type="button" aria-label="Plano anterior" className={seta} disabled={indice === 0} onClick={() => irPara(indice - 1)}>
           <ChevronLeft size={15} />
@@ -267,13 +155,7 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
 
         <div className="flex items-center gap-1.5">
           {planos.map((p, i) => (
-            <button
-              key={p.id}
-              type="button"
-              aria-label={`Ir para ${p.nome}`}
-              onClick={() => irPara(i)}
-              className={`h-1.5 rounded-full transition-all ${i === indice ? "w-5 bg-accent" : "w-1.5 bg-fg/[0.18] hover:bg-fg/[0.3]"}`}
-            />
+            <button key={p.id} type="button" aria-label={`Ir para ${p.nome}`} onClick={() => irPara(i)} className={`h-1.5 rounded-full transition-all ${i === indice ? "w-5 bg-accent" : "w-1.5 bg-fg/[0.18] hover:bg-fg/[0.3]"}`} />
           ))}
         </div>
 
@@ -283,13 +165,7 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
       </div>
 
       {/* ==================== DETALHE DO PLANO ==================== */}
-      <Modal
-        open={!!detalhe}
-        onClose={() => setDetalhe(null)}
-        title={detalhe ? detalhe.nome : ""}
-        subtitle={detalhe?.publicoAlvo ?? undefined}
-        size="lg"
-      >
+      <Modal open={!!detalhe} onClose={() => setDetalhe(null)} title={detalhe ? detalhe.nome : ""} subtitle={detalhe?.publicoAlvo ?? undefined} size="lg">
         {detalhe && (
           <div className="flex flex-col gap-5">
             {/* Preço e chamada: o porquê antes do quanto. */}
@@ -300,9 +176,7 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
               </div>
 
               <p className="shrink-0 text-right">
-                <span className="block text-[30px] leading-none tracking-tight text-ink">
-                  {formatCurrencyFromCents(detalhe.precoCentavos)}
-                </span>
+                <span className="block text-[30px] leading-none tracking-tight text-ink">{formatCurrencyFromCents(detalhe.precoCentavos)}</span>
                 <span className="text-[11px] text-faint">{CICLO_LABEL[detalhe.ciclo]}</span>
               </p>
             </div>
@@ -314,9 +188,7 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
               <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-fg/[0.06] sm:grid-cols-4">
                 {[...LIMITES, ...LIMITES_EXTRA].map(({ chave, rotulo, icone: Icone }) => (
                   <div key={rotulo} className="bg-surface px-3 py-2.5 text-center">
-                    <p className="text-[15px] leading-none tabular-nums text-ink">
-                      {textoLimite(detalhe[chave] as number | null)}
-                    </p>
+                    <p className="text-[15px] leading-none tabular-nums text-ink">{textoLimite(detalhe[chave] as number | null)}</p>
                     <p className="mt-1.5 flex items-center justify-center gap-1 text-[9.5px] leading-tight text-faint">
                       <Icone size={9} className="shrink-0 text-muted" />
                       {rotulo}
@@ -346,11 +218,7 @@ const CarrosselPlanos = ({ planos, selecionado, onSelecionar }: Props) => {
             </div>
 
             <div className="flex flex-col gap-2 border-t border-fg/[0.06] pt-4 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setDetalhe(null)}
-                className="focus-ring min-h-[42px] rounded-xl border border-fg/[0.1] px-4 text-[13px] text-mist transition-colors hover:text-ink"
-              >
+              <button type="button" onClick={() => setDetalhe(null)} className="focus-ring min-h-[42px] rounded-xl border border-fg/[0.1] px-4 text-[13px] text-mist transition-colors hover:text-ink">
                 Voltar
               </button>
 

@@ -6,6 +6,8 @@ export type UsuarioSessao = {
   nome?: string | null;
   email: string;
   cargo: string;
+  /** URL da foto de perfil. Vem na resposta do login/refresh, não no JWT. */
+  imagem?: string | null;
   permissao?: string | null;
   root?: boolean;
   codigoEmpresa: string;

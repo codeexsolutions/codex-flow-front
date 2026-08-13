@@ -13,16 +13,25 @@ interface HeaderPageProps {
   subtitle?: string;
   icon?: ReactNode;
   tabs?: HeaderTab[];
+  /** Controles da própria tela. Ver a nota sobre a exceção abaixo. */
+  actions?: ReactNode;
 }
 
 /**
- * Cabeçalho de página: identidade à esquerda, navegação à direita.
+ * Cabeçalho de página: identidade à esquerda, navegação e controles à direita.
  *
- * Por decisão de layout o header não recebe mais botões de ação — criar,
- * exportar e afins vivem na própria tela (ver `PageToolbar`), junto do conteúdo
- * sobre o qual agem. Isso mantém o header enxuto e previsível em toda rota.
+ * A regra continua sendo que "criar", "exportar" e afins vivem na própria tela
+ * (ver `PageToolbar`), junto do conteúdo sobre o qual agem — é o que mantém o
+ * header previsível em toda rota.
+ *
+ * `actions` é a exceção, e vale para telas em que o conteúdo PRECISA da altura:
+ * numa planilha, cada pixel gasto numa barra acima da tabela é uma linha a
+ * menos visível, e a barra ainda repetia o nome da planilha que o header já
+ * mostrava. Nesses casos os controles sobem para cá, ao lado da identidade.
+ *
+ * Opcional de propósito: nenhuma tela que não passe `actions` muda de aparência.
  */
-const HeaderPage = ({ title, subtitle, icon, tabs }: HeaderPageProps) => {
+const HeaderPage = ({ title, subtitle, icon, tabs, actions }: HeaderPageProps) => {
   const hasTabs = Boolean(tabs && tabs.length > 0);
 
   return (
@@ -49,6 +58,8 @@ const HeaderPage = ({ title, subtitle, icon, tabs }: HeaderPageProps) => {
             {subtitle && <p className="truncate text-[11.5px] text-faint">{subtitle}</p>}
           </div>
         </div>
+
+        {actions && <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">{actions}</div>}
 
         {/* Navegação — pílulas à direita, na mesma linha do título */}
         {hasTabs && (

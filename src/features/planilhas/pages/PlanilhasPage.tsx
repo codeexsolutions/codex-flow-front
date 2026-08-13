@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import useSincronizacao from "@/shared/realtime/useSincronizacao";
-import { Table2, Plus, ChevronLeft, ChevronRight, Settings2, Trash2, X, Loader2, ArrowLeft, Copy, History, LayoutTemplate } from "lucide-react";
+import { Table2, Plus, ChevronLeft, ChevronRight, ChevronDown, Settings2, Trash2, X, Loader2, ArrowLeft, Copy, History, LayoutTemplate, Link2, EyeOff, Lock, Eraser, Rows3 } from "lucide-react";
 
 import PlanilhaService, { type Alteracao, type Coluna, type Modelo, type ModeloCatalogo, type Pagina, type Periodicidade, type Periodo, type TipoColuna } from "@/features/planilhas/services/planilha.service";
 import { PageScreen } from "@/shared/ui/PageShell";
@@ -14,6 +14,9 @@ import { SkeletonListaPainel } from "@/shared/ui/skeleton";
 import Celula from "@/features/planilhas/components/Celula";
 import useEquipeStore from "@/features/funcionarios/store/equipe.store";
 import Presenca from "@/features/planilhas/components/Presenca";
+import LinksCliente from "@/features/planilhas/components/LinksCliente";
+import MenuColuna from "@/features/planilhas/components/MenuColuna";
+import MenuContexto from "@/features/planilhas/components/MenuContexto";
 
 const TIPOS: { id: TipoColuna; label: string }[] = [
   { id: "TEXTO", label: "Texto" },
@@ -182,6 +185,47 @@ const PlanilhasPage = () => {
 
     setColunas((prev) => prev.map((x) => (x.id === c.id ? { ...x, permissoes: nova } : x)));
     await PlanilhaService.alterarColuna(c.id, { permissoes: nova });
+  };
+
+  /** Esconde ou mostra a coluna no link do cliente — vale para TODO link. */
+  const alternarPublico = async (c: Coluna, publico: boolean) => {
+    setColunas((prev) => prev.map((x) => (x.id === c.id ? { ...x, publico } : x)));
+
+    try {
+      await PlanilhaService.alterarColuna(c.id, { publico });
+    } catch (err) {
+      setColunas((prev) => prev.map((x) => (x.id === c.id ? { ...x, publico: !publico } : x)));
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível salvar."));
+    }
+  };
+
+  /** A data que esta coluna não pode preceder. `null` remove a regra. */
+  const definirDataMinima = async (c: Coluna, alvo: string | null) => {
+    const antes = c.nao_antes_de;
+
+    setColunas((prev) => prev.map((x) => (x.id === c.id ? { ...x, nao_antes_de: alvo } : x)));
+
+    try {
+      await PlanilhaService.alterarColuna(c.id, { naoAntesDe: alvo });
+    } catch (err) {
+      setColunas((prev) => prev.map((x) => (x.id === c.id ? { ...x, nao_antes_de: antes } : x)));
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível salvar a regra."));
+    }
+  };
+
+  const renomearColuna = async (c: Coluna) => {
+    const nome = window.prompt("Novo nome da coluna", c.nome)?.trim();
+
+    if (!nome || nome === c.nome) return;
+
+    setColunas((prev) => prev.map((x) => (x.id === c.id ? { ...x, nome } : x)));
+
+    try {
+      await PlanilhaService.alterarColuna(c.id, { nome });
+    } catch (err) {
+      setColunas((prev) => prev.map((x) => (x.id === c.id ? { ...x, nome: c.nome } : x)));
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível renomear."));
+    }
   };
 
   /* Cor livre, do seletor do sistema operacional. A paleta fixa de seis que
@@ -410,6 +454,38 @@ const PlanilhasPage = () => {
   /* Grava a célula e atualiza só ela na memória — recarregar a planilha
      inteira a cada tecla seria lento e faria o cursor pular. */
   const salvarCelula = async (registroId: string, colunaId: string, valor: unknown) => {
+    /*
+     * A regra de data mínima é conferida aqui ANTES de gravar.
+     *
+     * O servidor também recusa, e é ele quem manda — esta checagem não é a
+     * segurança, é a experiência. Sem ela o valor impossível aparece na tela
+     * (a gravação é otimista), some meio segundo depois quando a resposta
+     * chega, e a planilha inteira recarrega. O usuário vê um piscar sem
+     * entender o que aconteceu.
+     */
+    const coluna = colunas.find((c) => c.id === colunaId);
+
+    if (coluna?.nao_antes_de && valor) {
+      const registro = pagina?.registros.find((r) => r.id === registroId);
+      const limite = registro?.valores[coluna.nao_antes_de];
+      const refNome = colunas.find((c) => c.id === coluna.nao_antes_de)?.nome ?? "a data de referência";
+
+      /* Datas em ISO (`YYYY-MM-DD`) comparam como string na ordem certa —
+         virar `Date` traria fuso para uma conta que não precisa dele. */
+      if (limite && String(valor) < String(limite)) {
+        alert.error(
+          "Data inválida",
+          `${coluna.nome} não pode ser antes de ${refNome} (${String(limite).split("-").reverse().join("/")}).`,
+        );
+
+        /* Recarrega para o campo voltar ao valor bom: o editor da célula já
+           guardou o rascunho, e sem isso ele ficaria mostrando o recusado. */
+        if (aberta) carregarPlanilha(aberta, dataAtual);
+
+        return;
+      }
+    }
+
     setPagina((p) =>
       p ? { ...p, registros: p.registros.map((r) => (r.id === registroId ? { ...r, valores: { ...r.valores, [colunaId]: valor } } : r)) } : p,
     );
@@ -468,18 +544,30 @@ const PlanilhasPage = () => {
    * Carrega só quando o painel abre: é consulta de exceção, não custa nada
    * ficar fora do carregamento da tela.
    */
-  const [historicoAberto, setHistoricoAberto] = useState(false);
+  const [linksAberto, setLinksAberto] = useState(false);
   const [historico, setHistorico] = useState<Alteracao[]>([]);
   const [carregandoHistorico, setCarregandoHistorico] = useState(false);
 
+  /**
+   * O recorte do histórico aberto agora.
+   *
+   * `null` = fechado. Sem filtro = a planilha inteira. Com `registro` e
+   * `coluna` = uma célula só, que é o caso do botão direito — e o motivo de
+   * isto ser um objeto em vez de um booleano: o painel é o mesmo, o que muda é
+   * o que ele pergunta ao servidor.
+   */
+  const [historicoAlvo, setHistoricoAlvo] = useState<null | { registro?: string; coluna?: string; rotulo?: string }>(null);
+
+  const abrirHistorico = (alvo: { registro?: string; coluna?: string; rotulo?: string } = {}) => setHistoricoAlvo(alvo);
+
   useEffect(() => {
-    if (!historicoAberto || !aberta) return;
+    if (!historicoAlvo || !aberta) return;
 
     let vivo = true;
 
     setCarregandoHistorico(true);
 
-    PlanilhaService.historico(aberta.id)
+    PlanilhaService.historico(aberta.id, historicoAlvo.registro, historicoAlvo.coluna)
       .then((lista) => vivo && setHistorico(lista))
       .catch(() => vivo && setHistorico([]))
       .finally(() => vivo && setCarregandoHistorico(false));
@@ -487,7 +575,29 @@ const PlanilhasPage = () => {
     return () => {
       vivo = false;
     };
-  }, [historicoAberto, aberta]);
+  }, [historicoAlvo, aberta]);
+
+  /* Menu de configuração aberto, por id de coluna. Um por vez: dois abertos ao
+     mesmo tempo é ruído, e nenhum menu de planilha do mundo faz isso. */
+  const [menuColuna, setMenuColuna] = useState<string | null>(null);
+
+  /* Menu do botão direito: onde clicou e sobre o quê. */
+  const [menuCelula, setMenuCelula] = useState<null | { x: number; y: number; registroId: string; coluna: Coluna; linha: number }>(null);
+
+  const abrirMenuCelula = (e: React.MouseEvent, registroId: string, coluna: Coluna, linha: number) => {
+    e.preventDefault();
+    setMenuCelula({ x: e.clientX, y: e.clientY, registroId, coluna, linha });
+  };
+
+  /**
+   * `root` de verdade, não `gestor`.
+   *
+   * `ehGestor` inclui quem tem cargo ADMIN, e ADMIN é distribuído por quem
+   * toca a operação. Quem pode editar qual coluna é o dono limitando a própria
+   * equipe — inclusive os ADMIN. Um ADMIN que pudesse editar essa lista se
+   * incluiria nela, e a trava deixaria de ser trava.
+   */
+  const ehRoot = Boolean(user?.root);
 
   /*
    * Renomear por duplo clique, na própria célula do nome.
@@ -839,71 +949,79 @@ const PlanilhasPage = () => {
 
   /* -------------------------- Planilha aberta -------------------------- */
 
-  return (
-    <PageScreen icon={<Table2 className="h-5 w-5" />} title="Planilhas" subtitle={rotuloPeriodo(pagina)}>
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
-        {/* O nome da planilha vive aqui, e não no título da tela: o título diz
-            em que módulo você está ("Planilhas"), o nome diz qual delas — e é
-            o nome que se renomeia, com duplo clique. */}
-        {renomeando?.alvo === "planilha" ? (
-          campoRenome("w-56 text-[15px]")
-        ) : (
-          <button
-            onDoubleClick={() => setRenomeando({ alvo: "planilha", chave: aberta.id, valor: aberta.nome })}
-            title="Clique duas vezes para renomear"
-            className="focus-ring flex items-center gap-2 rounded-lg px-2 py-1 text-[15px] text-ink transition-colors hover:bg-fg/[0.05]"
-          >
-            {aberta.nome}
-          </button>
-        )}
+  /*
+   * Os controles sobem para o cabeçalho da página.
+   *
+   * Eram uma barra própria acima da tabela, e ela custava caro: ~52px de altura
+   * permanente numa tela cujo conteúdo é justamente uma grade que se quer ver o
+   * máximo possível — em notebook isso é duas ou três linhas a menos, sempre. E
+   * a barra ainda repetia informação ("Planilhas" no header, o nome logo
+   * abaixo), gastando espaço para dizer duas vezes onde a pessoa está.
+   */
+  const acoes = (
+    <>
+      <Presenca planilhaId={aberta.id} />
 
-        <button
-          onClick={() => setAberta(null)}
-          aria-label="Ver todas as planilhas"
-          title="Ver todas as planilhas"
-          className="focus-ring grid h-9 w-9 place-items-center rounded-lg border border-fg/[0.1] text-mist hover:text-ink"
-        >
-          <ArrowLeft size={14} />
+      <span className="hidden text-[11.5px] tabular-nums text-faint sm:inline">
+        {pagina?.registros.length ?? 0} {(pagina?.registros.length ?? 0) === 1 ? "linha" : "linhas"}
+      </span>
+
+      <div className="flex items-center rounded-xl border border-fg/[0.1]">
+        <button onClick={() => navegar(-1)} aria-label="Período anterior" title="Período anterior" className="focus-ring grid h-8 w-8 place-items-center rounded-l-xl text-mist transition-colors hover:bg-fg/[0.05] hover:text-ink">
+          <ChevronLeft size={15} />
         </button>
-
-        {/* "Voltar para Planilhas" e "Hoje" saíram daqui: o primeiro virou o
-            próprio cabeçalho da página, e o segundo era um atalho para um
-            período que o rodapé agora mostra por nome. Sobraram as setas, para
-            quem anda de um em um. */}
-        <div className="flex items-center gap-1">
-          <button onClick={() => navegar(-1)} aria-label="Período anterior" className="focus-ring grid h-9 w-9 place-items-center rounded-lg border border-fg/[0.1] text-mist hover:text-ink">
-            <ChevronLeft size={15} />
-          </button>
-          <button onClick={() => navegar(1)} aria-label="Próximo período" className="focus-ring grid h-9 w-9 place-items-center rounded-lg border border-fg/[0.1] text-mist hover:text-ink">
-            <ChevronRight size={15} />
-          </button>
-        </div>
-
-        <button
-          onClick={() => setHistoricoAberto(true)}
-          title="Quem mudou o quê nesta planilha"
-          className="focus-ring flex items-center gap-1.5 rounded-lg border border-fg/[0.1] px-3 py-2 text-[11.5px] text-mist transition-colors hover:text-ink"
-        >
-          <History size={14} />
-          Histórico
+        <span className="h-4 w-px bg-fg/[0.1]" />
+        <button onClick={() => navegar(1)} aria-label="Próximo período" title="Próximo período" className="focus-ring grid h-8 w-8 place-items-center rounded-r-xl text-mist transition-colors hover:bg-fg/[0.05] hover:text-ink">
+          <ChevronRight size={15} />
         </button>
-
-        <span className="text-[11.5px] text-faint">
-          {pagina?.registros.length ?? 0} {(pagina?.registros.length ?? 0) === 1 ? "linha" : "linhas"}
-        </span>
-
-        {/* Presença no canto: quem mais está com esta planilha aberta. */}
-        <div className="ml-auto flex items-center gap-3">
-          <Presenca planilhaId={aberta.id} />
-
-          {gestor && (
-            <button onClick={() => setConfigAberta(true)} className="focus-ring flex items-center gap-1.5 rounded-xl border border-fg/[0.1] px-3 py-2 text-[12px] text-mist transition-colors hover:text-ink">
-              <Settings2 size={14} /> Colunas
-            </button>
-          )}
-
-        </div>
       </div>
+
+      <button
+        onClick={() => abrirHistorico()}
+        title="Quem mudou o quê nesta planilha"
+        aria-label="Histórico"
+        className="focus-ring grid h-8 w-8 place-items-center rounded-xl border border-fg/[0.1] text-mist transition-colors hover:bg-fg/[0.05] hover:text-ink"
+      >
+        <History size={14} />
+      </button>
+
+      {/* Emitir link é criar acesso para fora da empresa: fica com o gestor. */}
+      {gestor && (
+        <button
+          onClick={() => setLinksAberto(true)}
+          title="Link de acompanhamento para o cliente"
+          className="focus-ring flex h-8 items-center gap-1.5 rounded-xl border border-fg/[0.1] px-2.5 text-[12px] text-mist transition-colors hover:bg-fg/[0.05] hover:text-ink"
+        >
+          <Link2 size={14} />
+          <span className="hidden md:inline">Cliente</span>
+        </button>
+      )}
+
+      <button
+        onClick={() => setAberta(null)}
+        title="Ver todas as planilhas"
+        className="focus-ring flex h-8 items-center gap-1.5 rounded-xl border border-fg/[0.1] px-2.5 text-[12px] text-mist transition-colors hover:bg-fg/[0.05] hover:text-ink"
+      >
+        <ArrowLeft size={14} />
+        <span className="hidden md:inline">Planilhas</span>
+      </button>
+    </>
+  );
+
+  return (
+    <PageScreen
+      icon={<Table2 className="h-5 w-5" />}
+      /* O nome da planilha É o título agora. Antes o título dizia "Planilhas" —
+         o módulo, que a barra lateral já indica — e o nome ficava numa linha
+         abaixo. Quem está dentro de uma planilha quer ver qual. */
+      title={aberta.nome}
+      subtitle={rotuloPeriodo(pagina)}
+      actions={acoes}
+    >
+      {/* Renomear continua por duplo clique, agora no cabeçalho da tabela. */}
+      {renomeando?.alvo === "planilha" && (
+        <div className="flex shrink-0 items-center gap-2">{campoRenome("w-56 text-[14px]")}</div>
+      )}
 
       {/* A planilha ocupa todo o espaço restante do outlet. */}
       <div className="card glass-sheen min-h-0 flex-1 overflow-auto">
@@ -911,10 +1029,14 @@ const PlanilhasPage = () => {
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
             <p className="text-[14px] text-ink">Esta planilha ainda não tem colunas</p>
             <p className="max-w-sm text-[12.5px] leading-relaxed text-faint">Defina o que cada coluna representa e de que tipo ela é — texto, seleção, data, imagem.</p>
-            {gestor && (
+
+            {ehRoot ? (
               <button onClick={() => setConfigAberta(true)} className="mt-1 rounded-xl bg-accent px-5 py-2 text-[13px] text-white">
                 Criar colunas
               </button>
+            ) : (
+              /* Quem não é root vê o motivo, e não um vazio sem explicação. */
+              <p className="mt-1 text-[12px] text-faint">Peça ao responsável pela conta para configurar as colunas.</p>
             )}
           </div>
         ) : (
@@ -923,29 +1045,97 @@ const PlanilhasPage = () => {
               <tr>
                 {/* Número da linha, como em planilha de verdade. Gruda na
                     esquerda para não se perder o eixo ao rolar na horizontal. */}
-                <th className="sticky left-0 z-30 w-14 border-b border-r border-fg/[0.07] bg-surface px-2 py-2 text-center text-[10.5px] text-faint">#</th>
+                <th className="sticky left-0 z-30 w-12 border-b border-r border-fg/[0.07] bg-surface-raised px-2 py-2.5 text-center text-[10px] font-medium text-faint">#</th>
 
-                {colunas.map((c) => (
-                  <th
-                    key={c.id}
-                    style={{ minWidth: c.largura ?? 180 }}
-                    className="border-b border-r border-fg/[0.07] bg-surface px-3 py-2 text-[11px] uppercase tracking-[0.08em] text-faint"
-                  >
-                    {c.nome}
-                  </th>
-                ))}
+                {colunas.map((c) => {
+                  const restrita = (c.permissoes?.length ?? 0) > 0;
+                  const interna = c.publico === false;
 
-                <th className="w-10 border-b border-fg/[0.07] bg-surface" />
+                  return (
+                    <th
+                      key={c.id}
+                      style={{ minWidth: c.largura ?? 180 }}
+                      className="relative border-b border-r border-fg/[0.07] bg-surface-raised p-0 font-medium"
+                    >
+                      {/*
+                       * A configuração da coluna mora NO cabeçalho dela.
+                       *
+                       * Era um modal com a lista das treze colunas dentro: para
+                       * mexer em "Prazo" era preciso abrir, achar no meio e
+                       * voltar. Aqui o alvo é o próprio rótulo — clicou, é
+                       * daquela.
+                       */}
+                      {/* Configurar coluna é do root, igual ao painel de
+                          Configurações — renomear e excluir mudam a estrutura
+                          que a equipe inteira preenche. */}
+                      <button
+                        onClick={() => ehRoot && setMenuColuna(menuColuna === c.id ? null : c.id)}
+                        disabled={!ehRoot}
+                        title={ehRoot ? "Configurar coluna" : undefined}
+                        className={`flex w-full items-center gap-1.5 px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.07em] text-mist transition-colors ${
+                          ehRoot ? "hover:bg-fg/[0.04] hover:text-ink" : "cursor-default"
+                        }`}
+                      >
+                        <span className="min-w-0 flex-1 truncate">{c.nome}</span>
+
+                        {/* Os dois estados que mudam o comportamento da coluna
+                            ficam visíveis para TODO MUNDO, não só para o root:
+                            descobrir que uma coluna é restrita só ao tentar
+                            editá-la é tarde. */}
+                        {interna && <EyeOff size={11} className="shrink-0 text-faint" />}
+                        {restrita && <Lock size={11} className="shrink-0 text-accent-soft" />}
+
+                        {ehRoot && <ChevronDown size={11} className={`shrink-0 text-faint transition-transform ${menuColuna === c.id ? "rotate-180" : ""}`} />}
+                      </button>
+
+                      {menuColuna === c.id && ehRoot && (
+                        <MenuColuna
+                          coluna={c}
+                          colunas={colunas}
+                          funcionarios={funcionarios}
+                          ehRoot={ehRoot}
+                          onFechar={() => setMenuColuna(null)}
+                          onRenomear={() => renomearColuna(c)}
+                          onExcluir={() => removerColuna(c)}
+                          onAlternarPermissao={(fid) => alternarPermissao(c, fid)}
+                          onAlternarPublico={(pub) => alternarPublico(c, pub)}
+                          onDefinirDataMinima={(alvo) => definirDataMinima(c, alvo)}
+                        />
+                      )}
+                    </th>
+                  );
+                })}
+
+                {/* Criar coluna virou a última do cabeçalho — o mesmo gesto de
+                    "adicionar linha" no fim da tabela, no outro eixo. */}
+                <th className="w-10 border-b border-fg/[0.07] bg-surface-raised p-0">
+                  {ehRoot && (
+                    <button
+                      onClick={() => setConfigAberta(true)}
+                      title="Configurações da planilha"
+                      aria-label="Configurações da planilha"
+                      className="grid h-full w-full place-items-center py-2.5 text-faint transition-colors hover:bg-fg/[0.04] hover:text-accent-soft"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  )}
+                </th>
               </tr>
             </thead>
 
             <tbody>
               {(pagina?.registros ?? []).map((r, i) => (
-                <tr key={r.id} className="group">
-                  <td className="sticky left-0 z-10 border-b border-r border-fg/[0.05] bg-surface px-2 py-1 text-center text-[11px] tabular-nums text-faint">{i + 1}</td>
+                <tr key={r.id} className="group transition-colors hover:bg-fg/[0.02]">
+                  <td className="sticky left-0 z-10 border-b border-r border-fg/[0.05] bg-surface px-2 py-1 text-center text-[11px] tabular-nums text-faint transition-colors group-hover:text-mist">
+                    {i + 1}
+                  </td>
 
                   {colunas.map((c) => (
-                    <td key={c.id} className="border-b border-r border-fg/[0.05] p-0 align-top">
+                    <td
+                      key={c.id}
+                      onContextMenu={(e) => abrirMenuCelula(e, r.id, c, i + 1)}
+                      className="border-b border-r border-fg/[0.05] p-0 align-top"
+                    >
                       <Celula coluna={c} valor={r.valores[c.id]} editavel={podeEditar(c)} onSalvar={(v) => salvarCelula(r.id, c.id, v)} />
                     </td>
                   ))}
@@ -1058,14 +1248,32 @@ const PlanilhasPage = () => {
       {/* Histórico — leitura, sem ação: a planilha não desfaz mudança, ela
           responde quem fez. Voltar o valor é digitar de novo, e isso a pessoa
           já sabe fazer. */}
-      <Modal open={historicoAberto} onClose={() => setHistoricoAberto(false)} title="Histórico" subtitle={aberta.nome} size="lg">
+      <Modal
+        open={!!historicoAlvo}
+        onClose={() => setHistoricoAlvo(null)}
+        title="Histórico"
+        subtitle={historicoAlvo?.rotulo ?? aberta.nome}
+        size="lg"
+      >
         {carregandoHistorico ? (
           <div className="flex items-center justify-center gap-2 py-10 text-[13px] text-mist">
             <Loader2 size={15} className="animate-spin text-accent" />
             Carregando...
           </div>
         ) : historico.length === 0 ? (
-          <p className="py-10 text-center text-[13px] text-faint">Nenhuma alteração registrada ainda.</p>
+          <div className="py-10 text-center">
+            <p className="text-[13px] text-faint">
+              {historicoAlvo?.coluna ? "Esta célula nunca foi alterada." : "Nenhuma alteração registrada ainda."}
+            </p>
+
+            {/* Sem esta saída, quem chegou pelo botão direito e caiu no vazio
+                teria de fechar e procurar o botão do histórico geral. */}
+            {historicoAlvo?.coluna && (
+              <button onClick={() => abrirHistorico()} className="mt-2 text-[12px] text-accent-soft hover:underline">
+                Ver o histórico da planilha inteira
+              </button>
+            )}
+          </div>
         ) : (
           <div className="flex flex-col divide-y divide-fg/[0.06]">
             {historico.map((h) => {
@@ -1097,8 +1305,83 @@ const PlanilhasPage = () => {
         )}
       </Modal>
 
-      {/* Configuração das colunas */}
-      <Modal open={configAberta} onClose={() => setConfigAberta(false)} title="Colunas da planilha" subtitle={aberta.nome}>
+      {menuCelula && (
+        <MenuContexto
+          x={menuCelula.x}
+          y={menuCelula.y}
+          titulo={`${menuCelula.coluna.nome} · linha ${menuCelula.linha}`}
+          onFechar={() => setMenuCelula(null)}
+          itens={[
+            {
+              id: "hist-celula",
+              rotulo: "Histórico desta célula",
+              icone: History,
+              onClick: () =>
+                abrirHistorico({
+                  registro: menuCelula.registroId,
+                  coluna: menuCelula.coluna.id,
+                  rotulo: `${menuCelula.coluna.nome} · linha ${menuCelula.linha}`,
+                }),
+            },
+            {
+              id: "hist-linha",
+              rotulo: "Histórico da linha",
+              icone: Rows3,
+              onClick: () => abrirHistorico({ registro: menuCelula.registroId, rotulo: `Linha ${menuCelula.linha}` }),
+            },
+            {
+              id: "limpar",
+              rotulo: "Limpar célula",
+              icone: Eraser,
+              separar: true,
+              /* Coluna restrita não é limpável por quem não pode editá-la — o
+                 servidor recusaria, e oferecer a ação seria mentira. */
+              desabilitado: !podeEditar(menuCelula.coluna),
+              onClick: () => salvarCelula(menuCelula.registroId, menuCelula.coluna.id, null),
+            },
+            {
+              id: "config",
+              rotulo: "Configurar coluna",
+              icone: Settings2,
+              desabilitado: !ehRoot,
+              onClick: () => setMenuColuna(menuCelula.coluna.id),
+            },
+            {
+              id: "excluir",
+              rotulo: `Excluir linha ${menuCelula.linha}`,
+              icone: Trash2,
+              separar: true,
+              perigo: true,
+              onClick: () => excluirLinha(menuCelula.registroId),
+            },
+          ]}
+        />
+      )}
+
+      <Modal
+        open={linksAberto}
+        onClose={() => setLinksAberto(false)}
+        title="Acompanhamento do cliente"
+        subtitle={aberta.nome}
+        size="lg"
+      >
+        <LinksCliente planilhaId={aberta.id} colunas={colunas} registros={pagina?.registros ?? []} />
+      </Modal>
+
+      {/*
+       * Configurações da planilha — só o root.
+       *
+       * Era "Colunas", aberto a todo gestor. Virou o painel onde se decide QUEM
+       * mexe em quê, e isso é o dono limitando a própria equipe: `ehGestor`
+       * inclui o cargo ADMIN, que o dono distribui para quem toca a operação.
+       * Um ADMIN com acesso a esta tela se incluiria em qualquer coluna, e a
+       * restrição deixaria de restringir.
+       *
+       * O atalho por coluna (menu do cabeçalho) mostra o mesmo e obedece à
+       * mesma regra — os dois chamam `alternarPermissao`, então não há como um
+       * dizer uma coisa e o outro dizer outra.
+       */}
+      <Modal open={configAberta && ehRoot} onClose={() => setConfigAberta(false)} title="Configurações" subtitle={aberta.nome}>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             {colunas.map((c) => (

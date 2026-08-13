@@ -1,6 +1,7 @@
 import useEnterprise from "@/features/empresa/store/enterprise.store";
 import { MapPin, Building2, Phone, BadgeCheck } from "lucide-react";
 import { formatDocument } from "@/shared/utils/format";
+import { podeMostrarDocumento, rotuloDocumento } from "@/shared/utils/documento";
 import { maskPhone } from "@/shared/validation/masks";
 
 const HeaderInterprise = () => {
@@ -10,6 +11,10 @@ const HeaderInterprise = () => {
 
   const endereco = enterprise.endereco;
   const contato = enterprise.contato;
+
+  /* CNPJ sempre sai; CPF só se a empresa tiver desligado a opção — que vem
+     ligada de fábrica. Ver `shared/utils/documento`. */
+  const documento = podeMostrarDocumento(enterprise.cpfCnpj, enterprise.ocultarCpfNota);
 
   return (
     <div className="flex items-start gap-5">
@@ -72,11 +77,14 @@ const HeaderInterprise = () => {
             </div>
           )}
 
-          {(contato?.telefone || enterprise.cpfCnpj) && (
+          {(contato?.telefone || documento) && (
             <div className="flex flex-wrap items-center gap-3 text-sm text-mist">
               <Phone size={16} className="shrink-0 text-muted" />
               {contato?.telefone && <span>{maskPhone(String(contato.telefone))}</span>}
-              {enterprise.cpfCnpj && <span className="text-muted">• CNPJ {formatDocument(enterprise.cpfCnpj)}</span>}
+              {/* O rótulo vem do documento, não cravado: a linha dizia "CNPJ"
+                  sempre, e quem abriu a conta como pessoa física via o próprio
+                  CPF rotulado errado em toda nota. */}
+              {documento && <span className="text-muted">• {rotuloDocumento(enterprise.cpfCnpj)} {formatDocument(enterprise.cpfCnpj)}</span>}
             </div>
           )}
         </div>

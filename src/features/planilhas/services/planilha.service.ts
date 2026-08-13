@@ -52,6 +52,10 @@ export type Coluna = {
   valor_padrao: string | null;
   /** Ids que podem editar. Vazio = todos. */
   permissoes: string[];
+  /** `false` esconde do link do cliente, em todos os links. */
+  publico: boolean;
+  /** Coluna DATA que serve de mínimo para esta, na mesma linha. */
+  nao_antes_de: string | null;
 };
 
 export type Registro = {
@@ -76,6 +80,31 @@ export type ModeloCatalogo = {
   exclusivo: boolean;
 };
 
+
+/** Um link de acompanhamento entregue a um cliente. */
+export type LinkPublico = {
+  id: string;
+  token: string;
+  cliente_nome: string;
+  coluna_cliente_fk: string;
+  ativo: boolean;
+  expira_em: string | null;
+  visitas: number;
+  visto_em: string | null;
+  criado_em: string;
+};
+
+export type TemaMarca = "claro" | "escuro" | "degrade";
+
+/** A identidade visual que a página do cliente veste. */
+export type MarcaEmpresa = {
+  nome: string;
+  logo: string | null;
+  cor: string | null;
+  tema: TemaMarca;
+  capa: string | null;
+  whatsapp: string | null;
+};
 
 const lista = <T>(r: { data?: { data?: T[] } }): T[] => r.data?.data ?? [];
 const um = <T>(r: { data?: { data?: T[] } }): T => (r.data?.data ?? [])[0] as T;
@@ -122,9 +151,52 @@ const PlanilhaService = {
     await sysgrafix.patch(`/planilhas/${modeloId}/paginas`, { competencia, nome });
   },
 
-  /** Quem mudou o quê. Sem `registroId`, a planilha inteira. */
-  async historico(modeloId: string, registroId?: string) {
-    return lista<Alteracao>(await sysgrafix.get(`/planilhas/${modeloId}/historico`, { params: registroId ? { registro: registroId } : undefined }));
+  /* --------- Links de acompanhamento (o que o cliente abre) --------- */
+
+  async links(modeloId: string) {
+    return lista<LinkPublico>(await sysgrafix.get(`/planilhas/${modeloId}/links`));
+  },
+
+  /**
+   * Emite o link de um cliente.
+   *
+   * Chamar duas vezes para o mesmo cliente devolve o MESMO link com a validade
+   * renovada — o servidor trata isso, então a tela não precisa checar antes.
+   */
+  async criarLink(
+    modeloId: string,
+    dados: { clienteNome: string; colunaClienteId?: string; colunasVisiveis?: string[]; validadeDias?: number | null },
+  ) {
+    return um<LinkPublico>(await sysgrafix.post(`/planilhas/${modeloId}/links`, dados));
+  },
+
+  async revogarLink(linkId: string) {
+    await sysgrafix.delete(`/planilhas/links/${linkId}`);
+  },
+
+  /** Logo, cor e contato — o que a página do cliente veste. */
+  async marca() {
+    return um<MarcaEmpresa>(await sysgrafix.get("/planilhas/marca"));
+  },
+
+  /**
+   * Campo omitido não é tocado; campo vazio limpa. Mandar `{ cor }` sozinho
+   * não apaga o tema nem a capa.
+   */
+  async salvarMarca(dados: { cor?: string | null; tema?: TemaMarca | null; capa?: string | null }) {
+    await sysgrafix.patch("/planilhas/marca", dados);
+  },
+
+  /** Quem mudou o quê. Sem filtro, a planilha inteira; com os dois, a célula. */
+  async historico(modeloId: string, registroId?: string, colunaId?: string) {
+    const params: Record<string, string> = {};
+
+    if (registroId) params.registro = registroId;
+    if (colunaId) params.coluna = colunaId;
+
+    return lista<Alteracao>(
+      await sysgrafix.get(`/planilhas/${modeloId}/historico`, { params: Object.keys(params).length ? params : undefined }),
+    );
   },
 
   async colunas(modeloId: string) {

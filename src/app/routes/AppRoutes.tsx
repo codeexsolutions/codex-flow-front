@@ -32,6 +32,7 @@ import FuncionariosPage from "@/features/funcionarios/pages/FuncionariosPage";
 import OrcamentosPage from "@/features/orcamentos/pages/OrcamentosPage";
 import AjudaPage from "@/features/ajuda/pages/AjudaPage";
 import PlanilhasPage from "@/features/planilhas/pages/PlanilhasPage";
+import AcompanharProducaoPage from "@/features/acompanhamento/pages/AcompanharProducaoPage";
 import { ehGestor } from "@/features/vendas/components/TabsVendas";
 
 import CheckoutPage from "@/features/checkout/pages/CheckoutPage";
@@ -53,6 +54,19 @@ import ProfilePage from "@/features/config/pages/ProfilePage";
 import AparenciaTab from "@/features/config/pages/AparenciaPage";
 
 const PUBLIC_PATHS = ["/login", "/cadastro", "/planos", "/page"];
+
+/**
+ * O acompanhamento do cliente — `/p/<token>`.
+ *
+ * Fica fora de `PUBLIC_PATHS` porque aquela lista é de caminhos exatos e este
+ * tem token variável. E não basta acrescentar: `PUBLIC_PATHS` só livra da
+ * exigência de login. Esta tela precisa escapar de TODOS os desvios, inclusive
+ * os que valem para quem ESTÁ logado — o dono da gráfica conferindo o link do
+ * cliente cairia no `/checkout` se a empresa dele estivesse inadimplente, e
+ * veria a tela de espera enquanto a empresa carregasse. Nos dois casos, o link
+ * pareceria quebrado para quem só queria conferi-lo.
+ */
+const ehAcompanhamento = (path: string) => path.startsWith("/p/");
 
 /**
  * No celular a tela de carregamento não aparece: ela competia com a animação
@@ -95,6 +109,17 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
     if (isLogged && user?.ativo) carregarPlano();
     else limparPlano();
   }, [isLogged, user?.ativo, carregarPlano, limparPlano]);
+
+  /* Antes de qualquer desvio, e depois de todos os hooks: quem chega por um
+     link de acompanhamento não é usuário do sistema e não deve ser mandado a
+     lugar nenhum. Ver `ehAcompanhamento`. */
+  if (ehAcompanhamento(path)) {
+    return (
+      <Routes>
+        <Route path="/p/:token" element={<AcompanharProducaoPage />} />
+      </Routes>
+    );
+  }
 
   if (!isLogged && !isPublic) {
     return <Navigate to="/login" replace />;

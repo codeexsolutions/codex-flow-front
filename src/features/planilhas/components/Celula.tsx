@@ -4,6 +4,7 @@ import { Check, ImagePlus } from "lucide-react";
 import type { Coluna } from "@/features/planilhas/services/planilha.service";
 import { formatCurrency } from "@/shared/utils/currency";
 import useClienteStore from "@/features/clientes/store/cliente.store";
+import ComboCliente from "@/features/planilhas/components/ComboCliente";
 
 type Props = {
   coluna: Coluna;
@@ -133,26 +134,29 @@ const Celula = ({ coluna, valor, onSalvar, editavel = true }: Props) => {
    * forte fica para quando existir relatório cruzando as duas coisas.
    */
   if (coluna.tipo === "CLIENTE") {
+    /*
+     * Campo com lista, e não uma lista fechada.
+     *
+     * Era um `<select>`: só dava para escolher o que já estava no cadastro.
+     * Num balcão isso trava o trabalho — o pedido chega antes de o cliente
+     * virar cadastro, e a pessoa precisava sair da planilha, cadastrar, voltar
+     * e achar a linha de novo. Pior num cadastro grande, onde achar o nome numa
+     * lista de trezentos sem poder digitar é rolagem pura.
+     *
+     * Agora dá para digitar e escolher. O nome digitado à mão é gravado como
+     * está, que é o mesmo que a planilha sempre fez com cliente excluído do
+     * cadastro — o valor é o NOME, não uma referência.
+     */
     return (
-      <select
-        data-celula={coluna.id}
-        value={rascunho}
-        onChange={(e) => {
-          setRascunho(e.target.value);
-          confirmar(e.target.value);
+      <ComboCliente
+        valor={rascunho}
+        opcoes={clientes.map((c) => c.nome).filter(Boolean)}
+        colunaId={coluna.id}
+        onEscolher={(v) => {
+          setRascunho(v);
+          confirmar(v);
         }}
-        className={`${base} cursor-pointer`}
-      >
-        <option value="">—</option>
-        {/* Nome já gravado que não está mais no cadastro continua aparecendo:
-            cliente excluído não pode apagar o histórico da planilha. */}
-        {rascunho && !clientes.some((c) => c.nome === rascunho) && <option value={rascunho}>{rascunho}</option>}
-        {clientes.map((c) => (
-          <option key={c.id} value={c.nome}>
-            {c.nome}
-          </option>
-        ))}
-      </select>
+      />
     );
   }
 

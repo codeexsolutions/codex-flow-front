@@ -34,6 +34,7 @@ import useAuth from "@/features/auth/store/auth.store";
 import useClientes from "@/features/clientes/store/cliente.store";
 import { maskPhone } from "@/shared/validation/masks";
 import { formatDocument } from "@/shared/utils/format";
+import { podeMostrarDocumento } from "@/shared/utils/documento";
 import PagamentoForm from "@/shared/ui/PagamentoForm";
 
 const gerarUID = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -99,7 +100,12 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
      só para enriquecer a nota. */
   const clienteCadastro = clientes.find((c) => c.id === clienteId);
 
-  const documentoCliente = clienteCadastro?.cpfCnpj ? formatDocument(String(clienteCadastro.cpfCnpj)) : "";
+  /* Mesma regra do documento da empresa: CNPJ sai, CPF só se a opção estiver
+     desligada. O do cliente é ainda menos assunto de quem recebe a via — e é
+     ele que a nota circula junto do nome e do telefone. */
+  const documentoCliente = podeMostrarDocumento(clienteCadastro?.cpfCnpj, enterprise?.ocultarCpfNota)
+    ? formatDocument(String(clienteCadastro?.cpfCnpj))
+    : "";
   const emailCliente = clienteCadastro?.contato?.email ?? "";
 
   const telefoneCliente = (() => {

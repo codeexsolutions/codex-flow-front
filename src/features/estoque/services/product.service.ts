@@ -14,7 +14,19 @@ const ProductService = {
    */
   update: async (data: ProdutoUpdateDto) => await sysgrafix.patch(`/produtos/alterar/`, data),
 
-  remove: async (id: string) => await sysgrafix.delete(`/produtos/${id}`),
+  /**
+   * Devolve a frase do servidor, e não só a resposta crua.
+   *
+   * Excluir tem dois desfechos: o produto some de vez (nunca foi vendido) ou
+   * sai do estoque e continua nos pedidos em que apareceu. Quem apaga precisa
+   * saber em qual dos dois caiu — a tela dizer sempre "excluído" faria a pessoa
+   * procurar o produto no histórico achando que sumiu de lá também.
+   */
+  remove: async (id: string): Promise<string> => {
+    const { data } = await sysgrafix.delete(`/produtos/${id}`);
+
+    return data?.message ?? "Produto excluído.";
+  },
 };
 
 export default ProductService;

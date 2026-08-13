@@ -8,6 +8,13 @@ interface EnterpriseType {
   urlLogo?: string;
   /** Imagem de fundo (wallpaper) da nota de venda e do orçamento. */
   notaBackground?: string;
+  /**
+   * `true` (padrão) omite CPF da nota — o da empresa e o do cliente.
+   *
+   * CNPJ nunca é escondido: é público e é o que identifica a empresa. CPF é
+   * dado pessoal, e a nota é um documento que circula por WhatsApp e balcão.
+   */
+  ocultarCpfNota?: boolean;
   ativo: boolean;
   endereco?: {
     logradouro: string;

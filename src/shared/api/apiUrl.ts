@@ -13,7 +13,18 @@
  */
 
 const PRODUCAO = "https://codex-flow-production.up.railway.app/v1";
-const LOCAL = "http://localhost:3000/v1";
+
+/**
+ * O IP da máquina de desenvolvimento na VPN, e não `localhost`.
+ *
+ * `localhost` é resolvido pelo aparelho que ABRE a página: no celular ou no
+ * notebook do lado, ele aponta para o próprio aparelho, onde não há API
+ * nenhuma. O sintoma é o app abrir e nada carregar — só na máquina do dev
+ * funciona, o que faz o problema parecer de rede.
+ *
+ * Continua sendo só o último recurso: `VITE_API_LOCAL` vence.
+ */
+const LOCAL = "http://26.242.6.51:3000/v1";
 
 const doAmbiente = import.meta.env.PROD ? import.meta.env.VITE_API_PRODUCTION : import.meta.env.VITE_API_LOCAL;
 

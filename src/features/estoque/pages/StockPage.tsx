@@ -185,10 +185,14 @@ const Estoque = () => {
     if (!selectedProduct?.id) return;
     setError(null);
     try {
-      await ProductService.remove(selectedProduct.id);
+      const mensagem = await ProductService.remove(selectedProduct.id);
+
       fechar();
       await load();
-      alert.success("Produto excluído!", "O produto foi removido do estoque.");
+
+      /* A frase vem do servidor: só ele sabe se o produto foi apagado ou
+         apenas tirado do estoque por já estar em pedidos. */
+      alert.success("Pronto!", mensagem);
     } catch (err) {
       alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível excluir o produto."));
     }

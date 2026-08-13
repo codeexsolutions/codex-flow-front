@@ -40,6 +40,21 @@ const useEnterprise = create<useEnterpriseProps>((set) => ({
       throw err;
     }
   },
+
+  /**
+   * Troca o CPF pelo CNPJ.
+   *
+   * Separado de `updateEnterprise` porque o servidor pode RECUSAR (formato
+   * inválido, documento já usado por outra empresa) — e aí o estado local não
+   * pode ser atualizado. O `update` comum assume que passou.
+   */
+  changeDocument: async (id, cpfCnpj) => {
+    await EnterpriseService.changeDocument(id, cpfCnpj);
+
+    set((state) => ({
+      enterprise: state.enterprise ? { ...state.enterprise, cpfCnpj } : null,
+    }));
+  },
 }));
 
 export default useEnterprise;
