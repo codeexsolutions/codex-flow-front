@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
 import {
-  LayoutDashboard,
   DollarSign,
   Wallet,
   AlertCircle,
@@ -15,6 +14,7 @@ import {
   ShoppingCart,
   AlertTriangle,
   Receipt,
+  FileText,
   Trophy,
   BarChart3,
   Boxes,
@@ -36,6 +36,7 @@ import useAuth from "@/features/auth/store/auth.store";
 import useVendaStore from "@/features/vendas/store/venda.store";
 import useClienteStore from "@/features/clientes/store/cliente.store";
 import useProdutoStore, { stockLevel } from "@/features/estoque/store/produto.store";
+import OrcamentoService, { type Orcamento } from "@/features/orcamentos/services/orcamento.service";
 
 import { estaAberto, estaFechado, estaCancelado, totalDoPedido } from "@/shared/domain/pedido";
 import { formatCurrency } from "@/shared/utils/currency";
@@ -306,6 +307,11 @@ const DashboardPage = () => {
   const produtos = useProdutoStore((s) => s.produtos);
   const fetchProdutos = useProdutoStore((s) => s.fetchProdutos);
 
+  /* Orçamento não tem store: a tela dele busca direto no serviço. Aqui é a
+     mesma leitura — a lista inteira, contada localmente. */
+  const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
+  const [carregandoOrcamentos, setCarregandoOrcamentos] = useState(true);
+
   /* Um hook por linha, e só depois o `||`. Encadeados numa expressão só, o
      curto-circuito faria os seguintes não serem chamados quando o primeiro
      fosse verdadeiro — e ordem de hook que muda entre renders quebra o React. */
@@ -315,13 +321,31 @@ const DashboardPage = () => {
 
   /* O painel só aparece quando as três fontes chegam: KPI de vendas com estoque
      ainda vazio faz o número "pular" na frente de quem está lendo. */
-  const carregando = carregandoVendas || carregandoClientes || carregandoProdutos;
+  const carregando = carregandoVendas || carregandoClientes || carregandoProdutos || carregandoOrcamentos;
 
   useEffect(() => {
     fetchVendas();
     fetchClientes();
     fetchProdutos();
   }, [fetchVendas, fetchClientes, fetchProdutos]);
+
+  useEffect(() => {
+    let vivo = true;
+
+    /* Falha de orçamento não pode travar o painel inteiro: sem a lista o KPI
+       mostra zero, mas os outros números continuam de pé. */
+    OrcamentoService.listar()
+      .then((lista) => vivo && setOrcamentos(lista))
+      .catch(() => vivo && setOrcamentos([]))
+      .finally(() => vivo && setCarregandoOrcamentos(false));
+
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  /* Quantos orçamentos ainda esperam resposta — o número que vira trabalho. */
+  const orcamentosAbertos = useMemo(() => orcamentos.filter((o) => o.status === "ABERTO").length, [orcamentos]);
 
   const dados = useMemo(() => {
     const agora = new Date();
@@ -454,13 +478,60 @@ const DashboardPage = () => {
 
   const primeiroNome = user?.nome?.trim().split(/\s+/)[0];
 
+  /**
+   * Como está o dia — vira o subtítulo do cabeçalho.
+   *
+   * É o recorte que o resto da tela não dá: todo o painel fala de mês, e quem
+   * abre o sistema de manhã quer saber do turno de hoje.
+   */
+  const resumoDoDia = useMemo(() => {
+    const partes = [
+      dados.vendasHoje > 0
+        ? `${formatCurrency(dados.faturadoHoje)} em ${dados.vendasHoje} ${dados.vendasHoje === 1 ? "venda" : "vendas"} hoje`
+        : "Nenhuma venda registrada hoje ainda",
+    ];
+
+    if (dados.abertasAgora > 0) {
+      partes.push(`${dados.abertasAgora} ${dados.abertasAgora === 1 ? "nota em aberto" : "notas em aberto"}`);
+    }
+
+    return partes.join(" · ");
+  }, [dados.vendasHoje, dados.faturadoHoje, dados.abertasAgora]);
+
   const ATALHOS = [
     { label: "Nova venda", icone: ShoppingCart, para: "/pdv" },
     { label: "Clientes", icone: Users, para: "/clientes" },
     { label: "Estoque", icone: Package, para: "/estoque" },
-    { label: "Financeiro", icone: Wallet, para: "/vendas/financeiro" },
+    { label: "Caixa", icone: Wallet, para: "/vendas/caixa" },
     { label: "Relatórios", icone: BarChart3, para: "/relatorios" },
   ];
+
+  /**
+   * Os caminhos para o trabalho, no cabeçalho.
+   *
+   * Moravam numa faixa própria logo abaixo dele, junto da saudação — uma
+   * segunda barra de identidade empilhada sobre a primeira, gastando ~70px de
+   * altura para repetir o que o cabeçalho já é. A saudação virou o título da
+   * tela (numa home, "Boa noite, Fulano" diz mais que "Dashboard") e os
+   * atalhos ocuparam o espaço que sobrava à direita.
+   */
+  const atalhos = (
+    <>
+      {ATALHOS.map(({ label, icone: Icone, para }) => (
+        <motion.button
+          key={para}
+          whileHover={{ y: -2 }}
+          whileTap={{ scale: 0.97 }}
+          transition={{ type: "spring", stiffness: 500, damping: 30 }}
+          onClick={() => navigate(para)}
+          className="focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-fg/[0.08] bg-fg/[0.03] px-3 py-2 text-[11.5px] text-mist transition-colors hover:border-accent/40 hover:text-ink"
+        >
+          <Icone size={13} />
+          {label}
+        </motion.button>
+      ))}
+    </>
+  );
 
   if (mobile) {
     return (
@@ -473,6 +544,8 @@ const DashboardPage = () => {
           vendasNoMes={dados.vendasNoMes}
           totalClientes={clientes.length}
           totalProdutos={produtos.length}
+          totalOrcamentos={orcamentos.length}
+          orcamentosAbertos={orcamentosAbertos}
           porMes={dados.porMes}
           recentes={dados.recentes.map((v) => ({
             id: v.pedido.pedidoId,
@@ -486,69 +559,24 @@ const DashboardPage = () => {
           onIrParaEstoque={() => navigate("/estoque")}
           onIrParaVendas={() => navigate("/vendas/lista")}
           onIrParaClientes={() => navigate("/clientes")}
+          onIrParaOrcamentos={() => navigate("/pdv/orcamentos")}
         />
       </div>
     );
   }
 
   return (
-    <PageScreen icon={<LayoutDashboard className="h-5 w-5" />} title="Dashboard" subtitle="Visão geral do seu negócio">
-      {/*
-       * Faixa de abertura: quem está usando, como está o dia e para onde ir.
-       *
-       * O dia é o recorte que o resto da tela não dá — todo o painel fala de
-       * mês, e quem abre o sistema de manhã quer saber do turno de hoje. Os
-       * atalhos ficam aqui porque a dashboard é a tela onde se chega, não onde
-       * se fica: o caminho para o trabalho tem que estar à mão.
-       */}
-      <Bloco i={0}>
-        <section className="card glass-sheen flex shrink-0 flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3.5">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/20">
-              <saudacao.Icone size={17} />
-            </span>
-
-            <div className="min-w-0">
-              <p className="truncate text-[14px] text-ink">
-                {saudacao.texto}
-                {primeiroNome ? `, ${primeiroNome}` : ""}
-              </p>
-              <p className="mt-0.5 truncate text-[11.5px] text-faint">
-                {dados.vendasHoje > 0 ? (
-                  <>
-                    <span className="text-success">{formatCurrency(dados.faturadoHoje)}</span> em {dados.vendasHoje} {dados.vendasHoje === 1 ? "venda" : "vendas"} hoje
-                  </>
-                ) : (
-                  "Nenhuma venda registrada hoje ainda"
-                )}
-                {dados.abertasAgora > 0 ? ` · ${dados.abertasAgora} ${dados.abertasAgora === 1 ? "nota em aberto" : "notas em aberto"}` : ""}
-              </p>
-            </div>
-          </div>
-
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            {ATALHOS.map(({ label, icone: Icone, para }) => (
-              <motion.button
-                key={para}
-                whileHover={{ y: -2 }}
-                whileTap={{ scale: 0.97 }}
-                transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                onClick={() => navigate(para)}
-                className="focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-fg/[0.08] bg-fg/[0.03] px-3 py-2 text-[11.5px] text-mist transition-colors hover:border-accent/40 hover:text-ink"
-              >
-                <Icone size={13} />
-                {label}
-              </motion.button>
-            ))}
-          </div>
-        </section>
-      </Bloco>
-
+    <PageScreen
+      icon={<saudacao.Icone className="h-5 w-5" />}
+      title={`${saudacao.texto}${primeiroNome ? `, ${primeiroNome}` : ""}`}
+      subtitle={resumoDoDia}
+      actions={atalhos}
+    >
       {/* KPIs */}
       {carregando ? (
         <SkeletonKpis />
       ) : (
-        <Bloco i={1} className="grid shrink-0 grid-cols-2 gap-3 xl:grid-cols-5">
+        <Bloco i={0} className="grid shrink-0 grid-cols-2 gap-3 xl:grid-cols-6">
           <Kpi
             icon={<DollarSign size={16} />}
             label="Faturado no mês"
@@ -581,11 +609,19 @@ const DashboardPage = () => {
             tone="accent"
           />
           <Kpi icon={<Users size={16} />} label="Clientes" valor={clientes.length} moeda={false} hint={`${formatNumber(produtos.length)} produtos cadastrados`} tone="danger" />
+          <Kpi
+            icon={<FileText size={16} />}
+            label="Orçamentos"
+            valor={orcamentos.length}
+            moeda={false}
+            hint={orcamentosAbertos > 0 ? `${formatNumber(orcamentosAbertos)} aguardando resposta` : "nenhum em aberto"}
+            tone="warning"
+          />
         </Bloco>
       )}
 
       {/* Gráfico do ano, agora dividindo a linha com a rosca de recebimento */}
-      <Bloco i={2} className="grid shrink-0 grid-cols-1 gap-3 xl:grid-cols-3">
+      <Bloco i={1} className="grid shrink-0 grid-cols-1 gap-3 xl:grid-cols-3">
         <section className="card glass-sheen overflow-hidden xl:col-span-2">
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-fg/[0.07] px-4 py-3">
             <div className="flex items-center gap-2.5">
@@ -725,13 +761,13 @@ const DashboardPage = () => {
           )}
         </section>
 
-        <Painel title="Como receberam" subtitle="última forma de cada nota quitada no mês" icon={<CreditCard size={15} />} action={<VerTudo onClick={() => navigate("/vendas/financeiro")} />}>
+        <Painel title="Como receberam" subtitle="última forma de cada nota quitada no mês" icon={<CreditCard size={15} />} action={<VerTudo onClick={() => navigate("/vendas/caixa")} />}>
           {carregando ? <SkeletonGrafico altura={176} /> : dados.formas.length === 0 ? <Vazio>Nenhuma nota quitada neste mês.</Vazio> : <Rosca fatias={dados.formas.map((f) => ({ nome: f.forma, valor: f.total }))} formatar={formatCurrency} />}
         </Painel>
       </Bloco>
 
       {/* Rankings, em barras */}
-      <Bloco i={3} className="grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-2">
+      <Bloco i={2} className="grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-2">
         <Painel title="Quem mais comprou" subtitle="no mês, por valor" icon={<Trophy size={15} />} action={<VerTudo onClick={() => navigate("/clientes")} />}>
           {carregando ? (
             <SkeletonGrafico altura={176} />
@@ -762,7 +798,7 @@ const DashboardPage = () => {
       </Bloco>
 
       {/* Listas */}
-      <Bloco i={4} className="grid min-h-[280px] shrink-0 grid-cols-1 gap-3 lg:grid-cols-2">
+      <Bloco i={3} className="grid min-h-[280px] shrink-0 grid-cols-1 gap-3 lg:grid-cols-2">
         <Painel title="Últimas vendas" icon={<ShoppingCart size={15} />} action={<VerTudo onClick={() => navigate("/vendas/lista")} />}>
           {carregando ? (
             <SkeletonListaPainel />
