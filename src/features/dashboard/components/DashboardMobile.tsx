@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Eye, EyeOff, ChevronRight, TrendingUp, AlertTriangle, FileText, Package, ShoppingCart, Users } from "lucide-react";
+import { Eye, EyeOff, ChevronRight, TrendingUp, AlertTriangle, Package, ShoppingCart, Users } from "lucide-react";
 
 import { formatNumber, getInitials } from "@/shared/utils/format";
 import { formatDate } from "@/shared/utils/date";
@@ -16,9 +16,6 @@ type Props = {
   vendasNoMes: number;
   totalClientes: number;
   totalProdutos: number;
-  totalOrcamentos: number;
-  /** Dos orçamentos, quantos ainda aguardam resposta do cliente. */
-  orcamentosAbertos: number;
   /** 12 meses, para o gráfico de barras. */
   porMes: { name: string; faturado: number }[];
   recentes: VendaRecente[];
@@ -27,7 +24,6 @@ type Props = {
   onIrParaEstoque: () => void;
   onIrParaVendas: () => void;
   onIrParaClientes: () => void;
-  onIrParaOrcamentos: () => void;
 };
 
 const saudacao = () => {
@@ -59,8 +55,6 @@ const DashboardMobile = ({
   vendasNoMes,
   totalClientes,
   totalProdutos,
-  totalOrcamentos,
-  orcamentosAbertos,
   porMes,
   recentes,
   criticos,
@@ -68,7 +62,6 @@ const DashboardMobile = ({
   onIrParaEstoque,
   onIrParaVendas,
   onIrParaClientes,
-  onIrParaOrcamentos,
 }: Props) => {
   const { mostrar, alternar, dinheiro } = useDinheiroVisivel();
 
@@ -188,24 +181,6 @@ const DashboardMobile = ({
             <Package size={13} /> Produtos
           </span>
           <span className="text-[19px] leading-none text-ink">{formatNumber(totalProdutos)}</span>
-        </button>
-
-        {/* Ocupa a linha inteira: em três colunas o rótulo "Orçamentos" não
-            cabe ao lado do número neste tamanho de tela. */}
-        <button
-          type="button"
-          onClick={onIrParaOrcamentos}
-          className="focus-ring col-span-2 flex min-h-[68px] items-center justify-between gap-3 rounded-2xl border border-fg/[0.07] px-4 text-left active:bg-fg/[0.04]"
-        >
-          <span className="flex min-w-0 flex-col gap-1">
-            <span className="flex items-center gap-1.5 text-[11px] text-faint">
-              <FileText size={13} /> Orçamentos
-            </span>
-            <span className="text-[19px] leading-none text-ink">{formatNumber(totalOrcamentos)}</span>
-          </span>
-          <span className={`shrink-0 text-[11px] ${orcamentosAbertos > 0 ? "text-warning" : "text-faint"}`}>
-            {orcamentosAbertos > 0 ? `${formatNumber(orcamentosAbertos)} aguardando resposta` : "nenhum em aberto"}
-          </span>
         </button>
       </div>
 
