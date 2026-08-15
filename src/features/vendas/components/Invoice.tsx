@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
 import HeaderInterprise from "@/shared/ui/HeaderInterprise";
 
 import { formatDate } from "@/shared/utils/date";
@@ -35,7 +34,9 @@ import useClientes from "@/features/clientes/store/cliente.store";
 import { maskPhone } from "@/shared/validation/masks";
 import { formatDocument } from "@/shared/utils/format";
 import { podeMostrarDocumento } from "@/shared/utils/documento";
-import PagamentoForm from "@/shared/ui/PagamentoForm";
+import PrazoNota from "@/features/vendas/components/PrazoNota";
+import PainelPagamento from "@/features/vendas/components/PainelPagamento";
+import ContaService, { type AcordoVenda } from "@/features/financeiro/services/conta.service";
 
 const gerarUID = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -144,6 +145,12 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
   const [valorPagoAnterior, setValorPagoAnterior] = useState(0);
   const [confirmandoPagamento, setConfirmandoPagamento] = useState(false);
 
+  /* ─── Venda a prazo ───
+     O acordo é a conta a receber que nasceu desta nota: as parcelas e seus
+     vencimentos. `null` = nota à vista, que é a maioria. */
+  const [acordo, setAcordo] = useState<AcordoVenda | null>(null);
+  const [carregandoAcordo, setCarregandoAcordo] = useState(!!idInicial);
+
 
   /* ─── UI state ─── */
   const [tipoPagamento, setTipoPagamento] = useState("");
@@ -204,6 +211,46 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
       .catch((err) => alert.error(getErrorTitle(err), extractErrorMessage(err, "Erro ao carregar o pedido.")))
       .finally(() => setLoadingPedido(false));
   }, [id]);
+
+  /* ─── Carrega o acordo de prazo ───
+     Em paralelo ao pedido, e sem derrubar a nota se falhar: a venda continua
+     legível e recebível mesmo que o financeiro esteja fora do ar. */
+  useEffect(() => {
+    if (!id) {
+      setAcordo(null);
+      return;
+    }
+
+    setCarregandoAcordo(true);
+
+    ContaService.acordoDaVenda(id)
+      .then(setAcordo)
+      .catch(() => setAcordo(null))
+      .finally(() => setCarregandoAcordo(false));
+  }, [id]);
+
+  /**
+   * Relê nota e acordo juntos.
+   *
+   * Receber uma parcela mexe nos dois — a baixa abate o saldo da nota no
+   * servidor. Recarregar só um deixaria a tela mostrando um pagamento que o
+   * outro lado não conhece.
+   */
+  const recarregarNotaEPrazo = async () => {
+    if (!id) return;
+
+    const [pedidoAtualizado, acordoAtual] = await Promise.all([
+      NoteService.getById(id).catch(() => null),
+      ContaService.acordoDaVenda(id).catch(() => null),
+    ]);
+
+    if (pedidoAtualizado) {
+      setPedido(pedidoAtualizado);
+      setValorPagoAnterior(Number(pedidoAtualizado.pedido.valorPago ?? 0));
+    }
+
+    setAcordo(acordoAtual);
+  };
 
   /* ─── Produtos ─── */
   /* `avisar` existe para o cadastro feito de dentro da nota: lá o produto entra
@@ -1040,6 +1087,25 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
               )}
             </div>
 
+            {/* Venda a prazo no celular.
+                A coluna de recebimento só existe a partir de `lg`; sem isto,
+                combinar vencimento e dar baixa em parcela seria coisa de
+                desktop — e boa parte das vendas a prazo é fechada no balcão,
+                no celular. `data-sem-foto` mantém tudo fora do PNG: é
+                ferramenta de quem atende, não parte do documento. */}
+            {!modoOrcamento && id && (
+              <div data-sem-foto className="px-5 pb-2 lg:hidden">
+                <PrazoNota
+                  pedidoId={id}
+                  pendente={pendente}
+                  clienteNome={pedido?.nomeCliente || nome}
+                  acordo={acordo}
+                  carregando={carregandoAcordo}
+                  onAtualizar={recarregarNotaEPrazo}
+                />
+              </div>
+            )}
+
             {/* O copia-e-cola do Pix saiu daqui.
                 Era um bloco largo com o código inteiro quebrado em várias
                 linhas — ocupava mais altura que o resumo da venda para uma
@@ -1128,59 +1194,22 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
          */}
         {/* Pagamento não existe em orçamento — a proposta não recebe. */}
         {!modoOrcamento && (
-        <aside id="painel-pagamento" className={`order-first hidden w-[320px] shrink-0 flex-col border-r border-fg/[0.06] bg-fg/[0.02] lg:flex ${focarPagamento ? "ring-2 ring-inset ring-accent/50" : ""}`}>
-          {/*
-           * O cabeçalho mostra o que falta, em corpo grande.
-           *
-           * Era um rótulo de 12px dizendo "Recebimentos" — o nome da coluna, que
-           * a pessoa já sabe por estar olhando para ela. O número que importa
-           * é quanto ainda falta receber, e ele muda a cada lançamento: em
-           * destaque, quem atende confere sem procurar.
-           */}
-          <header className="shrink-0 border-b border-fg/[0.06] px-4 py-4">
-            <p className="text-[10.5px] uppercase tracking-[0.1em] text-faint">{pendente > 0 ? "Falta receber" : "Recebido"}</p>
-
-            <motion.p
-              key={pendente}
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
-              className={`mt-1 text-[26px] leading-none tracking-tight tabular-nums ${pendente > 0 ? "text-warning" : "text-success"}`}
-            >
-              {formatCurrency(pendente > 0 ? pendente : totalPago)}
-            </motion.p>
-
-            <p className="mt-1.5 text-[11px] text-faint">
-              {statusPedido ? statusPedido.toLowerCase() : "nova nota"} · total {formatCurrency(total)}
-            </p>
-          </header>
-
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            {!id ? (
-              <p className="rounded-xl border border-warning/30 bg-warning/[0.08] px-3.5 py-3 text-[12px] leading-relaxed text-warning">
-                Salve a nota antes de registrar pagamentos.
-              </p>
-            ) : (
-              <>
-                {focarPagamento && (
-                  <p className="mb-3 rounded-xl border border-accent/30 bg-accent/[0.1] px-3.5 py-2.5 text-[12px] leading-relaxed text-accent-soft">
-                    Nota salva! Informe como o cliente pagou para quitar.
-                  </p>
-                )}
-
-                <PagamentoForm
-                  total={total}
-                  jaPago={totalPago}
-                  compacto
-                  salvando={confirmandoPagamento}
-                  textoConfirmar="Registrar pagamento"
-                  onConfirmar={(valor, forma) => void handleAdicionarPagamento(valor, forma)}
-                />
-              </>
-            )}
-
-          </div>
-        </aside>
+          <PainelPagamento
+            pedidoId={id}
+            total={total}
+            totalPago={totalPago}
+            totalBruto={totalBruto}
+            totalDesconto={totalDesconto}
+            formaPagamento={formaPagamento}
+            statusPedido={statusPedido}
+            clienteNome={pedido?.nomeCliente || nome}
+            acordo={acordo}
+            carregandoAcordo={carregandoAcordo}
+            salvandoPagamento={confirmandoPagamento}
+            destacar={focarPagamento}
+            onPagar={(valor, forma) => void handleAdicionarPagamento(valor, forma)}
+            onAtualizar={recarregarNotaEPrazo}
+          />
         )}
       </div>
     </div>

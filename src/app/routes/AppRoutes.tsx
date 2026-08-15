@@ -13,7 +13,8 @@ import { useIsMobile } from "@/shared/hooks/useIsMobile";
 import LandingPage from "@/features/landing/pages/LandingPage";
 
 import DashboardPage from "@/features/dashboard/pages/DashboardPage";
-import FinanceiroPage from "@/features/financeiro/pages/FinanceiroPage";
+import CaixaPage from "@/features/financeiro/pages/CaixaPage";
+import ContasPage from "@/features/financeiro/pages/ContasPage";
 import RelatoriosPage from "@/features/relatorios/pages/RelatoriosPage";
 
 import AuthPage from "@/features/auth/pages/LoginPage";
@@ -161,8 +162,13 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
       path.startsWith("/configuracoes/empresa") ||
       path.startsWith("/configuracoes/faturas") ||
       path.startsWith("/funcionarios") ||
-      /* Caixa e contas a receber são do dono — esconder do menu não basta. */
-      path.startsWith("/vendas/financeiro");
+      /* Caixa e contas são do dono — esconder do menu não basta. A lista cobre
+         a rota antiga e as três novas: digitar /vendas/a-pagar na mão também
+         não pode abrir. */
+      path.startsWith("/vendas/financeiro") ||
+      path.startsWith("/vendas/caixa") ||
+      path.startsWith("/vendas/a-pagar") ||
+      path.startsWith("/vendas/a-receber");
 
     if (soDoDono) return <Navigate to="/" replace />;
   }
@@ -196,7 +202,7 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
 
           {/* Vendas e Financeiro viraram uma tela só, em abas. A rota antiga
               continua respondendo para não quebrar link salvo ou atalho. */}
-          <Route path="financeiro" element={<Navigate to="/vendas/financeiro" replace />} />
+          <Route path="financeiro" element={<Navigate to="/vendas/caixa" replace />} />
           <Route path="vendas/orcamentos" element={<Navigate to="/pdv/orcamentos" replace />} />
 
           <Route path="funcionarios" element={<FuncionariosPage />} />
@@ -262,14 +268,40 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
                 vendas. Sem isso, abrir /vendas o levaria ao "geralzão". */}
             <Route index element={ehGestor(user) ? <SalesOverviewPage /> : <Navigate to="/vendas/lista" replace />} />
             <Route path="lista" element={<SalesList />} />
+
+            {/* Caixa, a pagar e a receber eram guias por dentro de uma aba
+                "Financeiro". Viraram rota: a barra de abas da seção é uma só, e
+                cada destino tem endereço próprio — dá para favoritar "A pagar"
+                e voltar direto nele. A rota antiga continua respondendo para
+                não quebrar link salvo, atalho do celular ou aba deixada
+                aberta. */}
+            <Route path="financeiro" element={<Navigate to="/vendas/caixa" replace />} />
+
             <Route
-              path="financeiro"
+              path="caixa"
               element={
                 <RecursoDoPlano recurso="financeiro" promessa="Caixa, contas a receber e o resultado do mês no mesmo lugar em que a venda acontece.">
-                  <FinanceiroPage />
+                  <CaixaPage />
                 </RecursoDoPlano>
               }
             />
+            <Route
+              path="a-pagar"
+              element={
+                <RecursoDoPlano recurso="financeiro" promessa="Aluguel, fornecedor e imposto com vencimento à vista — e o aviso do que já venceu.">
+                  <ContasPage tipo="PAGAR" />
+                </RecursoDoPlano>
+              }
+            />
+            <Route
+              path="a-receber"
+              element={
+                <RecursoDoPlano recurso="financeiro" promessa="O que os clientes ainda devem, parcela a parcela, com recibo na hora do pagamento.">
+                  <ContasPage tipo="RECEBER" />
+                </RecursoDoPlano>
+              }
+            />
+
             <Route path="*" element={<NotFoundPage />} />
           </Route>
 

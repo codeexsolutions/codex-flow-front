@@ -72,6 +72,40 @@ export type Pagamento = {
   usuarioNome: string | null;
 };
 
+/** O acordo de prazo de uma venda: a conta a receber que nasceu da nota. */
+export type AcordoVenda = {
+  id: string;
+  descricao: string;
+  valorTotal: number;
+  recorrencia: Recorrencia;
+  status: "ABERTA" | "QUITADA" | "CANCELADA";
+  criadoEm: string;
+  /** Taxa combinada por parcela, em %. 0 = parcelado sem juros. */
+  jurosPercentual: number;
+  /** Quanto do `valorTotal` é juros — por isso ele passa do total da nota. */
+  acrescimo: number;
+  parcelas: Parcela[];
+};
+
+/**
+ * O prazo de uma venda, resumido — uma linha por nota parcelada.
+ *
+ * `diasAtraso` e `vencidas` vêm do servidor de propósito: "hoje" é o dia do
+ * banco, e calcular no navegador faria a mesma nota aparecer vencida ou não
+ * conforme o relógio da máquina de quem abriu a tela.
+ */
+export type PrazoVenda = {
+  pedidoId: string;
+  contaId: string;
+  parcelas: number;
+  abertas: number;
+  vencidas: number;
+  emAberto: number;
+  vencido: number;
+  proximoVencimento: string | null;
+  diasAtraso: number;
+};
+
 export type ResumoContas = {
   aPagar: number;
   aReceber: number;
@@ -106,9 +140,25 @@ const ContaService = {
     primeiroVencimento?: string | null;
     recorrencia?: Recorrencia;
     valor?: number;
+    /** Taxa por parcela, em %. O acréscimo é calculado no servidor. */
+    juros?: number;
+    /** A partir de quantas parcelas a taxa vale. Padrão do servidor: 2. */
+    jurosAPartirDe?: number;
   }): Promise<string> => {
     const r = await sysgrafix.post("/contas/da-venda", dados);
     return String(r.data?.data?.[0] ?? "");
+  },
+
+  /** O prazo de todas as vendas — indexado por nota na tela que consome. */
+  prazoDasVendas: async (): Promise<PrazoVenda[]> => {
+    const r = await sysgrafix.get("/contas/vendas");
+    return (r.data?.data ?? []) as PrazoVenda[];
+  },
+
+  /** O acordo de UMA venda. `null` = nota à vista, que é o caso comum. */
+  acordoDaVenda: async (pedidoId: string): Promise<AcordoVenda | null> => {
+    const r = await sysgrafix.get(`/contas/vendas/${pedidoId}`);
+    return (r.data?.data?.[0] ?? null) as AcordoVenda | null;
   },
 
   pagar: async (parcelaId: string, dados: { valor?: number; formaPagamento?: string }): Promise<Recibo> => {

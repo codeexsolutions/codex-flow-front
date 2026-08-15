@@ -103,7 +103,7 @@ const BottomNav = () => {
    * O resto vai para a folha "Mais" — não cabe e não é de uso constante.
    *
    * Os grupos e a ordem acompanham a sidebar — Meu dia, Cadastros,
-   * Dinheiro, Entregas, Conta. O que muda é a moldura: lá os dois
+   * Dinheiro, Logística, Conta. O que muda é a moldura: lá os três
    * grandes blocos são abas, aqui tudo desce numa lista. Numa folha que já
    * custou um toque para abrir, esconder metade dos destinos atrás de uma
    * segunda troca cobraria caro demais; os títulos separam o suficiente, e a
@@ -121,20 +121,21 @@ const BottomNav = () => {
 
     { rota: "/clientes", label: "Clientes", icon: <Users size={18} />, familia: "Cadastros" },
     // Equipe é do dono e só existe em plano que comporta mais de um usuário.
-    ...(gestor && planoTemEquipe(equipe) ? [{ rota: "/funcionarios", label: "Minha equipe", icon: <UserCircle size={18} /> }] : []),
-    /* O mesmo rótulo da sidebar: quem usou o computador precisa achar o item
-       pelo nome que já conhece quando abrir no celular. */
-    { rota: "/estoque", label: "Estoque/Serviços", icon: <Package size={18} /> },
+    ...(gestor && planoTemEquipe(equipe) ? [{ rota: "/funcionarios", label: "Funcionários", icon: <UserCircle size={18} /> }] : []),
 
     // Financeiro virou aba de Vendas — deixou de ser destino próprio.
-    ...(gestor ? [{ rota: "/vendas/financeiro", label: "Caixa e contas", icon: <Wallet size={18} />, recurso: "financeiro", familia: "Dinheiro" }] : []),
+    ...(gestor ? [{ rota: "/vendas/caixa", label: "Financeiro", icon: <Wallet size={18} />, recurso: "financeiro", familia: "Dinheiro" }] : []),
     { rota: "/relatorios", label: "Relatórios", icon: <BarChart3 size={18} />, recurso: "relatorios" },
 
+    /* Estoque e Correios juntos, como na aba Logística da sidebar: o que
+       entra na loja e o que sai dela. O rótulo é o mesmo dos dois lados —
+       quem usou o computador precisa achar o item pelo nome que já conhece. */
+    { rota: "/estoque", label: "Estoque/Serviços", icon: <Package size={18} />, familia: "Logística" },
     // Correios voltou para "em breve" enquanto o módulo é finalizado. Fica na
     // folha, apagado: some do menu e ninguém descobre que existe. O selo é
     // "Em breve", não o cadeado de plano — o cadeado promete uma tela que o
     // upgrade destrava hoje, e essa ainda não está de pé.
-    { rota: "/correios", label: "Correios", icon: <Truck size={18} />, emBreve: true, familia: "Entregas" },
+    { rota: "/correios", label: "Correios", icon: <Truck size={18} />, emBreve: true },
 
     { rota: "/configuracoes", label: "Configurações", icon: <Settings size={18} />, familia: "Conta" },
   ];

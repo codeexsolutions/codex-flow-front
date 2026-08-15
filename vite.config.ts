@@ -4,17 +4,7 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
-/**
- * Identidade do build, carimbada no código.
- *
- * Sem ela, "o app está desatualizado?" é uma sensação: ninguém consegue olhar
- * a tela e dizer qual versão está rodando, nem comparar com o que foi
- * publicado. Com o carimbo, a pergunta vira uma conferência de dez segundos.
- *
- * Na Vercel o commit vem em `VERCEL_GIT_COMMIT_SHA`; fora dela, o git local
- * responde. Sem git (um tarball baixado), sobra a data — que ainda distingue
- * um build do outro.
- */
+
 function identidadeDoBuild(): string {
   const data = new Date().toISOString().slice(0, 16).replace("T", " ");
 

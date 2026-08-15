@@ -81,11 +81,11 @@ const FAQ: GrupoFaq[] = [
     itens: [
       {
         p: "Meu funcionário precisa ver o financeiro?",
-        r: <>Você decide, por pessoa. Em <b className="text-ink">Minha equipe</b>, cada funcionário tem as áreas que enxerga marcadas uma a uma — dá para liberar o PDV e as planilhas sem abrir o caixa. Quem não tem a área marcada não acessa nem digitando o endereço.</>,
+        r: <>Você decide, por pessoa. Em <b className="text-ink">Funcionários</b>, cada funcionário tem as áreas que enxerga marcadas uma a uma — dá para liberar o PDV e as planilhas sem abrir o caixa. Quem não tem a área marcada não acessa nem digitando o endereço.</>,
       },
       {
         p: "Esqueci minha senha. E agora?",
-        r: <>Se você é o dono da conta, fale com o suporte pelos canais abaixo. Se é funcionário, quem redefine é o dono da empresa, em Minha equipe. Ninguém — nem nós — consegue ler sua senha: ela é guardada cifrada.</>,
+        r: <>Se você é o dono da conta, fale com o suporte pelos canais abaixo. Se é funcionário, quem redefine é o dono da empresa, em Funcionários. Ninguém — nem nós — consegue ler sua senha: ela é guardada cifrada.</>,
       },
       {
         p: "Posso usar em dois computadores ao mesmo tempo?",

@@ -15,7 +15,7 @@ import usePlano from "@/shared/plano/plano.store";
 import { BUILD_ID, forcarAtualizacao } from "@/shared/pwa/versao";
 import BotaoInstalar from "@/shared/pwa/BotaoInstalar";
 
-type AbaId = "gerenciamento" | "atendimento";
+type AbaId = "gerenciamento" | "atendimento" | "logistica";
 
 /**
  * Atendimento está desligado.
@@ -31,10 +31,24 @@ type AbaId = "gerenciamento" | "atendimento";
  */
 const ATENDIMENTO_ATIVO = false;
 
+/**
+ * As três áreas do sistema.
+ *
+ * "Logística" é o caminho da mercadoria: o que entra na loja (estoque) e o
+ * que sai dela (entregas). Os dois viviam em Gerenciamento, misturados com
+ * cadastro de gente e com dinheiro — três assuntos numa aba só, e quem ia
+ * postar um pacote passava por "Relatórios" no caminho.
+ *
+ * Os nomes são todos de área, não de tela: é o que faz as três serem lidas
+ * como o mesmo tipo de coisa e não como três atalhos soltos.
+ */
 const ABAS: { id: AbaId; titulo: string; icone: typeof Users; ativa: boolean }[] = [
   { id: "gerenciamento", titulo: "Gerenciamento", icone: Building2, ativa: true },
+  { id: "logistica", titulo: "Logística", icone: Truck, ativa: true },
   { id: "atendimento", titulo: "Atendimento", icone: Headset, ativa: ATENDIMENTO_ATIVO },
 ];
+
+const EH_ABA = (v: string): v is AbaId => ABAS.some((a) => a.id === v);
 
 /**
  * De que aba cada rota é.
@@ -51,10 +65,10 @@ const ABAS: { id: AbaId; titulo: string; icone: typeof Users; ativa: boolean }[]
  */
 const ABA_DA_ROTA: [string, AbaId][] = [
   ["/funcionarios", "gerenciamento"],
-  ["/estoque", "gerenciamento"],
-  ["/correios", "gerenciamento"],
   ["/vendas", "gerenciamento"],
   ["/relatorios", "gerenciamento"],
+  ["/estoque", "logistica"],
+  ["/correios", "logistica"],
   /* Planilhas saiu daqui junto com a mudança para "Meu dia": o grupo fica fora
      das abas, então abrir a planilha não deve mexer em qual delas está aberta. */
   ["/whatsapp", "atendimento"],
@@ -106,7 +120,7 @@ const Sidebar = () => {
 
     try {
       const salva = localStorage.getItem(CHAVE_ABA);
-      if (salva === "gerenciamento" || salva === "atendimento") return permitida(salva) ?? "gerenciamento";
+      if (salva && EH_ABA(salva)) return permitida(salva) ?? "gerenciamento";
     } catch {
       /* sem preferência salva: cai no padrão */
     }
@@ -307,7 +321,7 @@ const Sidebar = () => {
       {/* `relative` é obrigatório: o brilho do topo é `absolute` e, sem um
           ancestral posicionado, ele se prende à viewport e cobre a tela toda. */}
       <aside
-        className="glass-strong relative hidden w-72 flex-shrink-0 flex-col overflow-hidden border-y-0 border-l-0 border-r md:flex"
+        className="glass-strong relative hidden w-80 flex-shrink-0 flex-col overflow-hidden border-y-0 border-l-0 border-r md:flex"
         style={{ borderColor: "rgb(var(--glass-border) / calc(var(--glass-border-alpha) + 0.03))" }}
       >
         {/* Brilho ambiente no topo */}
@@ -375,10 +389,15 @@ const Sidebar = () => {
          * clique a mais na tarefa mais frequente do sistema.
          */}
         <div className="relative border-b border-fg/[0.07] px-3 py-3">
+          {/* Três colunas, ícone em cima do rótulo.
+              Lado a lado numa linha, "Gerenciamento" e "Abastecimento" não
+              cabiam nos 264px úteis da sidebar — as três encolhiam até o texto
+              cortar. Empilhado, cada aba tem a largura toda da sua coluna para
+              o nome. */}
           <div
             role="tablist"
             aria-label="Áreas do sistema"
-            className="flex gap-1 rounded-xl border border-fg/[0.07] bg-fg/[0.03] p-1"
+            className="grid grid-cols-3 gap-1 rounded-xl border border-fg/[0.07] bg-fg/[0.03] p-1"
           >
             {ABAS.map((a) => {
               const on = aba === a.id;
@@ -392,7 +411,7 @@ const Sidebar = () => {
                   disabled={!a.ativa}
                   title={a.ativa ? undefined : `${a.titulo} está em breve`}
                   onClick={() => a.ativa && setAba(a.id)}
-                  className={`focus-ring relative flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11.5px] transition-colors duration-200 ${
+                  className={`focus-ring relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[11px] transition-colors duration-200 ${
                     !a.ativa ? "cursor-not-allowed text-faint opacity-50" : on ? "text-ink" : "text-mist hover:text-ink"
                   }`}
                 >
@@ -415,9 +434,9 @@ const Sidebar = () => {
                   )}
 
                   <span className={`relative ${on ? "text-accent-soft" : "text-faint"}`}>
-                    <a.icone size={13} />
+                    <a.icone size={14} />
                   </span>
-                  <span className="relative">{a.titulo}</span>
+                  <span className="relative w-full truncate leading-none">{a.titulo}</span>
                 </button>
               );
             })}
@@ -469,11 +488,9 @@ const Sidebar = () => {
                 {/* Equipe só existe em plano que comporta mais de um usuário:
                     mostrar para quem tem uma vaga só seria oferecer porta que
                     não abre. */}
-                {gestor && planoTemEquipe(equipe) && item("funcionarios", <UserCog size={17} />, "Minha equipe")}
-                {/* "e serviços" no rótulo: é a mesma tela de sempre, mas quem
-                    presta serviço cadastra serviço nela, e sem isso metade dos
-                    clientes procurava um menu que não existe. */}
-                {item("estoque", <Package size={17} />, "Estoque/Serviços")}
+                {gestor && planoTemEquipe(equipe) && item("funcionarios", <UserCog size={17} />, "Funcionários")}
+                {/* Estoque saiu daqui: virou o primeiro item de Logística,
+                    junto das entregas — o que entra e o que sai da loja. */}
 
                 {cat("Dinheiro")}
                 {/*
@@ -484,9 +501,17 @@ const Sidebar = () => {
                  * tudo o que pode ver.
                  */}
                 {gestor
-                  ? item("vendas/financeiro", <Wallet size={17} />, "Caixa e contas", false, !temRecurso("financeiro"))
+                  ? item("vendas/caixa", <Wallet size={17} />, "Financeiro", false, !temRecurso("financeiro"))
                   : item("vendas/lista", <DollarSign size={17} />, "Minhas vendas")}
                 {item("relatorios", <BarChart3 size={17} />, "Relatórios", false, !temRecurso("relatorios"))}
+              </>
+            ) : aba === "logistica" ? (
+              <>
+                {cat("Loja")}
+                {/* "e serviços" no rótulo: é a mesma tela de sempre, mas quem
+                    presta serviço cadastra serviço nela, e sem isso metade dos
+                    clientes procurava um menu que não existe. */}
+                {item("estoque", <Package size={17} />, "Estoque/Serviços")}
 
                 {cat("Entregas")}
                 {/* Correios volta para "Em breve" enquanto o módulo é

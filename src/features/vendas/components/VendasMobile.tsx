@@ -4,8 +4,9 @@ import { formatCurrency } from "@/shared/utils/currency";
 import { formatDateShort } from "@/shared/utils/date";
 import { getInitials } from "@/shared/utils/format";
 import { useDinheiroVisivel } from "@/shared/session/valoresVisiveis";
+import { dataBr } from "@/shared/utils/parcelas";
 
-export type StatusFiltro = "todos" | "pago" | "pendente" | "cancelado";
+export type StatusFiltro = "todos" | "pago" | "pendente" | "vencida" | "cancelado";
 
 export type VendaItem = {
   pedidoId: string;
@@ -14,13 +15,17 @@ export type VendaItem = {
   data: string | Date;
   total: number;
   pendente: number;
-  status: "pago" | "pendente" | "cancelado";
+  status: "pago" | "pendente" | "vencido" | "cancelado";
+  /** Próxima parcela em aberto (AAAA-MM-DD). Nulo = venda à vista. */
+  vencimento?: string | null;
 };
 
 type Props = {
   vendas: VendaItem[];
   totalVendas: number;
   totalEmAberto: number;
+  /** O que já passou do vencimento — some do topo quando é zero. */
+  vencido?: { valor: number; notas: number };
   busca: string;
   onBusca: (v: string) => void;
   status: StatusFiltro;
@@ -33,6 +38,7 @@ type Props = {
 const FILTROS: { id: StatusFiltro; label: string }[] = [
   { id: "todos", label: "Todas" },
   { id: "pendente", label: "Em aberto" },
+  { id: "vencida", label: "Vencidas" },
   { id: "pago", label: "Pagas" },
   { id: "cancelado", label: "Canceladas" },
 ];
@@ -40,6 +46,7 @@ const FILTROS: { id: StatusFiltro; label: string }[] = [
 const STATUS: Record<VendaItem["status"], { label: string; cls: string }> = {
   pago: { label: "Paga", cls: "text-success" },
   pendente: { label: "Em aberto", cls: "text-warning" },
+  vencido: { label: "Vencida", cls: "text-danger" },
   cancelado: { label: "Cancelada", cls: "text-muted line-through" },
 };
 
@@ -54,7 +61,7 @@ const STATUS: Record<VendaItem["status"], { label: string; cls: string }> = {
  *   quatro opções com nomes longos: em 390px elas não cabem lado a lado sem
  *   virar abreviação ilegível.
  */
-const VendasMobile = ({ vendas, totalVendas, totalEmAberto, busca, onBusca, status, onStatus, onAbrirNota, onBaixarNota }: Props) => {
+const VendasMobile = ({ vendas, totalVendas, totalEmAberto, vencido, busca, onBusca, status, onStatus, onAbrirNota, onBaixarNota }: Props) => {
   const { mostrar, alternar, dinheiro } = useDinheiroVisivel();
 
 
@@ -68,6 +75,14 @@ const VendasMobile = ({ vendas, totalVendas, totalEmAberto, busca, onBusca, stat
           <p className="mt-1.5 text-[12.5px] text-faint">
             {totalVendas} {totalVendas === 1 ? "venda registrada" : "vendas registradas"}
           </p>
+
+          {/* O vencido é o que faz alguém cobrar hoje: fica logo abaixo do
+              total, e some quando não há nada em atraso. */}
+          {vencido && vencido.notas > 0 && (
+            <button type="button" onClick={() => onStatus("vencida")} className="mt-2 flex items-center gap-1.5 rounded-full border border-danger/40 bg-danger/[0.1] px-2.5 py-1 text-[11.5px] text-danger">
+              {dinheiro(vencido.valor)} vencido · {vencido.notas} {vencido.notas === 1 ? "nota" : "notas"}
+            </button>
+          )}
         </div>
 
         <button
@@ -155,8 +170,16 @@ const VendasMobile = ({ vendas, totalVendas, totalEmAberto, busca, onBusca, stat
                        espaço de "falta X", que é o dado que faz agir. */}
                     <span className="block truncate text-[12px] text-faint">
                       {formatDateShort(v.data)}
-                      {v.status === "pendente" && v.pendente > 0 && ` · falta ${formatCurrency(v.pendente)}`}
+                      {(v.status === "pendente" || v.status === "vencido") && v.pendente > 0 && ` · falta ${formatCurrency(v.pendente)}`}
                     </span>
+
+                    {/* O vencimento vem numa linha própria: é o dado que decide
+                        se essa venda é assunto de hoje. */}
+                    {v.vencimento && v.status !== "pago" && v.status !== "cancelado" && (
+                      <span className={`block truncate text-[11.5px] ${v.status === "vencido" ? "text-danger" : "text-mist"}`}>
+                        {v.status === "vencido" ? "venceu" : "vence"} {dataBr(v.vencimento)}
+                      </span>
+                    )}
                   </span>
 
                   <span className="shrink-0 text-right">

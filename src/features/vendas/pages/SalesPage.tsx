@@ -1,23 +1,28 @@
-import { ShoppingCart } from "lucide-react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 
 import { PageScreen } from "@/shared/ui/PageShell";
-import { tabsVendas, ehGestor } from "@/features/vendas/components/TabsVendas";
+import { abaAtiva, abasVendas } from "@/features/vendas/components/TabsVendas";
 import useAuth from "@/features/auth/store/auth.store";
 
+/**
+ * A casca da seção — cabeçalho, abas e o outlet onde as telas entram.
+ *
+ * O cabeçalho fala pela aba aberta, não pela seção.
+ *
+ * Antes ele dizia "Vendas" em toda rota do outlet: quem clicava em "Caixa e
+ * contas" na barra lateral chegava numa tela chamada Vendas e precisava
+ * conferir qual pílula estava acesa para saber onde tinha caído. O nome do
+ * lugar é a primeira coisa que se lê, e ele estava mentindo em quatro dos
+ * cinco destinos.
+ */
 const SalesPage = () => {
   const { user } = useAuth();
-  const gestor = ehGestor(user);
+  const { pathname } = useLocation();
+
+  const aba = abaAtiva(pathname, user);
 
   return (
-    <PageScreen
-      title={gestor ? "Vendas" : "Minhas vendas"}
-      /* O texto acompanha o que a pessoa tem à frente: prometer "financeiro"
-         para quem não tem a aba é pior do que não dizer nada. */
-      subtitle={gestor ? "Vendas, notas e o financeiro da loja" : "As vendas que você fez"}
-      icon={<ShoppingCart className="h-5 w-5" />}
-      tabs={tabsVendas(user)}
-    >
+    <PageScreen title={aba.titulo} subtitle={aba.descricao} icon={aba.simbolo} tabs={abasVendas(user)}>
       <Outlet />
     </PageScreen>
   );

@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, ReactNode, Ref } from "react";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 
 import Dica from "@/shared/ui/Dica";
@@ -19,9 +19,11 @@ export const TabelaCard = ({
   countLabel,
   onAdd,
   addLabel = "Adicionar",
+  controles,
   filters,
   children,
   footer,
+  bodyRef,
   minWidth = MIN_TABLE_WIDTH,
 }: {
   title: string;
@@ -30,14 +32,33 @@ export const TabelaCard = ({
   countLabel?: string;
   onAdd?: () => void;
   addLabel?: string;
+  /**
+   * Busca e filtros da lista — um grupo só, empurrado para a ponta oposta ao
+   * título.
+   *
+   * Juntos porque as três coisas fazem o mesmo trabalho (restringir a lista) e
+   * separá-las pelas duas pontas obrigava o olho a atravessar a barra para
+   * montar um filtro só. Longe do título porque o título é o que a lista É, e
+   * os controles são o que se faz com ela: encostados, viram um bloco de texto
+   * e caixas sem hierarquia nenhuma.
+   */
+  controles?: ReactNode;
+  /** Controles à direita, colados no botão de criar. */
   filters?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  /**
+   * Referência do corpo rolável.
+   *
+   * Serve ao `useAutoPageSize`: é a altura DESTE elemento que decide quantas
+   * linhas cabem na página.
+   */
+  bodyRef?: Ref<HTMLDivElement>;
   minWidth?: number;
 }) => (
   <section className="card glass-sheen flex min-h-[220px] min-w-0 flex-1 flex-col overflow-hidden">
-    <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-fg/[0.07] px-4 py-3">
-      <div className="flex min-w-0 items-center gap-2.5">
+    <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2.5 border-b border-fg/[0.07] px-4 py-3">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
         {icon && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/20">{icon}</span>}
         <div className="min-w-0">
           <h2 className="truncate text-[13px] text-ink">{title}</h2>
@@ -47,9 +68,14 @@ export const TabelaCard = ({
             </p>
           )}
         </div>
+
+        {/* `ml-auto` come a sobra da linha: o título fica na ponta esquerda e
+            o grupo de controles na direita, sem depender de o cartão ter
+            `filters` ou botão de criar para empurrá-lo. */}
+        {controles && <div className="ml-auto flex flex-wrap items-center justify-end gap-2">{controles}</div>}
       </div>
 
-      <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         {filters}
         {onAdd && (
           <button type="button" onClick={onAdd} className="focus-ring inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-gradient-to-br from-accent-soft to-accent px-3 py-2 text-[12.5px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98]">
@@ -60,7 +86,7 @@ export const TabelaCard = ({
       </div>
     </header>
 
-    <div className="min-h-0 flex-1 overflow-auto">
+    <div ref={bodyRef} className="min-h-0 flex-1 overflow-auto">
       <div className="min-w-0 sm:[min-width:var(--tabela-min)]" style={{ "--tabela-min": `${minWidth}px` } as CSSProperties}>
         {children}
       </div>
@@ -147,6 +173,7 @@ export const ListaLinha = ({
   onClick,
   ariaLabel,
   acoes,
+  destaque,
   children,
 }: {
   cols: string;
@@ -154,14 +181,23 @@ export const ListaLinha = ({
   onClick?: () => void;
   ariaLabel?: string;
   acoes?: ReactNode;
+  /**
+   * Fundo de aviso na linha inteira — vencida, crítica, o que a tela chamar
+   * de urgente. É um tom lavado de propósito: a linha precisa saltar ao correr
+   * o olho pela lista sem ficar ilegível quando se para nela.
+   */
+  destaque?: "danger" | "warning";
   children: ReactNode;
 }) => {
   const Tag = onClick ? "button" : "div";
 
+  const fundo = destaque === "danger" ? "bg-danger/[0.055] hover:bg-danger/[0.09]" : destaque === "warning" ? "bg-warning/[0.05] hover:bg-warning/[0.085]" : "hover:bg-fg/[0.03]";
+  const marca = destaque === "danger" ? "before:bg-danger" : destaque === "warning" ? "before:bg-warning" : "before:bg-accent";
+
   const linha = (
     <Tag
       {...(onClick ? { type: "button" as const, onClick, "aria-label": ariaLabel } : {})}
-      className={`group relative grid w-full ${cols} items-center border-b border-fg/[0.04] px-5 text-left transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-r before:bg-accent before:opacity-0 before:transition-opacity hover:bg-fg/[0.03] hover:before:opacity-100`}
+      className={`group relative grid w-full ${cols} items-center border-b border-fg/[0.04] px-5 text-left transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-r before:transition-opacity hover:before:opacity-100 ${fundo} ${marca} ${destaque ? "before:opacity-100" : "before:opacity-0"}`}
       style={{ height: altura }}
     >
       {children}
@@ -246,6 +282,34 @@ export const ListaFantasmas = ({ quantidade, altura }: { quantidade: number; alt
  * telas é o `resumo` da esquerda ("12 clientes", "Mostrando 1–8 de 11", o
  * ticket médio), que cada uma escreve do seu jeito.
  */
+/**
+ * Só as setas e o "3 / 7".
+ *
+ * Separado do rodapé porque nem toda tela quer uma barra própria para paginar:
+ * a lista de vendas já tem um rodapé com os totais, e empilhar duas faixas
+ * seria gastar altura para dizer duas coisas que cabem na mesma linha.
+ */
+export const ControlesPagina = ({ pagina, totalPaginas, onPagina }: { pagina: number; totalPaginas: number; onPagina: (p: number) => void }) => {
+  const botao =
+    "focus-ring flex cursor-pointer items-center gap-1 rounded-lg border border-fg/[0.08] bg-fg/[0.04] px-2.5 py-1.5 text-mist transition-colors hover:bg-fg/[0.08] disabled:cursor-not-allowed disabled:opacity-40";
+
+  return (
+    <div className="flex items-center gap-2 text-[11px] text-faint">
+      <button type="button" disabled={pagina <= 1} onClick={() => onPagina(Math.max(1, pagina - 1))} aria-label="Página anterior" className={botao}>
+        <ChevronLeft className="h-3.5 w-3.5" /> Anterior
+      </button>
+
+      <span className="px-1 tabular-nums">
+        {pagina} / {totalPaginas}
+      </span>
+
+      <button type="button" disabled={pagina >= totalPaginas} onClick={() => onPagina(Math.min(totalPaginas, pagina + 1))} aria-label="Próxima página" className={botao}>
+        Próxima <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+};
+
 export const TabelaPaginacao = ({
   pagina,
   totalPaginas,
@@ -256,30 +320,12 @@ export const TabelaPaginacao = ({
   totalPaginas: number;
   onPagina: (p: number) => void;
   resumo?: ReactNode;
-}) => {
-  const botao =
-    "focus-ring flex cursor-pointer items-center gap-1 rounded-lg border border-fg/[0.08] bg-fg/[0.04] px-2.5 py-1.5 text-mist transition-colors hover:bg-fg/[0.08] disabled:cursor-not-allowed disabled:opacity-40";
-
-  return (
-    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-fg/[0.06] bg-fg/[0.02] px-5 py-3 text-[11px] text-faint">
-      <div className="min-w-0">{resumo}</div>
-
-      <div className="flex items-center gap-2">
-        <button type="button" disabled={pagina <= 1} onClick={() => onPagina(Math.max(1, pagina - 1))} aria-label="Página anterior" className={botao}>
-          <ChevronLeft className="h-3.5 w-3.5" /> Anterior
-        </button>
-
-        <span className="px-1 tabular-nums">
-          {pagina} / {totalPaginas}
-        </span>
-
-        <button type="button" disabled={pagina >= totalPaginas} onClick={() => onPagina(Math.min(totalPaginas, pagina + 1))} aria-label="Próxima página" className={botao}>
-          Próxima <ChevronRight className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </div>
-  );
-};
+}) => (
+  <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-fg/[0.06] bg-fg/[0.02] px-5 py-3 text-[11px] text-faint">
+    <div className="min-w-0">{resumo}</div>
+    <ControlesPagina pagina={pagina} totalPaginas={totalPaginas} onPagina={onPagina} />
+  </div>
+);
 
 export const TabelaVazia = ({ icon, title, description, action }: { icon?: ReactNode; title: string; description?: string; action?: ReactNode }) => (
   <div className="flex h-full min-h-[180px] flex-col items-center justify-center gap-2.5 px-6 py-10 text-center">

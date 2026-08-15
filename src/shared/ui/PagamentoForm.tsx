@@ -14,16 +14,22 @@ import { formatCurrency } from "@/shared/utils/currency";
  * num lugar encontrava outra tela no outro, e o do financeiro nem permitia
  * receber metade — que é o caso mais comum do balcão.
  *
- * O que este resolve, em ordem de importância para quem opera:
+ * Ele faz três coisas, e só três:
  *
- * 1. **Mostra a conta antes de pedir o valor.** Total, já pago e quanto falta
- *    ficam no topo. Sem isso o operador calcula de cabeça e erra.
- * 2. **Atalhos para os valores reais.** Tudo, metade, ou digitar. Metade é o
- *    sinal; digitar é o "me dá 50 reais agora".
- * 3. **Forma de pagamento com ícone.** Seis opções em texto puro viram uma
- *    lista para ler; com ícone, viram alvos para reconhecer.
- * 4. **Avisa o que vai acontecer.** O rodapé diz se a nota fica quitada ou
- *    quanto continua em aberto — antes de confirmar, não depois.
+ * 1. **Quanto.** O campo já vem preenchido com o que falta, porque quitar é o
+ *    caso comum; quem vai receber menos apaga e digita.
+ * 2. **Como.** Seis formas com ícone. Em texto puro viram uma lista para ler;
+ *    com ícone, viram alvos para reconhecer.
+ * 3. **O que vai acontecer.** O rodapé diz se fica quitada ou quanto continua
+ *    em aberto — antes de confirmar, não depois.
+ *
+ * O que ele NÃO faz mais: repetir a conta da nota. Total, recebido e pendente
+ * já estão no resumo da venda e no topo da coluna, em corpo grande — três
+ * blocos aqui embaixo eram o mesmo número dito uma segunda vez, roubando a
+ * altura de quem realmente muda a cada recebimento. Os atalhos "Tudo" e
+ * "Metade" saíram junto: "Tudo" é o valor que o campo já traz, e "Metade"
+ * resolvia um caso — o sinal — que hoje se combina no parcelamento, com
+ * vencimento e cobrança, em vez de virar um saldo solto sem data.
  */
 
 export const FORMAS: { id: string; label: string; icone: LucideIcon }[] = [
@@ -50,11 +56,19 @@ type Props = {
    * recebia não via a conta inteira sem rolar.
    */
   compacto?: boolean;
+  /**
+   * O que está sendo recebido.
+   *
+   * O mesmo formulário serve para a nota inteira e para UMA parcela de uma
+   * venda a prazo. Chamar a parcela de "nota" faria o rodapé prometer que a
+   * venda ficaria quitada quando só a primeira de seis foi paga.
+   */
+  alvo?: "nota" | "parcela";
   onConfirmar: (valor: number, forma: string) => void | Promise<void>;
   onCancelar?: () => void;
 };
 
-const PagamentoForm = ({ total, jaPago, salvando = false, textoConfirmar = "Adicionar pagamento", compacto = false, onConfirmar, onCancelar }: Props) => {
+const PagamentoForm = ({ total, jaPago, salvando = false, textoConfirmar = "Adicionar pagamento", compacto = false, alvo = "nota", onConfirmar, onCancelar }: Props) => {
   const restante = useMemo(() => Math.max(Math.round((total - jaPago) * 100) / 100, 0), [total, jaPago]);
 
   const [forma, setForma] = useState(FORMAS[0].id);
@@ -92,7 +106,6 @@ const PagamentoForm = ({ total, jaPago, salvando = false, textoConfirmar = "Adic
     };
   }, [abertoFormas]);
 
-  const metade = Math.round((restante / 2) * 100) / 100;
   const sobra = Math.max(Math.round((restante - valor) * 100) / 100, 0);
   const excede = valor > restante;
 
@@ -103,23 +116,16 @@ const PagamentoForm = ({ total, jaPago, salvando = false, textoConfirmar = "Adic
 
   return (
     <div className={`flex flex-col ${compacto ? "gap-3.5" : "gap-5"}`}>
-      {/* A conta, antes de pedir o valor */}
-      <div className="grid grid-cols-3 gap-px overflow-hidden rounded-xl bg-fg/[0.06]">
-        {[
-          { rotulo: "Nota", valor: total, cor: "text-ink" },
-          { rotulo: "Recebido", valor: jaPago, cor: "text-success" },
-          { rotulo: "Falta", valor: restante, cor: restante > 0 ? "text-warning" : "text-success" },
-        ].map((c) => (
-          <div key={c.rotulo} className={`bg-surface text-center ${compacto ? "px-1.5 py-2" : "px-3 py-2.5"}`}>
-            <p className={`uppercase tracking-[0.08em] text-faint ${compacto ? "text-[9.5px]" : "text-[10.5px]"}`}>{c.rotulo}</p>
-            <p className={`mt-0.5 truncate tabular-nums ${compacto ? "text-[12px]" : "mt-1 text-[14px]"} ${c.cor}`}>{formatCurrency(c.valor)}</p>
-          </div>
-        ))}
-      </div>
-
       {/* Quanto está recebendo */}
       <div>
-        <label className={`mb-1.5 block uppercase tracking-[0.08em] text-faint ${compacto ? "text-[10px]" : "mb-2 text-[11px]"}`}>Quanto está recebendo</label>
+        {/* O rótulo carrega o número que antes ocupava um bloco inteiro: quem
+            digita menos que o total precisa do teto à vista, e ele cabe aqui. */}
+        <div className={`mb-1.5 flex items-baseline justify-between gap-2 ${compacto ? "" : "mb-2"}`}>
+          <label className={`uppercase tracking-[0.08em] text-faint ${compacto ? "text-[10px]" : "text-[11px]"}`}>Quanto está recebendo</label>
+          <span className={`shrink-0 tabular-nums text-faint ${compacto ? "text-[10px]" : "text-[11px]"}`}>
+            de {formatCurrency(restante)}
+          </span>
+        </div>
 
         <MoneyInput
           value={valor}
@@ -129,15 +135,6 @@ const PagamentoForm = ({ total, jaPago, salvando = false, textoConfirmar = "Adic
             compacto ? "px-3 py-2.5 text-[13.5px]" : "px-3.5 py-3 text-[15px]"
           } ${excede ? "border-danger/60" : "border-fg/[0.08] focus:border-accent/60"}`}
         />
-
-        <div className="mt-2 flex gap-2">
-          <button type="button" onClick={() => setValor(restante)} className={`flex-1 rounded-lg border transition-colors ${compacto ? "py-1 text-[10.5px]" : "py-1.5 text-[11.5px]"} ${valor === restante ? "border-accent bg-accent/[0.12] text-accent-soft" : "border-fg/[0.1] text-mist hover:text-ink"}`}>
-            Tudo · {formatCurrency(restante)}
-          </button>
-          <button type="button" onClick={() => setValor(metade)} className={`flex-1 rounded-lg border transition-colors ${compacto ? "py-1 text-[10.5px]" : "py-1.5 text-[11.5px]"} ${valor === metade ? "border-accent bg-accent/[0.12] text-accent-soft" : "border-fg/[0.1] text-mist hover:text-ink"}`}>
-            Metade · {formatCurrency(metade)}
-          </button>
-        </div>
 
         {excede && <p className={`mt-2 text-danger ${compacto ? "text-[10.5px]" : "text-[11.5px]"}`}>Passou do que falta — o máximo é {formatCurrency(restante)}.</p>}
       </div>
@@ -222,7 +219,7 @@ const PagamentoForm = ({ total, jaPago, salvando = false, textoConfirmar = "Adic
           >
             {sobra === 0 ? (
               <>
-                Depois disso a nota fica <span className="text-success">sem saldo em aberto</span>.
+                Depois disso {alvo === "parcela" ? "a parcela" : "a nota"} fica <span className="text-success">sem saldo em aberto</span>.
               </>
             ) : (
               <>

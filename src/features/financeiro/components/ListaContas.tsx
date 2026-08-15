@@ -7,6 +7,7 @@ import { Selo, type TomSelo } from "@/shared/ui/StatusBadge";
 import { useAlert } from "@/shared/ui/Alert";
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import { formatCurrency } from "@/shared/utils/currency";
+import { dataBr, prazo } from "@/shared/utils/parcelas";
 import ContaService, { type Conta, type Parcela, type Recibo, type SituacaoParcela, type TipoConta } from "@/features/financeiro/services/conta.service";
 
 /**
@@ -29,31 +30,16 @@ const SITUACAO: Record<SituacaoParcela, { label: string; tom: TomSelo }> = {
   VENCIDA: { label: "Vencida", tom: "perigo" },
 };
 
-const dataBr = (iso: string) => String(iso).slice(0, 10).split("-").reverse().join("/");
-
-/** "vence hoje", "há 3 dias", "em 12 dias" — o que a pessoa realmente calcula. */
-const prazo = (iso: string): { texto: string; atrasada: boolean } => {
-  const hoje = new Date();
-  const [a, m, d] = String(iso).slice(0, 10).split("-").map(Number);
-
-  const alvo = new Date(a, (m ?? 1) - 1, d ?? 1);
-  const zero = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-  const dias = Math.round((alvo.getTime() - zero.getTime()) / 86_400_000);
-
-  if (dias === 0) return { texto: "vence hoje", atrasada: false };
-  if (dias === 1) return { texto: "vence amanhã", atrasada: false };
-  if (dias === -1) return { texto: "venceu ontem", atrasada: true };
-  if (dias < 0) return { texto: `${Math.abs(dias)} dias em atraso`, atrasada: true };
-
-  return { texto: `em ${dias} dias`, atrasada: false };
-};
-
 type Props = {
   tipo: TipoConta;
   contas: Conta[];
   carregando?: boolean;
   onRecarregar: () => void;
-  onNova: () => void;
+  /**
+   * Criar conta. Opcional: quando a tela dona já oferece o botão na barra de
+   * ações, repeti-lo aqui daria dois "criar" na mesma altura da página.
+   */
+  onNova?: () => void;
 };
 
 const ListaContas = ({ tipo, contas, carregando = false, onRecarregar, onNova }: Props) => {
@@ -138,14 +124,16 @@ const ListaContas = ({ tipo, contas, carregando = false, onRecarregar, onNova }:
           {pendentes.length} {pendentes.length === 1 ? "parcela em aberto" : "parcelas em aberto"}
         </p>
 
-        <button
-          type="button"
-          onClick={onNova}
-          className="focus-ring inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-gradient-to-br from-accent-soft to-accent px-3 py-2 text-[12.5px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98]"
-        >
-          <Plus size={14} />
-          {aPagar ? "Nova conta a pagar" : "Nova conta a receber"}
-        </button>
+        {onNova && (
+          <button
+            type="button"
+            onClick={onNova}
+            className="focus-ring inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-gradient-to-br from-accent-soft to-accent px-3 py-2 text-[12.5px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98]"
+          >
+            <Plus size={14} />
+            {aPagar ? "Nova conta a pagar" : "Nova conta a receber"}
+          </button>
+        )}
       </div>
 
       <div className="card glass-sheen min-h-0 flex-1 overflow-y-auto">

@@ -3,6 +3,7 @@ import { CalendarDays, Loader2, Repeat, Save, X } from "lucide-react";
 
 import { Modal } from "@/shared/ui/Modal";
 import { formatCurrency } from "@/shared/utils/currency";
+import { hojeIso, previaParcelas } from "@/shared/utils/parcelas";
 import type { NovaConta, Recorrencia, TipoConta } from "@/features/financeiro/services/conta.service";
 
 /**
@@ -19,35 +20,6 @@ const RECORRENCIAS: { id: Recorrencia; label: string }[] = [
   { id: "QUINZENAL", label: "Quinzenal" },
   { id: "SEMANAL", label: "Semanal" },
 ];
-
-const hojeIso = () => new Date().toISOString().slice(0, 10);
-
-/** Mesma regra do servidor — ver `ContaService.vencimentoDa`. */
-const vencimentoDa = (primeiro: string, indice: number, recorrencia: Recorrencia): string => {
-  const [a, m, d] = primeiro.split("-").map(Number);
-  const base = new Date(a, (m ?? 1) - 1, d ?? 1);
-
-  if (indice === 0) return primeiro;
-
-  if (recorrencia === "SEMANAL" || recorrencia === "QUINZENAL") {
-    base.setDate(base.getDate() + (recorrencia === "SEMANAL" ? 7 : 15) * indice);
-  } else {
-    const dia = base.getDate();
-    const alvo = new Date(base.getFullYear(), base.getMonth() + indice, 1);
-    const ultimo = new Date(alvo.getFullYear(), alvo.getMonth() + 1, 0).getDate();
-    base.setFullYear(alvo.getFullYear(), alvo.getMonth(), Math.min(dia, ultimo));
-  }
-
-  return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
-};
-
-/** Divide sem perder centavo — a sobra vai para a primeira, como no comércio. */
-const dividir = (total: number, n: number): number[] => {
-  const centavos = Math.round(total * 100);
-  const base = Math.floor(centavos / n);
-  const resto = centavos - base * n;
-  return Array.from({ length: n }, (_, i) => (base + (i === 0 ? resto : 0)) / 100);
-};
 
 const campo =
   "w-full rounded-lg border border-fg/[0.09] bg-fg/[0.03] px-3 py-2 text-[13px] text-ink outline-none transition-colors focus:border-accent/60";
@@ -73,17 +45,7 @@ const ContaForm = ({ tipo, salvando = false, onFechar, onSalvar }: Props) => {
 
   const total = Number(String(valor).replace(/\./g, "").replace(",", ".")) || 0;
 
-  const previa = useMemo(() => {
-    if (!(total > 0) || parcelas < 1) return [];
-
-    const valores = dividir(total, parcelas);
-
-    return valores.map((v, i) => ({
-      numero: i + 1,
-      valor: v,
-      vencimento: vencimentoDa(primeiro, i, parcelas > 1 ? recorrencia : "UNICA"),
-    }));
-  }, [total, parcelas, primeiro, recorrencia]);
+  const previa = useMemo(() => previaParcelas(total, parcelas, primeiro, recorrencia), [total, parcelas, primeiro, recorrencia]);
 
   const enviar = async () => {
     if (!descricao.trim()) return setErro("Informe a descrição.");

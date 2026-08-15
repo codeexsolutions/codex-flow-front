@@ -7,13 +7,7 @@ const sysgrafix = axios.create({
   baseURL: API_URL,
 });
 
-/*
- * O token vai no header, em toda requisição.
- *
- * Lido do `localStorage` a cada chamada, e não guardado numa variável do
- * módulo: assim uma renovação (ou um logout em outra aba) passa a valer na
- * requisição seguinte, sem ninguém precisar reconstruir o cliente HTTP.
- */
+
 sysgrafix.interceptors.request.use((config) => {
   const token = lerToken();
 
@@ -25,18 +19,6 @@ sysgrafix.interceptors.request.use((config) => {
   return config;
 });
 
-/*
- * Renovação de sessão.
- *
- * O access token dura 12h; antes disso existia só ele, então quem passava do
- * expediente tomava 401 e o app quebrava calado. Agora o 401 dispara uma
- * renovação com o refresh token guardado e a requisição original é repetida —
- * a troca é invisível para quem está usando.
- *
- * A store de sessão registra os callbacks aqui em vez de ser importada: este
- * módulo é importado por todos os serviços, e importar a store criaria ciclo
- * (store → service → sysgrafix → store).
- */
 type GanchosDeSessao = {
   aoRenovar: (usuario: unknown) => void;
   aoExpirar: () => void;
@@ -48,12 +30,6 @@ export function registrarGanchosDeSessao(g: GanchosDeSessao) {
   ganchos = g;
 }
 
-/*
- * Uma renovação por vez. Sem isto, uma tela que dispara seis requisições ao
- * abrir mandaria seis refreshes concorrentes — e como cada um rotaciona o
- * refresh token, os últimos chegariam com um token que os primeiros já
- * invalidaram.
- */
 let renovacaoEmCurso: Promise<unknown> | null = null;
 
 function renovarSessao() {
