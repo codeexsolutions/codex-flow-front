@@ -19,6 +19,9 @@ const SITUACAO: Record<StatusOrcamento, { label: string; cls: string }> = {
   APROVADO: { label: "Aprovado", cls: "border-success/40 bg-success/15 text-success" },
   RECUSADO: { label: "Recusado", cls: "border-danger/40 bg-danger/15 text-danger" },
   EXPIRADO: { label: "Expirado", cls: "border-fg/[0.12] bg-fg/[0.04] text-mist" },
+  /* Não aparece na lista — fica aqui para o selo não quebrar caso um
+     convertido chegue por outro caminho (busca por código, link direto). */
+  CONVERTIDO: { label: "Virou venda", cls: "border-accent/40 bg-accent/15 text-accent-soft" },
 };
 
 const FILTROS: { id: "todos" | StatusOrcamento; label: string }[] = [
@@ -69,6 +72,9 @@ const OrcamentosPage = () => {
     const termo = busca.trim().toLowerCase();
 
     return orcamentos.filter((o) => {
+      /* Proposta que já virou nota sai da lista: aqui é fila de trabalho, e
+         ela não espera mais nada de ninguém. O registro fica no banco. */
+      if (o.status === "CONVERTIDO") return false;
       if (filtro !== "todos" && o.status !== filtro) return false;
       if (!termo) return true;
 

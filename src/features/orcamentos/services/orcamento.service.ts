@@ -9,7 +9,11 @@ export type ItemOrcamento = {
   subtotal?: number;
 };
 
-export type StatusOrcamento = "ABERTO" | "APROVADO" | "RECUSADO" | "EXPIRADO";
+/**
+ * `CONVERTIDO` é o que já virou nota — sai da lista de trabalho, ao contrário
+ * de `APROVADO`, que é o cliente ter dito sim e a venda ainda não existir.
+ */
+export type StatusOrcamento = "ABERTO" | "APROVADO" | "RECUSADO" | "EXPIRADO" | "CONVERTIDO";
 
 export type Orcamento = {
   id: string;

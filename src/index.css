@@ -1,22 +1,6 @@
-/*
- * Duas famílias com papéis distintos, no lugar do Inter para tudo.
- *
- * `Space Grotesk` (display) tem numerais de personalidade — e este sistema é
- * feito de dinheiro na tela: total do dia, valor da nota, saldo do caixa. Os
- * números viram parte da identidade em vez de carga neutra.
- *
- * `Plus Jakarta Sans` (texto/interface) foi escolhida pelo tamanho pequeno:
- * a maior parte da interface vive entre 11 e 14px, e ela mantém a abertura
- * das letras nesse corpo melhor que a média das grotescas.
- */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* ══════════════════════════════════════════════════════════════════════
-   TOKENS — fonte única de verdade do design system.
-   Tudo em canal RGB puro para o Tailwind aplicar <alpha-value>.
-   ══════════════════════════════════════════════════════════════════════ */
 
 :root {
   /* ---------- TEMA CLARO ---------- */

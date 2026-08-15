@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LegacyRef, ReactNode } from "react";
-import { ShoppingCart, Plus, Receipt, UserCheck, DollarSign, Wallet, AlertCircle, Hash, TrendingUp, ChevronRight, Search, UserPlus, PackagePlus, FileText, Check, Loader2, Pencil, CalendarDays } from "lucide-react";
+import { ShoppingCart, Plus, Receipt, UserCheck, DollarSign, Wallet, AlertCircle, Hash, TrendingUp, ChevronRight, Search, UserPlus, PackagePlus, FileText, Check, X, Trash2, Loader2, Pencil, CalendarDays } from "lucide-react";
 
 import { useNavigate } from "react-router-dom";
 
@@ -128,13 +128,14 @@ const AcaoLinha = ({
   icon: ReactNode;
   label: string;
   onClick: () => void;
-  tone?: "neutro" | "sucesso" | "aviso";
+  tone?: "neutro" | "sucesso" | "aviso" | "perigo";
   ocupado?: boolean;
 }) => {
   const tons = {
     neutro: "text-mist hover:text-ink",
     sucesso: "text-success hover:text-success",
     aviso: "text-warning hover:text-warning",
+    perigo: "text-muted hover:text-danger",
   } as const;
 
   return (
@@ -166,6 +167,9 @@ const SITUACAO_ORCAMENTO: Record<string, { label: string; tom: TomSelo }> = {
   APROVADO: { label: "Aprovado", tom: "sucesso" },
   RECUSADO: { label: "Recusado", tom: "perigo" },
   EXPIRADO: { label: "Expirado", tom: "neutro" },
+  /* Fora da fila, mas mapeado: se um convertido chegar por outro caminho, o
+     selo diz o que ele é em vez de cair no genérico "Aguardando". */
+  CONVERTIDO: { label: "Virou venda", tom: "info" },
 };
 
 const PontoDeVenda = () => {
@@ -214,9 +218,6 @@ const PontoDeVenda = () => {
   const refNotaDownload = useRef<HTMLDivElement>(null);
   const refOrcamentoDownload = useRef<HTMLDivElement>(null);
   const enterprise = useEnterprise((s) => s.enterprise);
-
-  /** Orçamento cujo cliente está sendo cadastrado — alimenta o `prefill`. */
-  const [clienteDoOrcamento, setClienteDoOrcamento] = useState<Orcamento | null>(null);
 
   /* Clicar na linha mostra a proposta como o cliente a recebeu. As decisões
      ficam nos botões: abrir para ler não pode ter efeito colateral. */
@@ -337,9 +338,17 @@ const PontoDeVenda = () => {
    */
   const orcamentosFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
+
+    /* O que virou venda sai daqui.
+     *
+     * Esta aba é fila de trabalho, não arquivo: proposta já faturada não tem
+     * mais nenhuma ação possível e só empurra para baixo as que ainda esperam
+     * resposta. O registro continua no banco — some da lista, não da história. */
+    const naFila = orcamentos.filter((o) => o.status !== "CONVERTIDO");
+
     const base = termo
-      ? orcamentos.filter((o) => o.clienteNome?.toLowerCase().includes(termo) || String(o.codigo).includes(termo))
-      : orcamentos;
+      ? naFila.filter((o) => o.clienteNome?.toLowerCase().includes(termo) || String(o.codigo).includes(termo))
+      : naFila;
 
     return [...base].sort((a, b) => +new Date(b.criadoEm) - +new Date(a.criadoEm));
   }, [orcamentos, busca]);
@@ -414,6 +423,45 @@ const PontoDeVenda = () => {
       alert.success("Orçamento aprovado!", "Agora é só converter em venda — o botão ao lado abre a nota com os itens.");
     } catch (err) {
       alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível aprovar o orçamento."));
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  /**
+   * O cliente disse não.
+   *
+   * A proposta fica na lista, marcada — sumir com ela no clique apagaria a
+   * informação mais útil que um orçamento recusado carrega: que aquele preço
+   * já foi oferecido àquela pessoa e não colou. Depois de recusada, aí sim
+   * aparece o apagar, para quem quiser limpar.
+   */
+  const recusarOrcamento = async (o: Orcamento) => {
+    if (ocupado) return;
+
+    setOcupado(o.id);
+
+    try {
+      await OrcamentoService.alterarStatus(o.id, "RECUSADO");
+      setOrcamentos((prev) => prev.map((x) => (x.id === o.id ? { ...x, status: "RECUSADO" } : x)));
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível recusar o orçamento."));
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  const excluirOrcamento = async (o: Orcamento) => {
+    if (ocupado) return;
+
+    setOcupado(o.id);
+
+    try {
+      await OrcamentoService.excluir(o.id);
+      setOrcamentos((prev) => prev.filter((x) => x.id !== o.id));
+      alert.success("Orçamento apagado.", `A proposta #${o.codigo} saiu da lista.`);
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível apagar o orçamento."));
     } finally {
       setOcupado(null);
     }
@@ -520,49 +568,6 @@ const PontoDeVenda = () => {
     abrirNota({ clienteId: o.clienteId ? String(o.clienteId) : undefined, nome: o.clienteNome, orcamento: true, itens: itensDoOrcamento(o), orcamentoId: o.id });
   };
 
-  /**
-   * Cadastra o cliente da proposta e amarra os dois.
-   *
-   * O `atualizar` no fim é o que faz o orçamento deixar de ser "nome solto":
-   * sem ele, o cadastro nasceria certo e a proposta continuaria sem dono —
-   * e o botão de converter seguiria pedindo o mesmo cadastro de novo.
-   */
-  const cadastrarClienteDoOrcamento = async (dados: ClienteFormData) => {
-    const origem = clienteDoOrcamento;
-
-    setSalvandoCadastro(true);
-
-    try {
-      await criarCliente(dados);
-      await fetchClientes(true);
-
-      const criado = useClienteStore.getState().clientes.find((c) => c.nome === dados.nome);
-
-      if (origem && criado?.id && origem.status === "ABERTO") {
-        await OrcamentoService.atualizar(origem.id, {
-          clienteNome: origem.clienteNome,
-          clienteId: String(criado.id),
-          clienteContato: origem.clienteContato ?? null,
-          itens: (origem.itens ?? []).map((i) => ({
-            produtoId: i.produtoId ?? null,
-            nomeProduto: i.nomeProduto,
-            quantidade: i.quantidade,
-            valorUnitario: i.valorUnitario,
-          })),
-        });
-
-        await carregarOrcamentos();
-      }
-
-      setClienteDoOrcamento(null);
-      alert.success("Cliente cadastrado!", criado?.id ? "A proposta já está no nome dele — pode converter em venda." : "O cadastro foi criado.");
-    } catch (err) {
-      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível cadastrar o cliente."));
-    } finally {
-      setSalvandoCadastro(false);
-    }
-  };
-
   /* ------------------------------- Downloads ------------------------------- */
 
   /**
@@ -654,16 +659,17 @@ const PontoDeVenda = () => {
     setNotaAberta(null);
 
     /*
-     * A proposta convertida vira APROVADA aqui, e não no clique de converter.
+     * A proposta convertida é marcada aqui, e não no clique de converter.
      *
      * No clique, a venda ainda não existe — quem abre a nota e desiste
-     * deixaria um orçamento marcado como aceito sem nada por trás. Aqui a
+     * deixaria um orçamento marcado como fechado sem nada por trás. Aqui a
      * nota já foi gerada (é o que fecha o modal), então o "sim" do cliente
-     * virou fato.
+     * virou fato — e CONVERTIDO, não APROVADO, é o que tira a proposta da
+     * fila: ela não espera mais nada de ninguém.
      */
     if (convertido) {
       try {
-        await OrcamentoService.alterarStatus(convertido, "APROVADO");
+        await OrcamentoService.alterarStatus(convertido, "CONVERTIDO");
       } catch {
         /* A venda é o que importa e já está salva; a marcação pode ser feita
            na mão pelo botão de aprovar. */
@@ -990,12 +996,10 @@ const PontoDeVenda = () => {
                           </span>
 
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-[13px] text-ink">
-                              {o.clienteNome}
-                              {/* Sem cadastro é o que trava a conversão — dizer
-                                  isso na linha evita descobrir no clique. */}
-                              {!o.clienteId && <span className="ml-2 text-[10.5px] uppercase tracking-wider text-faint">sem cadastro</span>}
-                            </p>
+                            {/* Sem selo de "sem cadastro": converter cria a ficha
+                                sozinho, então a falta dela deixou de ser um
+                                impedimento sobre o qual avisar. */}
+                            <p className="truncate text-[13px] text-ink">{o.clienteNome}</p>
                             <p className="text-[11px] text-faint">
                               {horaVenda(o.criadoEm)} · {o.itens?.length ?? 0} {(o.itens?.length ?? 0) === 1 ? "item" : "itens"}
                             </p>
@@ -1021,20 +1025,29 @@ const PontoDeVenda = () => {
                          * já respondido seriam portas que não abrem.
                          */}
                         <LinhaAcoes>
-                          {o.status !== "APROVADO" && (
+                          {o.status !== "APROVADO" && o.status !== "RECUSADO" && (
                             <AcaoLinha icon={<Check size={14} />} label="Cliente aprovou" tone="sucesso" ocupado={nesteMomento} onClick={() => void aprovarOrcamento(o)} />
                           )}
 
-                          <AcaoLinha
-                            icon={<ShoppingCart size={14} />}
-                            label="Converter em venda"
-                            tone="aviso"
-                            ocupado={nesteMomento}
-                            onClick={() => void converterEmVenda(o)}
-                          />
+                          {o.status !== "RECUSADO" && (
+                            <AcaoLinha
+                              icon={<ShoppingCart size={14} />}
+                              label="Converter em venda"
+                              tone="aviso"
+                              ocupado={nesteMomento}
+                              onClick={() => void converterEmVenda(o)}
+                            />
+                          )}
 
-                          {!o.clienteId && (
-                            <AcaoLinha icon={<UserPlus size={14} />} label="Cadastrar cliente" onClick={() => setClienteDoOrcamento(o)} />
+                          {o.status !== "RECUSADO" && (
+                            <AcaoLinha icon={<X size={14} />} label="Cliente recusou" ocupado={nesteMomento} onClick={() => void recusarOrcamento(o)} />
+                          )}
+
+                          {/* Apagar só depois da recusa: enquanto a proposta
+                              está viva, o botão destrutivo fica a um clique de
+                              distância das ações que se usam o dia inteiro. */}
+                          {o.status === "RECUSADO" && (
+                            <AcaoLinha icon={<Trash2 size={14} />} label="Apagar" tone="perigo" ocupado={nesteMomento} onClick={() => void excluirOrcamento(o)} />
                           )}
 
                           {o.status === "ABERTO" && (
@@ -1215,20 +1228,6 @@ const PontoDeVenda = () => {
             </div>
           )}
         </Modal>
-
-        {/* Cadastro do cliente de uma proposta: o nome e o telefone já vêm
-            escritos, e ao salvar o orçamento passa a apontar para o cadastro. */}
-        {clienteDoOrcamento && (
-          <ClienteForm
-            prefill={{
-              nome: clienteDoOrcamento.clienteNome,
-              contato: { whatsapp: clienteDoOrcamento.clienteContato ?? "" },
-            }}
-            saving={salvandoCadastro}
-            onClose={() => setClienteDoOrcamento(null)}
-            onSubmit={cadastrarClienteDoOrcamento}
-          />
-        )}
 
         {/*
           Os nós que viram PDF.
