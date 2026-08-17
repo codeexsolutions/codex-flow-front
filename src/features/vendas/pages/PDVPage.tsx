@@ -8,10 +8,6 @@ import Invoice from "@/features/vendas/components/Invoice";
 import { PageScreen, PrimaryAction, GhostAction } from "@/shared/ui/PageShell";
 import SeletorDia from "@/shared/ui/SeletorDia";
 import OrcamentoService, { type Orcamento } from "@/features/orcamentos/services/orcamento.service";
-import Sheet from "@/shared/ui/Sheet";
-import PDVMobile, { type VendaResumo } from "@/features/vendas/components/PDVMobile";
-import { useIsMobile } from "@/shared/hooks/useIsMobile";
-import useAuth from "@/features/auth/store/auth.store";
 
 import useVendaStore from "@/features/vendas/store/venda.store";
 import useClienteStore from "@/features/clientes/store/cliente.store";
@@ -36,7 +32,7 @@ import { baixarNotaPdf } from "@/shared/ui/downloadNota";
 import useEnterprise from "@/features/empresa/store/enterprise.store";
 
 import { estaAberto as estaAberta, totalDoPedido, type ItemPedidoType, type PedidoClienteType } from "@/shared/domain/pedido";
-import { formatTime as horaVenda, formatDate as dataBr, diaExtenso, isSameDay as noMesmoDia, isSameMonth as ehDesteMes } from "@/shared/utils/date";
+import { formatTime as horaVenda, formatDate as dataBr, diaExtenso, isSameDay as noMesmoDia } from "@/shared/utils/date";
 import { getInitials as iniciais, formatDocument } from "@/shared/utils/format";
 import { Selo, type TomSelo } from "@/shared/ui/StatusBadge";
 
@@ -51,8 +47,8 @@ type NotaAberta = {
   itens?: ItemPedidoType[];
   /** Reescrevendo esta proposta em vez de criar outra. */
   orcamentoId?: string;
-  /** Proposta a marcar como aprovada quando a venda for gerada. */
-  aprovarOrcamentoId?: string;
+  /** Proposta que esta venda substitui — apagada quando a nota for gerada. */
+  converterOrcamentoId?: string;
 };
 
 /* --------------------------- Componentes locais --------------------------- */
@@ -174,8 +170,6 @@ const SITUACAO_ORCAMENTO: Record<string, { label: string; tom: TomSelo }> = {
 
 const PontoDeVenda = () => {
   const navigate = useNavigate();
-  const mobile = useIsMobile();
-  const { user } = useAuth();
 
   const vendas = useVendaStore((s) => s.vendas);
   const fetchVendas = useVendaStore((s) => s.fetchVendas);
@@ -225,7 +219,6 @@ const PontoDeVenda = () => {
 
   /* No celular a tela é outra e não tem esta tabela — o par de listas do dia é
      coisa de desktop, e buscar orçamento ali seria uma requisição jogada fora. */
-  const [somenteHoje, setSomenteHoje] = useState(true);
 
   /* Cadastros no próprio PDV: parar a venda para ir até Clientes ou Estoque e
      voltar é o que faz o operador desistir e vender "no caderno". */
@@ -285,14 +278,14 @@ const PontoDeVenda = () => {
   /* Falha aqui não pode derrubar o balcão: sem orçamentos a aba fica vazia e
      as vendas seguem funcionando. */
   const carregarOrcamentos = useCallback(async () => {
-    if (mobile) return;
-
+    /* Sem guarda de largura: a aba de orçamentos deixou de existir só no
+       desktop, então não carregá-la no celular deixaria a aba vazia. */
     try {
       setOrcamentos(await OrcamentoService.listar());
     } catch {
       setOrcamentos([]);
     }
-  }, [mobile]);
+  }, []);
 
   useEffect(() => {
     fetchVendas();
@@ -311,16 +304,17 @@ const PontoDeVenda = () => {
   /*
    * As vendas do dia escolhido, da mais recente para a mais antiga.
    *
-   * No celular o filtro continua sendo "hoje / este mês" — a tela de lá é uma
-   * folha corrida, sem o cabeçalho de tabela que abriga o calendário.
+   * O recorte é o do CALENDÁRIO, em qualquer largura. O celular tinha o seu
+   * próprio ("hoje / este mês") porque a tela de lá não tinha onde pôr o
+   * seletor de dia; agora tem — e dois recortes diferentes para a mesma lista
+   * faziam o mesmo aparelho mostrar números distintos ao girar de lado.
    */
-  const vendasVisiveis = useMemo(() => {
-    const base = mobile
-      ? vendas.filter((v) => (somenteHoje ? noMesmoDia(v.pedido.dataPedido) : ehDesteMes(v.pedido.dataPedido)))
-      : vendas.filter((v) => noMesmoDia(v.pedido.dataPedido, dia));
-
-    return [...base].sort((a, b) => +new Date(b.pedido.dataPedido) - +new Date(a.pedido.dataPedido));
-  }, [vendas, dia, mobile, somenteHoje]);
+  const vendasVisiveis = useMemo(
+    () =>
+      [...vendas.filter((v) => noMesmoDia(v.pedido.dataPedido, dia))]
+        .sort((a, b) => +new Date(b.pedido.dataPedido) - +new Date(a.pedido.dataPedido)),
+    [vendas, dia],
+  );
 
   const vendasFiltradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -548,9 +542,15 @@ const PontoDeVenda = () => {
         clienteId,
         nome: o.clienteNome,
         itens: itensDoOrcamento(o),
-        /* Aprovar junto: quem converte já teve o "sim" do cliente, e deixar a
-           proposta como "aguardando" faria a lista mentir sobre o que falta. */
-        aprovarOrcamentoId: o.status === "APROVADO" ? undefined : o.id,
+        /*
+         * Vai SEMPRE, qualquer que seja a situação da proposta.
+         *
+         * Antes havia uma exceção para o já APROVADO — fazia sentido enquanto
+         * o efeito era "aprovar junto": não há o que aprovar duas vezes. Agora
+         * o efeito é apagar, e a proposta aprovada é justamente a que mais
+         * precisa sair da lista depois de virar nota.
+         */
+        converterOrcamentoId: o.id,
       });
     } catch (err) {
       alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível converter o orçamento em venda."));
@@ -653,135 +653,24 @@ const PontoDeVenda = () => {
     abrirNota({ nome: nomeLimpo, orcamento: true });
   };
 
+  /**
+   * Fechar a nota não decide nada sobre o orçamento — só recarrega as listas.
+   *
+   * Aqui havia a marcação da proposta convertida, apoiada na ideia de que
+   * fechar significa ter salvado. Não significa: este mesmo `fecharNota` é o
+   * `onClose` da folha, e dispara quando alguém abre a conversão, muda de
+   * ideia e fecha no X. Quem apaga a proposta agora é o `Invoice`, depois de o
+   * servidor devolver o id da venda — ver `converterOrcamentoId` lá.
+   */
   const fecharNota = async () => {
-    const convertido = notaAberta?.aprovarOrcamentoId;
-
     setNotaAberta(null);
 
-    /*
-     * A proposta convertida é marcada aqui, e não no clique de converter.
-     *
-     * No clique, a venda ainda não existe — quem abre a nota e desiste
-     * deixaria um orçamento marcado como fechado sem nada por trás. Aqui a
-     * nota já foi gerada (é o que fecha o modal), então o "sim" do cliente
-     * virou fato — e CONVERTIDO, não APROVADO, é o que tira a proposta da
-     * fila: ela não espera mais nada de ninguém.
-     */
-    if (convertido) {
-      try {
-        await OrcamentoService.alterarStatus(convertido, "CONVERTIDO");
-      } catch {
-        /* A venda é o que importa e já está salva; a marcação pode ser feita
-           na mão pelo botão de aprovar. */
-      }
-    }
-
     /* Recarrega os dois: a nota fechada pode ter sido venda OU orçamento, e
-       quem acabou de montar a proposta espera vê-la na aba ao fechar. */
+       quem acabou de montar a proposta espera vê-la na aba ao fechar. A lista
+       de orçamentos também é o que faz a proposta apagada sumir da tela. */
     carregarVendas();
     carregarOrcamentos();
   };
-
-  /* No celular a tela é outra — ver `PDVMobile`. A lógica acima é a mesma;
-     muda só a apresentação e os modais, que viram folhas. */
-  const resumoMobile: VendaResumo[] = vendasFiltradas.map((v) => {
-    const total = totalDoPedido(v);
-    return {
-      pedidoId: v.pedido.pedidoId,
-      clienteId: v.clienteId,
-      nomeCliente: v.nomeCliente,
-      data: v.pedido.dataPedido,
-      total,
-      pago: Number(v.pedido.valorPago ?? 0),
-      status: statusPagamentoVenda(v, total),
-    };
-  });
-
-  if (mobile) {
-    return (
-      <div className="relative h-full w-full overflow-y-auto text-ink">
-        <PDVMobile
-          nomeUsuario={user?.nome}
-          vendas={resumoMobile}
-          faturamento={faturamento}
-          recebido={recebido}
-          pendente={pendente}
-          somenteHoje={somenteHoje}
-          onPeriodo={setSomenteHoje}
-          busca={busca}
-          onBusca={setBusca}
-          onAbrirNota={(v) => abrirNota({ id: v.pedidoId, clienteId: v.clienteId, nome: v.nomeCliente })}
-          onNovaVenda={() => setNovaVendaOpen(true)}
-          onNovoOrcamento={() => setOrcamentoOpen(true)}
-        />
-
-        {/* Modal de nome do orçamento no mobile — folha. */}
-        <Sheet open={orcamentoOpen} onClose={() => setOrcamentoOpen(false)} title="Novo orçamento" subtitle="Para quem é a proposta?">
-          <div className="flex flex-col gap-3 pt-1">
-            <input
-              autoFocus
-              value={nomeOrcamento}
-              onChange={(e) => setNomeOrcamento(e.target.value)}
-              placeholder="Nome do cliente"
-              onKeyDown={(e) => e.key === "Enter" && abrirOrcamento()}
-              className="w-full rounded-xl border border-fg/[0.08] bg-fg/[0.03] px-3.5 py-3 text-[14px] text-ink outline-none focus:border-accent/60"
-            />
-            <p className="text-[11.5px] leading-relaxed text-faint">Não precisa ter cadastro. A nota abre em modo orçamento — sem pagamento.</p>
-            <button type="button" onClick={abrirOrcamento} className="min-h-[42px] rounded-xl bg-accent px-5 text-[13px] text-white transition-all hover:brightness-110 active:scale-[0.99]">
-              Montar orçamento
-            </button>
-          </div>
-        </Sheet>
-
-        {/* Escolher cliente — folha, não modal centralizado. */}
-        <Sheet open={novaVendaOpen} onClose={() => setNovaVendaOpen(false)} title="Iniciar venda" subtitle="Escolha o cliente" altura="cheia">
-          <div className="flex flex-col gap-3 pt-1">
-            <div className="flex items-center gap-2.5 rounded-2xl border border-fg/[0.08] bg-fg/[0.03] px-4 focus-within:border-accent/50">
-              <Search className="h-4 w-4 shrink-0 text-muted" />
-              <input value={nomeCliente} onChange={(e) => setNomeCliente(e.target.value)} placeholder="Buscar cliente" className="w-full flex-1 bg-transparent py-3 text-[16px] text-ink outline-none placeholder:text-faint" />
-            </div>
-
-            {listaClientes.length > 0 ? (
-              listaClientes.map((c, i) => (
-                <button
-                  key={c.id ?? i}
-                  type="button"
-                  onClick={() => c.id && abrirNota({ clienteId: String(c.id), nome: c.nome })}
-                  className="focus-ring flex min-h-[60px] items-center gap-3 border-b border-fg/[0.05] text-left active:bg-fg/[0.04]"
-                >
-                  <Avatar name={c.nome} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[14.5px] text-ink">{c.nome}</span>
-                    {c.cpfCnpj && <span className="block truncate text-[12px] text-faint">{formatDocument(c.cpfCnpj)}</span>}
-                  </span>
-                  <ChevronRight size={16} className="shrink-0 text-muted" />
-                </button>
-              ))
-            ) : (
-              <div className="flex flex-col items-center gap-3 py-12 text-center">
-                <p className="text-[14px] text-ink">{nomeCliente.trim() ? "Nenhum cliente encontrado" : "Nenhum cliente cadastrado"}</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNovaVendaOpen(false);
-                    navigate("/clientes");
-                  }}
-                  className="focus-ring min-h-[44px] rounded-2xl bg-accent px-5 text-[14px] text-white"
-                >
-                  Ir para Clientes
-                </button>
-              </div>
-            )}
-          </div>
-        </Sheet>
-
-        {/* A nota ocupa a tela inteira: é onde a venda (ou o orçamento) acontece. */}
-        <Sheet open={!!notaAberta} onClose={fecharNota} title={notaAberta?.orcamento ? "Novo orçamento" : notaAberta?.id ? "Venda" : "Nova venda"} subtitle={notaAberta?.nome} altura="cheia">
-          {notaAberta && <Invoice id={notaAberta.id} clienteId={notaAberta.clienteId} nome={notaAberta.nome} onSaved={fecharNota} modoOrcamento={notaAberta.orcamento} itensIniciais={notaAberta.itens} orcamentoId={notaAberta.orcamentoId} />}
-        </Sheet>
-      </div>
-    );
-  }
 
   return (
     <PageScreen icon={<ShoppingCart className="h-5 w-5" />} title="Ponto de Venda" subtitle="Registre vendas e monte orçamentos">
@@ -1165,11 +1054,11 @@ const PontoDeVenda = () => {
       <Modal
         open={!!notaAberta}
         onClose={fecharNota}
-        title={notaAberta?.orcamentoId ? "Editar orçamento" : notaAberta?.orcamento ? "Novo orçamento" : notaAberta?.aprovarOrcamentoId ? "Converter orçamento em venda" : notaAberta?.id ? "Venda" : "Nova venda"}
+        title={notaAberta?.orcamentoId ? "Editar orçamento" : notaAberta?.orcamento ? "Novo orçamento" : notaAberta?.converterOrcamentoId ? "Converter orçamento em venda" : notaAberta?.id ? "Venda" : "Nova venda"}
         subtitle={notaAberta?.nome}
         size="full"
       >
-        {notaAberta && <Invoice id={notaAberta.id} clienteId={notaAberta.clienteId} nome={notaAberta.nome} onSaved={fecharNota} modoOrcamento={notaAberta.orcamento} itensIniciais={notaAberta.itens} orcamentoId={notaAberta.orcamentoId} />}
+        {notaAberta && <Invoice id={notaAberta.id} clienteId={notaAberta.clienteId} nome={notaAberta.nome} onSaved={fecharNota} modoOrcamento={notaAberta.orcamento} itensIniciais={notaAberta.itens} orcamentoId={notaAberta.orcamentoId} converterOrcamentoId={notaAberta.converterOrcamentoId} />}
       </Modal>
 
       {/* Modal de nome do orçamento no desktop. */}

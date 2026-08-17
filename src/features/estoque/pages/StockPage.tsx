@@ -25,9 +25,7 @@ import { formatCurrency as brl } from "@/shared/utils/currency";
 import { SkeletonTableRows, SkeletonIdentityCell } from "@/shared/ui/skeleton";
 import { useAutoPageSize, ROW_HEIGHT } from "@/shared/hooks/useAutoPageSize";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
-import { useIsMobile } from "@/shared/hooks/useIsMobile";
 import useSincronizacao from "@/shared/realtime/useSincronizacao";
-import EstoqueMobile from "@/features/estoque/components/EstoqueMobile";
 
 type ModalType = "registrar" | "categorias" | null;
 
@@ -108,6 +106,16 @@ const SITUACOES: { value: Situacao; label: string }[] = [
 const COLS = "grid-cols-[minmax(220px,1fr)_132px_110px_110px_92px_132px]";
 /** Soma das colunas fixas + folga para a flexível: abaixo disso a tabela rola. */
 const TABLE_MIN_WIDTH = 840;
+
+/**
+ * Os rótulos das colunas, em UMA lista.
+ *
+ * Servem ao cabeçalho do desktop e ao cartão do celular (ver `ListaLinha`).
+ * Escritos duas vezes, o cartão diria "Preço" onde a tabela diz "Venda" no dia
+ * em que alguém renomeasse um dos dois — e essa divergência entre desktop e
+ * celular é exatamente o que esta tela deixou de ter.
+ */
+const ROTULOS = ["Item", "Categoria", "Custo", "Venda", "Qtd.", "Estoque"];
 
 /**
  * O nível do estoque vem de `shared/domain/produto`.
@@ -222,7 +230,6 @@ const Kpi = ({ icon, label, valor, hint, tom }: { icon: ReactNode; label: string
 
 const Estoque = () => {
   const alert = useAlert();
-  const mobile = useIsMobile();
   const navigate = useNavigate();
 
   const [products, setProducts] = useState<ProductType[]>([]);
@@ -532,48 +539,6 @@ const Estoque = () => {
     </>
   );
 
-  if (mobile) {
-    return (
-      <>
-        <EstoqueMobile
-          produtos={filtered.map((p) => ({
-            id: String(p.id),
-            nome: p.nome,
-            descricao: p.descricao,
-            imagem: p.imagem,
-            valorVenda: p.valorVenda ?? 0,
-            quantidade: p.quantidade ?? 0,
-            nivel: stockLevel(p),
-            tamanho: p.tamanho,
-            tipo: p.tipo,
-            categoria: p.categoria,
-            categoriaCor: p.categoriaId ? categoriaPorId.get(p.categoriaId)?.cor : null,
-          }))}
-          valorEstoque={stats.valorEstoque}
-          unidades={stats.unidades}
-          emFalta={stats.esgotados}
-          estoqueBaixo={stats.baixos}
-          busca={search}
-          onBusca={setSearch}
-          /* "Sem controle" não existe nos chips do celular — ele nasceu do
-             filtro de situação do desktop. Cai em "todos" em vez de sumir com
-             a seleção. */
-          filtro={situacao === "ilimitado" ? "todos" : situacao}
-          onFiltro={setSituacao}
-          tipo={tipo}
-          onTipo={setTipo}
-          carregando={loading}
-          /* Mesma decisão da tabela: o toque abre a ficha, onde cabe tudo o
-             que o produto tem. */
-          onAbrir={(item) => navigate(`/estoque/${item.id}`)}
-          onNovo={() => setModal("registrar")}
-          onCategorias={() => setModal("categorias")}
-        />
-        {modais}
-      </>
-    );
-  }
-
   return (
     <PageScreen
       icon={<Tags className="h-5 w-5" />}
@@ -653,7 +618,17 @@ const Estoque = () => {
            * separá-las pelas duas pontas obrigava o olho a atravessar a barra
            * para montar um filtro só. É o mesmo arranjo da lista de notas.
            */}
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          {/*
+           * No celular a fileira de controles ROLA na horizontal em vez de
+           * quebrar linha.
+           *
+           * São cinco controles de largura fixa: em 360px eles empilhariam em
+           * quatro fileiras e a barra tomaria metade da tela antes de a lista
+           * começar. Rolando, a barra continua com uma linha de altura e todos
+           * os filtros continuam alcançáveis — inclusive os que o celular não
+           * tinha, porque a versão separada não os conhecia.
+           */}
+          <div className="-mx-4 flex max-w-full items-center gap-2 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:justify-end sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
             {/*
              * A sugestão ABRE a ficha; ela não filtra a tabela.
              *
@@ -768,22 +743,31 @@ const Estoque = () => {
         </div>
 
         {/* Colunas + linhas rolam juntas na horizontal quando a tela é estreita. */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
-          <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth: TABLE_MIN_WIDTH }}>
+        {/* A largura mínima é do DESKTOP: ela existe para as seis colunas não
+            se esmagarem. No celular a linha virou cartão (ver `ListaLinha`), e
+            forçar 840px ali daria rolagem horizontal num conteúdo que já cabe
+            em pé. Por variável porque `style` não aceita breakpoint. */}
+        <div className="flex min-h-0 flex-1 flex-col sm:overflow-x-auto">
+          <div
+            className="flex min-h-0 flex-1 flex-col sm:[min-width:var(--tabela-min)]"
+            style={{ "--tabela-min": `${TABLE_MIN_WIDTH}px` } as React.CSSProperties}
+          >
+            {/* Os rótulos saem de `ROTULOS`, a mesma lista que o cartão do
+                celular usa. "Custo" e não "Compra": quem presta serviço não
+                compra nada e mesmo assim tem custo — e mesmo na revenda o custo
+                real inclui frete e imposto, não só a nota do fornecedor. */}
             <ListaCabecalho cols={COLS}>
-              <p>Item</p>
-              <p>Categoria</p>
-              {/* "Custo" e não "Compra": quem presta serviço não compra nada e
-                  mesmo assim tem custo — e mesmo na revenda o custo real inclui
-                  frete e imposto, não só a nota do fornecedor. */}
-              <p className="text-right">Custo</p>
-              <p className="text-right">Venda</p>
-              <p className="text-right">Qtd.</p>
-              <p className="text-right">Estoque</p>
+              {ROTULOS.map((r, i) => (
+                <p key={r} className={i >= 2 ? "text-right" : undefined}>{r}</p>
+              ))}
             </ListaCabecalho>
 
             {/* Corpo: sem scroll — o que não cabe vai pra próxima página */}
-            <div ref={bodyRef} className="min-h-0 flex-1 overflow-hidden">
+            {/* `overflow-hidden` é do desktop, onde a página tem exatamente as
+                linhas que couberem. No celular os cartões são mais altos que a
+                linha medida, então o que sobra da página rola aqui dentro em
+                vez de ser cortado. */}
+            <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto sm:overflow-hidden">
               {loading ? (
                 <SkeletonRows count={perPage} />
               ) : filtered.length === 0 ? (
@@ -816,6 +800,7 @@ const Estoque = () => {
                       key={product.id}
                       cols={COLS}
                       altura={ROW_HEIGHT}
+                      rotulos={ROTULOS}
                       /*
                        * A linha abre a FICHA, não um modal de edição.
                        *

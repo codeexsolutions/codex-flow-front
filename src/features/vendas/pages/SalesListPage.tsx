@@ -16,9 +16,6 @@ import { PedidoStatusBadge } from "@/shared/ui/StatusBadge";
 import useAuth from "@/features/auth/store/auth.store";
 import { ehGestor } from "@/features/vendas/components/TabsVendas";
 import useVendaStore from "@/features/vendas/store/venda.store";
-import VendasMobile, { type VendaItem } from "@/features/vendas/components/VendasMobile";
-import Sheet from "@/shared/ui/Sheet";
-import { useIsMobile } from "@/shared/hooks/useIsMobile";
 import { gerarBlobNota } from "@/shared/ui/DownloadButton";
 import { baixarNotaPdf } from "@/shared/ui/downloadNota";
 import useEnterprise from "@/features/empresa/store/enterprise.store";
@@ -60,6 +57,15 @@ const ORDEM_FILTRO: StatusFiltro[] = ["todos", "pago", "pendente", "vencida", "c
  */
 const COLS = "grid-cols-[minmax(190px,1.7fr)_96px_120px_minmax(140px,1fr)_120px_120px_124px_56px]";
 
+/**
+ * Os rótulos das colunas, em UMA lista.
+ *
+ * Servem ao cabeçalho do desktop e ao cartão do celular (ver `ListaLinha`). A
+ * última é vazia: aquela coluna só reserva a largura do botão de baixar a nota,
+ * e no cartão ela não tem o que rotular.
+ */
+const ROTULOS = ["Cliente", "Data", "Situação", "Vencimento", "Total", "Pago", "Pendente", undefined];
+
 const ALTURA_LINHA = 60;
 
 /** A faixa de títulos das colunas mora dentro do corpo medido — ver `offset`. */
@@ -67,7 +73,6 @@ const ALTURA_CABECALHO = 40;
 
 /* ======================= Sales / Outlet Page ======================= */
 const SalesList = () => {
-  const mobile = useIsMobile();
   const vendas = useVendaStore((s) => s.vendas);
   const fetchVendas = useVendaStore((s) => s.fetchVendas);
   const enterprise = useEnterprise((s) => s.enterprise);
@@ -293,47 +298,6 @@ const SalesList = () => {
     return { valor, notas };
   }, [prazos, vendas]);
 
-  if (mobile) {
-    const itens: VendaItem[] = vendasFiltradas.map((v) => ({
-      pedidoId: v.pedido.pedidoId,
-      clienteId: v.clienteId,
-      nomeCliente: v.nomeCliente,
-      data: v.pedido.dataPedido,
-      total: totalDoPedido(v),
-      pendente: valorPendenteDoPedido(v),
-      status: estaCancelado(v) ? "cancelado" : estaFechado(v) ? "pago" : (prazos.get(v.pedido.pedidoId)?.vencidas ?? 0) > 0 ? "vencido" : "pendente",
-      vencimento: prazos.get(v.pedido.pedidoId)?.proximoVencimento ?? null,
-    }));
-
-    return (
-      <div className="h-full w-full overflow-y-auto text-ink">
-        <VendasMobile
-          vendas={itens}
-          totalVendas={vendas.length}
-          totalEmAberto={totalEmAberto}
-          vencido={vencido}
-          busca={search}
-          onBusca={setSearch}
-          status={status}
-          onStatus={setStatus}
-          onAbrirNota={(v) => abrirNota({ id: v.pedidoId, clienteId: v.clienteId, nome: v.nomeCliente })}
-          onBaixarNota={(v) => {
-            const original = vendasFiltradas.find((x) => x.pedido.pedidoId === v.pedidoId);
-            if (original) void baixarNota(original);
-          }}
-        />
-
-        {/* A nota ocupa a tela toda: é onde a venda é editada e recebida. */}
-        <Sheet open={!!notaAberta} onClose={fecharNota} title={notaAberta?.id ? "Venda" : "Nova venda"} subtitle={notaAberta?.nome} altura="cheia">
-          {notaAberta && <Invoice id={notaAberta.id} clienteId={notaAberta.clienteId} nome={notaAberta.nome} onSaved={fecharNota} />}
-        </Sheet>
-
-        {/* Nó de nota fora da tela para o download rápido. */}
-        <NotaEscondida venda={notaDownload} refNota={refNotaDownload} />
-      </div>
-    );
-  }
-
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <TabelaCard
@@ -424,15 +388,12 @@ const SalesList = () => {
           />
         ) : (
           <>
+            {/* Os rótulos saem de `ROTULOS`, a mesma lista do cartão do
+                celular. */}
             <ListaCabecalho cols={COLS}>
-              <span>Cliente</span>
-              <span>Data</span>
-              <span>Situação</span>
-              <span>Vencimento</span>
-              <span className="text-right">Total</span>
-              <span className="text-right">Pago</span>
-              <span className="text-right">Pendente</span>
-              <span />
+              {ROTULOS.map((r, i) => (
+                <span key={r ?? `vazio-${i}`} className={r && i >= 4 ? "text-right" : undefined}>{r}</span>
+              ))}
             </ListaCabecalho>
 
             {daPagina.map((v) => {
@@ -451,6 +412,7 @@ const SalesList = () => {
                 <ListaLinha
                   key={v.pedido.pedidoId}
                   cols={COLS}
+                  rotulos={ROTULOS}
                   altura={ALTURA_LINHA}
                   ariaLabel={`Abrir a nota de ${v.nomeCliente}`}
                   destaque={atrasada ? "danger" : undefined}

@@ -28,8 +28,6 @@ import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { Rosca } from "@/shared/ui/Rosca";
 import { PageScreen } from "@/shared/ui/PageShell";
 import { SkeletonKpis, SkeletonGrafico, SkeletonListaPainel } from "@/shared/ui/skeleton";
-import DashboardMobile from "@/features/dashboard/components/DashboardMobile";
-import { useIsMobile } from "@/shared/hooks/useIsMobile";
 import useAuth from "@/features/auth/store/auth.store";
 
 import useVendaStore from "@/features/vendas/store/venda.store";
@@ -189,7 +187,13 @@ const Kpi = ({
 
     <div className={`relative mb-2.5 flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-inset transition-transform duration-200 group-hover:scale-105 ${TONES[tone]}`}>{icon}</div>
     <p className="relative text-[11px] text-faint">{label}</p>
-    <p className="nums relative mt-0.5 truncate text-xl tracking-tight text-ink">
+    {/*
+      Um degrau menor no celular.
+      Em duas colunas de 360px sobram ~130px para o número, e "R$ 48.320,00"
+      em 20px não cabe — o `truncate` cortava justamente o dígito que decide a
+      ordem de grandeza, e "R$ 48.32…" é pior do que número nenhum.
+    */}
+    <p className="nums relative mt-0.5 truncate text-lg tracking-tight text-ink sm:text-xl">
       <NumeroAnimado valor={valor} moeda={moeda} />
     </p>
     {hint && <p className="relative mt-0.5 truncate text-[11px] text-faint">{hint}</p>}
@@ -293,7 +297,6 @@ const JANELAS = [
 
 const DashboardPage = () => {
   const navigate = useNavigate();
-  const mobile = useIsMobile();
   const { user } = useAuth();
 
   const [janela, setJanela] = useState<3 | 6 | 12>(12);
@@ -499,7 +502,10 @@ const DashboardPage = () => {
           whileTap={{ scale: 0.97 }}
           transition={{ type: "spring", stiffness: 500, damping: 30 }}
           onClick={() => navigate(para)}
-          className="focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg border border-fg/[0.08] bg-fg/[0.03] px-3 py-2 text-[11.5px] text-mist transition-colors hover:border-accent/40 hover:text-ink"
+          /* `shrink-0` e `whitespace-nowrap`: na faixa que rola (celular) o
+             flex tentaria espremer os cinco na largura da tela, e "Financeiro"
+             viraria duas linhas de cinco letras. */
+          className="focus-ring flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-fg/[0.08] bg-fg/[0.03] px-3 py-2 text-[11.5px] text-mist transition-colors hover:border-accent/40 hover:text-ink"
         >
           <Icone size={13} />
           {label}
@@ -508,35 +514,6 @@ const DashboardPage = () => {
     </>
   );
 
-  if (mobile) {
-    return (
-      <div className="h-full w-full overflow-y-auto text-ink">
-        <DashboardMobile
-          nomeUsuario={user?.nome}
-          faturadoMes={dados.faturadoMes}
-          recebidoMes={dados.recebidoMes}
-          aReceber={dados.aReceber}
-          vendasNoMes={dados.vendasNoMes}
-          totalClientes={clientes.length}
-          totalProdutos={produtos.length}
-          porMes={dados.porMes}
-          recentes={dados.recentes.map((v) => ({
-            id: v.pedido.pedidoId,
-            cliente: v.nomeCliente,
-            data: v.pedido.dataPedido,
-            total: totalDoPedido(v),
-            paga: estaFechado(v),
-          }))}
-          criticos={dados.criticos.map((p) => ({ id: String(p.id), nome: p.nome ?? "Produto", quantidade: p.quantidade ?? 0 }))}
-          onVenda={() => navigate("/vendas/lista")}
-          onIrParaEstoque={() => navigate("/estoque")}
-          onIrParaVendas={() => navigate("/vendas/lista")}
-          onIrParaClientes={() => navigate("/clientes")}
-        />
-      </div>
-    );
-  }
-
   return (
     <PageScreen
       icon={<saudacao.Icone className="h-5 w-5" />}
@@ -544,11 +521,12 @@ const DashboardPage = () => {
       subtitle={resumoDoDia}
       actions={atalhos}
     >
-      {/* KPIs */}
+      {/* KPIs — 2 → 3 → 5 colunas. Sem o degrau de 3, o tablet ficava com duas
+          fileiras de dois e um cartão sozinho na terceira. */}
       {carregando ? (
         <SkeletonKpis />
       ) : (
-        <Bloco i={0} className="grid shrink-0 grid-cols-2 gap-3 xl:grid-cols-5">
+        <Bloco i={0} className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
           <Kpi
             icon={<DollarSign size={16} />}
             label="Faturado no mês"

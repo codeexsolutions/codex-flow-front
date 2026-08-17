@@ -59,7 +59,25 @@ const HeaderPage = ({ title, subtitle, icon, tabs, actions }: HeaderPageProps) =
           </div>
         </div>
 
-        {actions && <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">{actions}</div>}
+        {/*
+         * No celular os controles descem para uma FAIXA PRÓPRIA que rola na
+         * horizontal; a partir de `sm` voltam a dividir a linha do título.
+         *
+         * Com `flex-1 justify-end flex-wrap` em qualquer largura — como era —,
+         * os cinco atalhos do painel não cabiam em 360px e quebravam em duas ou
+         * três fileiras encostadas à direita. O cabeçalho passava de uma linha
+         * para quatro e comia a tela antes de o primeiro número aparecer.
+         *
+         * `-mx-4 px-4` faz a faixa sangrar até a borda: rolagem que começa e
+         * termina no meio do vão parece conteúdo cortado, não conteúdo que
+         * anda. A margem é desfeita em `sm`, onde o padding do cabeçalho volta
+         * a valer.
+         */}
+        {actions && (
+          <div className="-mx-4 flex w-full min-w-0 items-center gap-2 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:w-auto sm:flex-1 sm:flex-wrap sm:justify-end sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden">
+            {actions}
+          </div>
+        )}
 
         {/* Navegação — pílulas à direita, na mesma linha do título */}
         {hasTabs && (

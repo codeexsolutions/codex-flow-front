@@ -18,8 +18,6 @@ import useFinanceiroStore from "@/features/financeiro/store/financeiro.store";
 import type { MovimentacaoType, NotaFinanceiroType, NovaMovimentacaoType } from "@/shared/domain/financeiro";
 import { formatCurrency as brl, money } from "@/shared/utils/currency";
 import { brDate, MONTHS } from "@/shared/utils/date";
-import { useIsMobile } from "@/shared/hooks/useIsMobile";
-import FinanceiroMobile from "@/features/financeiro/components/FinanceiroMobile";
 import FiltroPeriodo, { dentroDoPeriodo, periodoPadrao, rotuloPeriodo, type Periodo } from "@/features/financeiro/components/FiltroPeriodo";
 
 /**
@@ -55,7 +53,6 @@ const dia10 = (v?: string | null) => (v ? String(v).slice(0, 10) : "");
 
 export default function CaixaPage() {
   const alert = useAlert();
-  const mobile = useIsMobile();
   const C = usePainelCores();
 
   const resumo = useFinanceiroStore((s) => s.resumo);
@@ -69,7 +66,6 @@ export default function CaixaPage() {
 
   const [periodo, setPeriodo] = useState<Periodo>(periodoPadrao);
   const [showNovaMovimentacao, setShowNovaMovimentacao] = useState(false);
-  const [abaMobile, setAbaMobile] = useState<"notas" | "caixa">("caixa");
   const [salvando, setSalvando] = useState(false);
   const [detalhe, setDetalhe] = useState<NotaFinanceiroType | null>(null);
 
@@ -404,47 +400,6 @@ export default function CaixaPage() {
           <RotateCw size={14} /> Tentar de novo
         </button>
       </div>
-    );
-  }
-
-  if (mobile) {
-    return (
-      <>
-        {/* O celular recebe o mesmo recorte de período do desktop. As abas
-            continuam sendo dele: "Notas" no celular lista recebimentos, não
-            pendências — o mesmo assunto da tabela de baixo do desktop. */}
-        <FinanceiroMobile
-          aba={abaMobile}
-          onAba={setAbaMobile}
-          saldoCaixa={totais.saldo}
-          aReceber={totais.recebidoVendas}
-          entradas={totais.entradas + totais.recebidoVendas}
-          saidas={totais.saidas}
-          notas={recebimentos.map((n) => ({
-            id: String(n.pedido_id),
-            cliente: n.cliente_nome,
-            pedido: n.codigo_pedido,
-            total: Number(n.total ?? 0),
-            pago: Number(n.valor_pago ?? 0),
-            data: n.data_pagamento ?? n.data_pedido,
-            quitada: Number(n.valor_pago ?? 0) >= Number(n.total ?? 0),
-            formaPagamento: n.forma_pagamento,
-          }))}
-          movimentacoes={movimentacoesDoPeriodo.map((m) => ({
-            id: m.id,
-            descricao: m.descricao,
-            categoria: m.categoria,
-            valor: Number(m.valor),
-            data: m.data_movimentacao,
-            entrada: m.tipo === "ENTRADA",
-          }))}
-          carregando={loading}
-          onNovaMovimentacao={() => setShowNovaMovimentacao(true)}
-          onExcluir={handleExcluirMovimentacao}
-          onPagar={(n) => setDetalhe(recebimentos.find((r) => String(r.pedido_id) === n.id) ?? null)}
-        />
-        {modais}
-      </>
     );
   }
 

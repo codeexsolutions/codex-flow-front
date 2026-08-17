@@ -6,9 +6,7 @@ import useClienteStore from "@/features/clientes/store/cliente.store";
 import useSincronizacao from "@/shared/realtime/useSincronizacao";
 import ClientType, { camposDeLead, completudeCliente, eStatus, type ContactType } from "@/shared/domain/cliente";
 import ClienteForm from "@/features/clientes/components/ClienteForm";
-import ClientesMobile, { type ClienteItem } from "@/features/clientes/components/ClientesMobile";
 import FichaCliente from "@/features/clientes/components/FichaCliente";
-import { useIsMobile } from "@/shared/hooks/useIsMobile";
 import type { ClienteFormData } from "@/features/clientes/schema/cliente.schema";
 import ClientesGrowthChart from "@/features/clientes/components/ClientesGrowthChart";
 import { useAlert } from "@/shared/ui/Alert";
@@ -65,6 +63,15 @@ const COLS = "grid-cols-[minmax(0,1fr)_148px_152px_84px_104px_104px]";
 /** Soma das colunas fixas + folga para a flexível: abaixo disso a tabela rola. */
 const TABLE_MIN_WIDTH = 824;
 
+/**
+ * Os rótulos das colunas, em UMA lista.
+ *
+ * Servem ao cabeçalho do desktop e ao cartão do celular (ver `ListaLinha`). A
+ * última posição é vazia de propósito: aquela coluna só reserva a largura das
+ * ações, e no cartão ela não tem o que rotular.
+ */
+const ROTULOS = ["Cliente", "Contato", "Local", "Ficha", "Situação", undefined];
+
 function contactDigits(contato?: ContactType) {
   if (!contato) return "";
   return onlyDigits(`${contato.telefone ?? ""}${contato.celular ?? ""}${contato.whatsapp ?? ""}`);
@@ -108,7 +115,6 @@ const PainelLateral = ({ icon, title, meta, children }: { icon: React.ReactNode;
 
 const Clientes = () => {
   const navigate = useNavigate();
-  const mobile = useIsMobile();
   const alert = useAlert();
 
   // Estado dos clientes vive no store — assim PDV, Dashboard e Relatórios
@@ -371,37 +377,6 @@ const Clientes = () => {
     if (local !== "todos" && !locais.includes(local)) setLocal("todos");
   }, [locais, local]);
 
-  if (mobile) {
-    const itens: ClienteItem[] = filtered.map((c) => ({
-      id: String(c.id ?? ""),
-      nome: c.nome,
-      cpfCnpj: c.cpfCnpj ?? undefined,
-      telefone: c.contato?.telefone ? String(c.contato.telefone) : undefined,
-      whatsapp: c.contato?.whatsapp ? String(c.contato.whatsapp) : undefined,
-      ativo: c.status === eStatus.ATIVO,
-      aniversarioHoje: ehAniversarioHoje(c.dataNascimento),
-    }));
-
-    return (
-      <div className="h-full w-full overflow-y-auto text-ink">
-        <ClientesMobile
-          clientes={itens}
-          total={customers.length}
-          ativos={stats.ativos}
-          busca={search}
-          onBusca={setSearch}
-          filtro={filtro === "incompletos" ? "todos" : filtro}
-          onFiltro={setFiltro}
-          carregando={loading}
-          onAbrir={(c) => navigate(`/clientes/${c.id}`)}
-          onNovo={() => setShowCreate(true)}
-        />
-
-        {showCreate && <ClienteForm saving={saving} onClose={() => setShowCreate(false)} onSubmit={handleCreate} />}
-      </div>
-    );
-  }
-
   return (
     <PageScreen title="Clientes" subtitle="Cadastre, organize e acompanhe sua base de clientes" icon={<Users />}>
       {error && (
@@ -451,7 +426,9 @@ const Clientes = () => {
              * os filtros de cidade e aniversário. Fechado, um seletor ocupa o
              * espaço de uma opção e mostra a contagem de todas.
              */}
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            {/* No celular a fileira ROLA na horizontal em vez de quebrar em
+                quatro linhas — ver a mesma decisão no Estoque. */}
+            <div className="-mx-4 flex max-w-full items-center gap-2 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:justify-end sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
               {/*
                * A sugestão ABRE a ficha; ela não filtra a tabela.
                *
@@ -523,19 +500,28 @@ const Clientes = () => {
           </div>
 
           {/* Colunas + linhas rolam juntas na horizontal quando a tela é estreita. */}
-          <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
-            <div className="flex min-h-0 flex-1 flex-col" style={{ minWidth: TABLE_MIN_WIDTH }}>
+          {/* Largura mínima e rolagem horizontal são do DESKTOP: no celular a
+              linha virou cartão e já cabe em pé. */}
+          <div className="flex min-h-0 flex-1 flex-col sm:overflow-x-auto">
+            <div
+              className="flex min-h-0 flex-1 flex-col sm:[min-width:var(--tabela-min)]"
+              style={{ "--tabela-min": `${TABLE_MIN_WIDTH}px` } as React.CSSProperties}
+            >
+              {/* Os rótulos saem de `ROTULOS`, a mesma lista do cartão do
+                  celular. "Ações" é escrito à parte: no cartão os botões ficam
+                  numa faixa própria, sem rótulo. */}
               <ListaCabecalho cols={COLS}>
-                <p>Cliente</p>
-                <p>Contato</p>
-                <p>Local</p>
-                <p>Ficha</p>
-                <p className="text-right">Situação</p>
+                {ROTULOS.slice(0, 5).map((r, i) => (
+                  <p key={r} className={i >= 4 ? "text-right" : undefined}>{r}</p>
+                ))}
                 <p className="text-right">Ações</p>
               </ListaCabecalho>
 
               {/* Corpo: sem scroll — o que não cabe vai pra próxima página */}
-              <div ref={bodyRef} className="min-h-0 flex-1 overflow-hidden">
+              {/* `overflow-hidden` é do desktop, que mostra exatamente as
+                  linhas que couberem; no celular os cartões são mais altos e o
+                  resto da página rola aqui. */}
+              <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto sm:overflow-hidden">
                 {loading ? (
                   <SkeletonRows count={perPage} />
                 ) : filtered.length === 0 ? (
@@ -575,6 +561,7 @@ const Clientes = () => {
                           key={c.id ?? c.nome}
                           cols={COLS}
                           altura={ROW_HEIGHT}
+                          rotulos={ROTULOS}
                           onClick={() => c.id && navigate(`/clientes/${c.id}`)}
                           ariaLabel={`Abrir cliente ${c.nome}`}
                           /*
