@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm, type Path } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   BadgeCheck, Cake, Check, Home, IdCard, Mail, MapPin,
   MessageCircle, Phone, Save, Search, Smartphone, Loader2, UserRound, Users,
@@ -44,6 +45,22 @@ const ETAPAS = [
   { titulo: "Contato", resumo: "Como falar com ele", icone: Phone },
   { titulo: "Endereço", resumo: "Onde ele está", icone: MapPin },
 ] as const;
+
+/**
+ * A entrada do conteúdo ao trocar de etapa.
+ *
+ * Animação de CSS, e não `AnimatePresence` como nas fichas de produto e de
+ * funcionário. Lá a aba que sai é DESMONTADA — é o que o `AnimatePresence`
+ * precisa para animar a saída. Aqui as três etapas ficam montadas de propósito
+ * (ver a nota logo acima delas), então não há o que desmontar, e forçar isso
+ * para ganhar a animação trocaria um enfeite por um formulário que perde o que
+ * foi digitado.
+ *
+ * O `fade-up` do tema resolve sem esse custo: uma animação de CSS REINICIA
+ * sozinha quando o elemento sai de `display: none`, que é exatamente o que a
+ * troca de aba faz. `motion-reduce` desliga para quem pediu menos movimento.
+ */
+const ETAPA_VISIVEL = "flex flex-col gap-5 animate-fade-up motion-reduce:animate-none";
 
 const toDefaults = (c?: Partial<ClientType> | null): ClienteFormInput => ({
   nome: c?.nome ?? "",
@@ -90,6 +107,7 @@ type Props = {
 const ClienteForm = ({ open = true, cliente, prefill, saving = false, onClose, onSubmit }: Props) => {
   const alert = useAlert();
   const { buscar, buscando } = useBuscaCep();
+  const reduzir = useReducedMotion();
   const editando = Boolean(cliente);
 
   const [etapa, setEtapa] = useState(0);
@@ -240,7 +258,17 @@ const ClienteForm = ({ open = true, cliente, prefill, saving = false, onClose, o
           decoração ocupando 70px acima de um formulário que a pessoa abriu
           para digitar um nome.
         */}
-        <div className="grid grid-cols-3 gap-1 rounded-xl border border-fg/[0.07] bg-fg/[0.02] p-1">
+        {/*
+          A pílula do destaque é UM elemento que se move, não um fundo que
+          acende e apaga em cada botão.
+
+          É o mesmo `layoutId` das fichas de produto e de funcionário — e o
+          motivo é o mesmo: o framer interpola a posição entre um render e
+          outro, e o olho SEGUE o destaque para onde ele foi. Acendendo e
+          apagando, o olho tem de procurar o que mudou a cada troca de aba, e
+          três abas com ícone parecido tornam essa procura real.
+        */}
+        <div className="grid grid-cols-3 gap-0.5 rounded-xl border border-fg/[0.07] bg-fg/[0.02] p-0.5">
           {ETAPAS.map((e, i) => {
             const Icone = e.icone;
             const atual = i === etapa;
@@ -251,18 +279,26 @@ const ClienteForm = ({ open = true, cliente, prefill, saving = false, onClose, o
                 type="button"
                 onClick={() => void irPara(i)}
                 aria-current={atual ? "step" : undefined}
-                className={`focus-ring flex min-h-[38px] cursor-pointer items-center justify-center gap-2 rounded-lg px-2 text-[12.5px] transition-colors ${
-                  atual ? "bg-accent/[0.14] text-ink ring-1 ring-inset ring-accent/30" : "text-mist hover:bg-fg/[0.04] hover:text-ink"
-                }`}
+                className="focus-ring relative flex min-h-[38px] cursor-pointer items-center justify-center gap-2 rounded-[10px] px-2 text-[12.5px] transition-colors"
               >
-                <span className={atual ? "text-accent-soft" : "text-faint"}>
-                  {preenchida[i] && !atual ? <Check size={13} /> : <Icone size={13} />}
-                </span>
+                {atual && (
+                  <motion.span
+                    layoutId="aba-cliente-form"
+                    /* Sem animação de layout para quem pediu menos movimento: o
+                       destaque continua aparecendo, só não desliza. */
+                    transition={reduzir ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 38 }}
+                    className="absolute inset-0 rounded-[10px] bg-accent"
+                  />
+                )}
 
-                {/* No celular só a etapa atual mostra o rótulo: três nomes
-                    lado a lado em 360px quebram linha e a barra dobra de
-                    altura. O ícone continua identificando as outras. */}
-                <span className={`min-w-0 truncate ${atual ? "" : "hidden sm:inline"}`}>{e.titulo}</span>
+                <span className={`relative flex items-center gap-2 ${atual ? "text-white" : "text-mist"}`}>
+                  {preenchida[i] && !atual ? <Check size={13} className="text-faint" /> : <Icone size={13} className={atual ? "" : "text-faint"} />}
+
+                  {/* No celular só a etapa atual mostra o rótulo: três nomes
+                      lado a lado em 360px quebram linha e a barra dobra de
+                      altura. O ícone continua identificando as outras. */}
+                  <span className={`min-w-0 truncate ${atual ? "" : "hidden sm:inline"}`}>{e.titulo}</span>
+                </span>
               </button>
             );
           })}
@@ -285,7 +321,7 @@ const ClienteForm = ({ open = true, cliente, prefill, saving = false, onClose, o
           Elemento com `display: none` também não recebe foco, então o Tab não
           passeia por campos invisíveis.
         */}
-        <div className={etapa === 0 ? "flex flex-col gap-5" : "hidden"}>
+        <div className={etapa === 0 ? ETAPA_VISIVEL : "hidden"}>
         <FormSection title="Identificação" icon={<UserRound className="h-3.5 w-3.5" />}>
           <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-3">
             <div className="sm:col-span-2">
@@ -341,7 +377,7 @@ const ClienteForm = ({ open = true, cliente, prefill, saving = false, onClose, o
         {/* ---------- Contato ---------- */}
         {/* Os três números na mesma linha, na ordem em que a loja usa: o
             WhatsApp primeiro, que é por onde se fala com o cliente. */}
-        <div className={etapa === 1 ? "flex flex-col gap-5" : "hidden"}>
+        <div className={etapa === 1 ? ETAPA_VISIVEL : "hidden"}>
         <FormSection title="Contato" icon={<Phone className="h-3.5 w-3.5" />}>
           <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-3">
             <TextField label="WhatsApp" icon={<MessageCircle className="h-3.5 w-3.5" />} placeholder="(00) 00000-0000" inputMode="tel" error={errors.contato?.whatsapp?.message} {...masked("contato.whatsapp", maskPhone)} />
@@ -354,7 +390,7 @@ const ClienteForm = ({ open = true, cliente, prefill, saving = false, onClose, o
         </div>
 
         {/* ---------- Endereço ---------- */}
-        <div className={etapa === 2 ? "flex flex-col gap-5" : "hidden"}>
+        <div className={etapa === 2 ? ETAPA_VISIVEL : "hidden"}>
         <FormSection title="Endereço" icon={<MapPin className="h-3.5 w-3.5" />}>
           {/* O CEP e o que ele preenche na mesma linha: digitar rua, bairro,
               cidade e UF à mão é onde o cadastro de endereço morre. */}

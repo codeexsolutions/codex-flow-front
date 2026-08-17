@@ -29,6 +29,16 @@ export type ItemPedidoType = {
   valorVendaItem: number;
   subtotalItens?: number;
   produto: ProdutoPedidoType;
+  /**
+   * Qual peça saiu, quando o produto tem variações.
+   *
+   * Sem isto, "vendi 3 camisetas" não diz se foram P ou G — a baixa cairia no
+   * produto inteiro e a nota reimpressa meses depois não mostraria o que o
+   * cliente levou.
+   */
+  variacaoId?: string | null;
+  /** "M / Azul" — só para exibir; quem manda no estoque é o `variacaoId`. */
+  variacaoDescricao?: string;
 };
 
 export type PedidoType = {
@@ -60,6 +70,8 @@ export type ItemPedidoDto = {
   produtoId: string;
   quantidade: number;
   valorVenda: number;
+  /** Ausente quando o produto não tem variações. */
+  variacaoId?: string | null;
 };
 
 /** POST /pedidos/novo-pedido — o controller lê `itensPedido`. */

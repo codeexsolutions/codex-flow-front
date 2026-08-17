@@ -86,6 +86,27 @@ export default defineConfig(({ mode }) => {
 
         workbox: {
           globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+
+          /*
+           * O teto do que entra no precache.
+           *
+           * O padrão do workbox é 2 MiB, e o bundle do app passou disso. O
+           * sintoma não é um aviso: é o `vite build` FALHANDO, com uma
+           * mensagem sobre "assets exceeding the limit" que parece problema de
+           * configuração de cache e não de tamanho de bundle.
+           *
+           * Deixar o arquivo de fora do precache seria pior do que parece: ele
+           * É o app. Sem ele no cache, abrir offline serve o `index.html` e
+           * trava numa tela em branco esperando um script que não vem — que é
+           * exatamente o que o PWA existe para evitar.
+           *
+           * 5 MiB dá folga para o app crescer sem que o build volte a morrer
+           * por um kilobyte. Continua sendo um teto: se um dia algum asset
+           * único passar disso, o erro volta — e aí é para ser investigado
+           * mesmo, porque nada num app deste tamanho deveria ter 5 MB.
+           */
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+
           cleanupOutdatedCaches: true,
           clientsClaim: true,
           // Ligado junto com o `autoUpdate`: sem ele o worker novo instala mas

@@ -1,9 +1,12 @@
-import { Search, X, Plus, Package, Eye, EyeOff, AlertTriangle } from "lucide-react";
+import { Search, X, Plus, Package, Eye, EyeOff, AlertTriangle, FolderTree } from "lucide-react";
 
 import { formatNumber } from "@/shared/utils/format";
 import { useDinheiroVisivel } from "@/shared/session/valoresVisiveis";
+import { SEM_CATEGORIA, type NivelEstoque } from "@/shared/domain/produto";
 
 export type FiltroEstoque = "todos" | "disponivel" | "baixo" | "esgotado";
+
+export type TipoEstoque = "tudo" | "PRODUTO" | "SERVICO";
 
 export type ProdutoItem = {
   id: string;
@@ -12,10 +15,20 @@ export type ProdutoItem = {
   imagem?: string;
   valorVenda: number;
   quantidade: number;
-  nivel: "disponivel" | "baixo" | "esgotado";
+  /**
+   * Vem de `nivelEstoque` — inclusive `ilimitado`, que é o item que não conta
+   * unidades (serviço, encomenda). Antes ele chegava aqui como `esgotado`,
+   * porque a quantidade era zero, e o card ficava vermelho dizendo "Esgotado"
+   * sobre um serviço que ninguém precisa repor.
+   */
+  nivel: NivelEstoque;
   /** Selo ao lado do nome — sem ele, dois tamanhos do mesmo item se confundem. */
   tamanho?: string;
   tipo?: "PRODUTO" | "SERVICO";
+  /** Nome da categoria. Vazio aparece como "Sem categoria", não some. */
+  categoria?: string | null;
+  /** Cor cadastrada da categoria. `null` = tom neutro do tema. */
+  categoriaCor?: string | null;
 };
 
 type Props = {
@@ -28,10 +41,29 @@ type Props = {
   onBusca: (v: string) => void;
   filtro: FiltroEstoque;
   onFiltro: (f: FiltroEstoque) => void;
+  /**
+   * Produto ou serviço — dimensão SEPARADA da situação do estoque.
+   *
+   * Os dois recortes respondem perguntas diferentes ("o que é isto" e "quanto
+   * tem"), e misturá-los na mesma fileira de chips criaria combinações sem
+   * sentido: "Serviços" e "Esgotado" ao mesmo tempo desliga um pelo outro, já
+   * que serviço não conta estoque. Em duas fileiras, cada uma filtra o que
+   * sabe filtrar.
+   */
+  tipo: TipoEstoque;
+  onTipo: (t: TipoEstoque) => void;
   carregando: boolean;
   onAbrir: (p: ProdutoItem) => void;
   onNovo: () => void;
+  /** Abre o painel de categorias — o mesmo do desktop, na mesma moldura. */
+  onCategorias: () => void;
 };
+
+const TIPOS: { id: TipoEstoque; label: string }[] = [
+  { id: "tudo", label: "Tudo" },
+  { id: "PRODUTO", label: "Produtos" },
+  { id: "SERVICO", label: "Serviços" },
+];
 
 const FILTROS: { id: FiltroEstoque; label: string }[] = [
   { id: "todos", label: "Todos" },
@@ -40,10 +72,13 @@ const FILTROS: { id: FiltroEstoque; label: string }[] = [
   { id: "disponivel", label: "Em estoque" },
 ];
 
-const NIVEL: Record<ProdutoItem["nivel"], { cls: string; texto: (q: number) => string }> = {
+const NIVEL: Record<NivelEstoque, { cls: string; texto: (q: number) => string }> = {
   esgotado: { cls: "text-danger", texto: () => "Esgotado" },
   baixo: { cls: "text-warning", texto: (q) => `${formatNumber(q)} un.` },
   disponivel: { cls: "text-mist", texto: (q) => `${formatNumber(q)} un.` },
+  /* Sem número: mostrar "0 un." para um serviço é pior do que não mostrar
+     nada — parece falta de estoque de algo que não tem estoque. */
+  ilimitado: { cls: "text-faint", texto: () => "Sem controle" },
 };
 
 /**
@@ -66,9 +101,12 @@ const EstoqueMobile = ({
   onBusca,
   filtro,
   onFiltro,
+  tipo,
+  onTipo,
   carregando,
   onAbrir,
   onNovo,
+  onCategorias,
 }: Props) => {
   const { mostrar, alternar, dinheiro } = useDinheiroVisivel();
 
@@ -85,14 +123,28 @@ const EstoqueMobile = ({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={alternar}
-          aria-label={mostrar ? "Esconder valores" : "Mostrar valores"}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-mist transition-colors hover:bg-fg/[0.06]"
-        >
-          {mostrar ? <Eye size={18} /> : <EyeOff size={18} />}
-        </button>
+        {/* Duas ações de tela, não de item: esconder valores e organizar as
+            gavetas do catálogo. Ficam no topo, longe do botão de cadastrar —
+            que é a ação de todo dia e mora fixo no rodapé. */}
+        <div className="flex shrink-0 items-center">
+          <button
+            type="button"
+            onClick={onCategorias}
+            aria-label="Categorias"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-mist transition-colors hover:bg-fg/[0.06]"
+          >
+            <FolderTree size={18} />
+          </button>
+
+          <button
+            type="button"
+            onClick={alternar}
+            aria-label={mostrar ? "Esconder valores" : "Mostrar valores"}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-mist transition-colors hover:bg-fg/[0.06]"
+          >
+            {mostrar ? <Eye size={18} /> : <EyeOff size={18} />}
+          </button>
+        </div>
       </div>
 
       {/* ---------- O que exige ação ---------- */}
@@ -139,8 +191,33 @@ const EstoqueMobile = ({
         </div>
       </div>
 
-      {/* ---------- Filtros ---------- */}
-      <div className="mt-3 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* ---------- Tipo ---------- */}
+      {/* Segmentado, e não chips soltos: as três opções são excludentes e
+          cobrem o total, então elas formam um controle só. */}
+      <div className="mt-3 px-5">
+        <div className="flex items-center gap-1 rounded-xl border border-fg/[0.08] bg-fg/[0.03] p-1">
+          {TIPOS.map((t) => {
+            const on = tipo === t.id;
+
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => onTipo(t.id)}
+                aria-pressed={on}
+                className={`min-h-[34px] flex-1 rounded-lg text-[12.5px] transition-colors ${
+                  on ? "bg-accent text-white" : "text-mist active:bg-fg/[0.05]"
+                }`}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ---------- Situação ---------- */}
+      <div className="mt-2 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {FILTROS.map((f) => {
           const on = filtro === f.id;
 
@@ -205,9 +282,34 @@ const EstoqueMobile = ({
                         <span className="shrink-0 rounded bg-accent/[0.12] px-1.5 py-px text-[10px] leading-[16px] text-accent-soft">serviço</span>
                       )}
                     </span>
-                    <span className={`flex items-center gap-1 truncate text-[12px] ${n.cls}`}>
-                      {p.nivel !== "disponivel" && <AlertTriangle size={11} className="shrink-0" />}
-                      {n.texto(p.quantidade)}
+                    {/*
+                      A categoria divide a linha com a quantidade em vez de
+                      virar um selo ao lado do nome.
+                      Selo junto do nome disputaria espaço com tamanho e
+                      "serviço", e num aparelho de 360px o nome do produto —
+                      que é o que a pessoa procura — seria o primeiro a ser
+                      cortado. Aqui embaixo há linha inteira, e a categoria
+                      fica em tom apagado para não competir com o aviso de
+                      estoque, que é o que exige ação.
+                    */}
+                    <span className="flex items-center gap-1.5 truncate text-[12px]">
+                      <span className={`flex shrink-0 items-center gap-1 ${n.cls}`}>
+                        {(p.nivel === "baixo" || p.nivel === "esgotado") && <AlertTriangle size={11} className="shrink-0" />}
+                        {n.texto(p.quantidade)}
+                      </span>
+
+                      <span className="shrink-0 text-faint">·</span>
+
+                      <span className="inline-flex min-w-0 items-center gap-1 text-faint">
+                        {p.categoria && (
+                          <span
+                            aria-hidden
+                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-fg/30"
+                            style={p.categoriaCor ? { background: p.categoriaCor } : undefined}
+                          />
+                        )}
+                        <span className="truncate">{p.categoria || SEM_CATEGORIA}</span>
+                      </span>
                     </span>
                   </span>
 

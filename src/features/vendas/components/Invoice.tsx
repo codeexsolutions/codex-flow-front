@@ -5,6 +5,8 @@ import { formatDate } from "@/shared/utils/date";
 import { formatCurrency } from "@/shared/utils/currency";
 
 import ProductType from "@/shared/domain/produto";
+import type { Indisponibilidade, Variacao } from "@/shared/domain/estoque";
+import { extrairFaltas } from "@/shared/domain/estoque";
 import type { PedidoClienteType, ItemPedidoType, NovoPedidoDto, PedidoUpdateDto } from "@/shared/domain/pedido";
 
 import NoteService from "@/features/vendas/services/note.service";
@@ -139,6 +141,10 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
      ignora: os itens dela são carregados do pedido logo abaixo. */
   const [itens, setItens] = useState<ItemPedidoType[]>(() => (idInicial ? [] : (itensIniciais ?? [])));
 
+  /* Linhas que o servidor recusou por falta de estoque, por chave
+     produto+variação. Ver `chaveDaLinha`. */
+  const [faltas, setFaltas] = useState<Indisponibilidade[]>([]);
+
   /** Data de emissão ao lado do vendedor: quem fez e quando, na mesma leitura. */
   const dataEmissao = formatDate(pedido?.pedido?.dataPedido ?? new Date());
 
@@ -256,14 +262,29 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
   /* `avisar` existe para o cadastro feito de dentro da nota: lá o produto entra
      na nota junto do "Produto cadastrado!", e dois avisos seguidos para o mesmo
      gesto só atrapalham quem está atendendo. */
-  const adicionarProduto = (produtoHandle: ProductType, avisar = true) => {
+  const adicionarProduto = (produtoHandle: ProductType, variacao?: Variacao, avisar = true) => {
+    /*
+     * A identidade da linha é PRODUTO + VARIAÇÃO.
+     *
+     * Antes era só o produto, e com variações isso passou a estar errado:
+     * lançar a camiseta M e depois a G somaria as duas na mesma linha, e a
+     * nota sairia dizendo "2 camisetas" sem dizer quais — com a baixa caindo
+     * toda na primeira variação.
+     */
+    const mesmaLinha = (l: ItemPedidoType) =>
+      l.produto.produtoId === produtoHandle.id && (l.variacaoId ?? null) === (variacao?.id ?? null);
+
+    /* O preço da variação manda quando ela tem um; senão herda o do produto.
+       Ver a nota do campo em `shared/domain/estoque.ts` sobre por que zero não
+       serve como "herda". */
+    const preco = variacao?.valorVendaEfetivo ?? variacao?.valorVenda ?? produtoHandle.valorVenda;
+
     setItens((prev) => {
-      // Mesmo produto já está na nota → soma a quantidade na linha existente
-      // em vez de criar uma segunda linha (duas linhas do mesmo produto
-      // quebravam a edição/remoção da nota no backend).
-      const existente = prev.find((l) => l.produto.produtoId === produtoHandle.id);
-      if (existente) {
-        return prev.map((l) => (l.produto.produtoId === produtoHandle.id ? { ...l, quantidadeItem: l.quantidadeItem + 1 } : l));
+      // Mesma linha já está na nota → soma a quantidade em vez de criar uma
+      // segunda (duas linhas do mesmo item quebravam a edição/remoção da nota
+      // no backend).
+      if (prev.some(mesmaLinha)) {
+        return prev.map((l) => (mesmaLinha(l) ? { ...l, quantidadeItem: l.quantidadeItem + 1 } : l));
       }
 
       return [
@@ -271,11 +292,13 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
         {
           itemPedidoId: gerarUID(),
           quantidadeItem: 1,
-          valorVendaItem: produtoHandle.valorVenda,
+          valorVendaItem: preco,
+          variacaoId: variacao?.id ?? null,
+          variacaoDescricao: variacao?.descricao,
           produto: {
             nomeProduto: produtoHandle.nome,
             produtoId: produtoHandle.id,
-            valorProduto: produtoHandle.valorVenda,
+            valorProduto: preco,
           },
         },
       ];
@@ -308,7 +331,7 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
 
       const criado = lista.find((p) => p.nome?.trim().toLowerCase() === dados.nome.trim().toLowerCase());
 
-      if (criado) adicionarProduto(criado, false);
+      if (criado) adicionarProduto(criado, undefined, false);
 
       alert.success("Produto cadastrado!", criado ? "Ele já entrou na nota." : "Ele já pode ser lançado na busca.");
     } catch (err) {
@@ -319,6 +342,21 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
   };
 
   const atualizarLinha = (uid: string, patch: Partial<ItemPedidoType>) => setItens((prev) => prev.map((l) => (l.itemPedidoId === uid ? { ...l, ...patch } : l)));
+
+  /**
+   * Quais linhas o servidor recusou por falta de estoque.
+   *
+   * Guardado por chave produto+variação, e não por índice: a pessoa vai mexer
+   * na nota depois do erro (é o que se espera dela), e um índice apontaria
+   * para a linha errada assim que uma fosse removida.
+   *
+   * Limpo a cada tentativa de salvar — marcação velha sobre uma nota já
+   * corrigida é pior do que marcação nenhuma.
+   */
+  const chaveDaLinha = (l: ItemPedidoType) => `${l.produto.produtoId}|${l.variacaoId ?? ""}`;
+
+  const faltaDaLinha = (l: ItemPedidoType) =>
+    faltas.find((f) => `${f.produtoId}|${f.variacaoId ?? ""}` === chaveDaLinha(l));
 
   const removerProduto = (uid: string) => setItens((prev) => prev.filter((l) => l.itemPedidoId !== uid));
 
@@ -415,7 +453,10 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
     itens.map((item) => ({
       produtoId: item.produto.produtoId,
       quantidade: item.quantidadeItem,
-      valorVenda: item.valorVendaItem
+      valorVenda: item.valorVendaItem,
+      /* Qual peça saiu. Sem isto o servidor baixaria o estoque do produto
+         inteiro e a nota reimpressa não diria se o cliente levou a P ou a G. */
+      variacaoId: item.variacaoId ?? null,
     }));
 
   const handleGerarOrcamento = async () => {
@@ -485,6 +526,10 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
        configurar (é do usuário master). Ele ficava preso sem saída. Sem chave,
        a nota simplesmente sai sem QR. */
 
+    /* Marcação da tentativa anterior sai antes desta: mantida, ela apontaria
+       para um problema que a pessoa acabou de corrigir. */
+    setFaltas([]);
+
     setSavingNote(true);
     try {
       if (id) {
@@ -514,6 +559,35 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
       // Só fecha a tela quando o usuário decide fechar — não ao salvar.
       if (id) onSaved?.();
     } catch (err) {
+      /*
+       * Falta de estoque não é "erro ao salvar".
+       *
+       * O servidor recusa com 409 e manda a lista item a item. Tratada como
+       * erro genérico, a pessoa lê "Erro ao salvar a nota. Tente novamente." —
+       * e tentar de novo dá exatamente o mesmo resultado, porque o problema
+       * não é a nota, é o estoque. Aqui a mensagem nomeia cada item, diz
+       * quanto foi pedido e quanto existe, e as linhas ficam marcadas na
+       * tabela para não ser preciso conferir uma a uma.
+       */
+      const faltas = extrairFaltas(err);
+
+      if (faltas.length > 0) {
+        setFaltas(faltas);
+
+        alert.error(
+          "Sem estoque para fechar",
+          faltas
+            .map((f) =>
+              f.motivo === "INSUMO"
+                ? `${f.insumoNome}: precisa de ${f.solicitado}, há ${f.disponivel}`
+                : `${f.variacaoDescricao ? `${f.produtoNome} (${f.variacaoDescricao})` : f.produtoNome}: pediu ${f.solicitado}, há ${f.disponivel}`,
+            )
+            .join(" · "),
+        );
+
+        return;
+      }
+
       alert.error(getErrorTitle(err), extractErrorMessage(err, "Erro ao salvar a nota. Tente novamente."));
     } finally {
       setSavingNote(false);
@@ -943,12 +1017,28 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
                       {loadingPedido ? (
                         Array.from({ length: 4 }).map((_, i) => <SkeletonInvoiceRow key={i} />)
                       ) : itens.length > 0 ? (
-                        itens.map((item) => (
-                          <tr key={item.itemPedidoId} className="transition-colors hover:bg-fg/[0.03]">
+                        itens.map((item) => {
+                          const falta = faltaDaLinha(item);
+
+                          return (
+                          <tr key={item.itemPedidoId} className={`transition-colors ${falta ? "bg-danger/[0.08]" : "hover:bg-fg/[0.03]"}`}>
                             <td className="max-w-[280px] p-2 align-middle">
                               <p className="truncate px-1 text-ink" title={item.produto.nomeProduto}>
                                 {item.produto.nomeProduto}
+                                {/* A variação vira selo ao lado do nome: sem ela,
+                                    duas linhas de "Camiseta preta" ficam idênticas
+                                    na nota e o cliente não sabe o que levou. */}
+                                {item.variacaoDescricao && (
+                                  <span className="ml-1.5 rounded bg-fg/[0.07] px-1.5 py-px text-[10px] text-mist">{item.variacaoDescricao}</span>
+                                )}
                               </p>
+                              {falta && (
+                                <p className="px-1 text-[10.5px] text-danger">
+                                  {falta.motivo === "INSUMO"
+                                    ? `falta ${falta.insumoNome} (há ${falta.disponivel})`
+                                    : `só há ${falta.disponivel} em estoque`}
+                                </p>
+                              )}
                             </td>
                             <td className="p-2 align-middle">
                               <input
@@ -978,7 +1068,8 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
                               </button>
                             </td>
                           </tr>
-                        ))
+                          );
+                        })
                       ) : (
                         <tr>
                           <td colSpan={5} className="py-12 text-center text-mist">
@@ -1006,7 +1097,15 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
                 itens.map((item) => (
                   <div key={item.itemPedidoId} className="rounded-xl border border-fg/[0.06] bg-fg/[0.03] p-3">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="min-w-0 text-sm text-ink">{item.produto.nomeProduto}</p>
+                      <p className="min-w-0 text-sm text-ink">
+                        {item.produto.nomeProduto}
+                        {item.variacaoDescricao && (
+                          <span className="ml-1.5 rounded bg-fg/[0.07] px-1.5 py-px text-[10px] text-mist">{item.variacaoDescricao}</span>
+                        )}
+                        {faltaDaLinha(item) && (
+                          <span className="mt-0.5 block text-[10.5px] text-danger">sem estoque suficiente</span>
+                        )}
+                      </p>
                       <button onClick={() => removerProduto(item.itemPedidoId)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-danger/20 text-danger">
                         <Trash2 size={15} />
                       </button>

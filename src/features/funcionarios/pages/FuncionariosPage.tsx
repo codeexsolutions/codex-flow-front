@@ -1,22 +1,67 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Users, ShieldCheck, UserPlus, KeyRound, Power, Crown, Loader2, AlertTriangle, Pencil, UserCog } from "lucide-react";
+import {
+  Users, ShieldCheck, UserPlus, Crown, AlertTriangle, Pencil,
+  UserCog, Trash2, Percent, Clock, ListFilter,
+} from "lucide-react";
 
 import { TabelaCard, TabelaHead, TabelaRow, TabelaVazia, type Coluna } from "@/shared/ui/DataTable";
 import { Modal } from "@/shared/ui/Modal";
 import { useAlert } from "@/shared/ui/Alert";
+import Select from "@/shared/ui/Select";
+import BuscaSugestoes from "@/shared/ui/BuscaSugestoes";
+import { SkeletonTableRows, SkeletonIdentityCell, Skeleton } from "@/shared/ui/skeleton";
+import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import useAuth from "@/features/auth/store/auth.store";
-import FuncionarioService, { type Equipe, type Funcionario, type PermissaoFuncionario } from "@/features/funcionarios/services/funcionario.service";
+import FuncionarioService from "@/features/funcionarios/services/funcionario.service";
+import FuncionarioForm from "@/features/funcionarios/components/FuncionarioForm";
 import useEquipeStore from "@/features/funcionarios/store/equipe.store";
 import { PageScreen } from "@/shared/ui/PageShell";
 import { Selo } from "@/shared/ui/StatusBadge";
+import { horasDaSemana, type Equipe, type Funcionario } from "@/shared/domain/funcionario";
+import { formatNumber } from "@/shared/utils/format";
+import { maskCpfCnpj } from "@/shared/validation/masks";
 
-const COLS = "grid-cols-[1.4fr_1fr_110px_100px_112px]";
+const COLS = "grid-cols-[1.5fr_150px_130px_120px_96px]";
 
-const VAZIO = { nome: "", email: "", cargo: "", senha: "", permissao: "USUARIO" as PermissaoFuncionario };
+/** Altura de uma linha da tabela — o esqueleto precisa dela para não saltar. */
+const ALTURA_LINHA = 56;
 
-/** Nível de acesso com rótulo — nunca só a cor. */
+type Situacao = "todas" | "trabalhando" | "desligados";
+type FiltroAcesso = "todos" | "com" | "sem" | "admin";
+type FiltroPonto = "todos" | "bate" | "nao";
+
+const SITUACOES: { valor: Situacao; label: string }[] = [
+  { valor: "todas", label: "Todas" },
+  { valor: "trabalhando", label: "Trabalhando" },
+  { valor: "desligados", label: "Desligados" },
+];
+
+const ACESSOS: { valor: FiltroAcesso; label: string }[] = [
+  { valor: "todos", label: "Todos" },
+  { valor: "com", label: "Com acesso" },
+  { valor: "sem", label: "Sem acesso" },
+  { valor: "admin", label: "Administradores" },
+];
+
+const PONTOS: { valor: FiltroPonto; label: string }[] = [
+  { valor: "todos", label: "Todos" },
+  { valor: "bate", label: "Bate ponto" },
+  { valor: "nao", label: "Não bate" },
+];
+
+/**
+ * O acesso ao sistema, na linha da lista.
+ *
+ * Três estados, e os três precisam de nome — "sem acesso" NÃO é um defeito:
+ * é o caso da costureira e do entregador, que a migration 046 veio permitir.
+ * Mostrá-lo como um vazio faria parecer cadastro pela metade.
+ */
 function AcessoBadge({ f }: { f: Funcionario }) {
-  if (f.root) {
+  const acesso = f.acesso;
+
+  if (!acesso) return <span className="text-[11.5px] text-faint">Sem acesso</span>;
+
+  if (acesso.root) {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[11px] text-accent-soft ring-1 ring-accent/25">
         <Crown size={11} /> Master
@@ -24,7 +69,7 @@ function AcessoBadge({ f }: { f: Funcionario }) {
     );
   }
 
-  return f.permissao === "ADMIN" ? (
+  return acesso.permissao === "ADMIN" ? (
     <span className="inline-flex items-center gap-1 rounded-full bg-accent/[0.1] px-2 py-0.5 text-[11px] text-accent-soft ring-1 ring-accent/20">
       <ShieldCheck size={11} /> Admin
     </span>
@@ -35,11 +80,42 @@ function AcessoBadge({ f }: { f: Funcionario }) {
   );
 }
 
-function StatusBadge({ status }: { status: Funcionario["status"] }) {
-  const ativo = status === "ATIVO";
+/**
+ * O esqueleto da tela, no formato do conteúdo real.
+ *
+ * Substitui o spinner centralizado que estava aqui. O spinner troca uma espera
+ * por outra: a tela aparecia inteira de uma vez e o olho tinha de reencontrar
+ * cabeçalho, colunas e primeira linha. Reproduzindo a forma — a barra de
+ * controles, o cabeçalho das colunas e as linhas com a mesma altura —, o
+ * layout já nasce no lugar e só falta o dado chegar.
+ *
+ * As pílulas cinzas no lugar da busca e dos filtros existem pelo mesmo motivo:
+ * sem elas a barra nasceria vazia e empurraria a tabela 38px para baixo no
+ * instante em que os controles aparecessem.
+ */
+const ControlesFantasma = () => (
+  /* Mesma altura (38px), largura e arredondamento dos controles reais: é o que
+     impede a barra de mudar de tamanho no instante em que eles aparecem. */
+  <>
+    <Skeleton className="h-[38px] w-[190px] rounded-xl" />
+    <Skeleton className="h-[38px] w-[132px] rounded-xl" />
+    <Skeleton className="h-[38px] w-[152px] rounded-xl" />
+    <Skeleton className="h-[38px] w-[132px] rounded-xl" />
+  </>
+);
 
-  return <Selo tom={ativo ? "sucesso" : "neutro"}>{ativo ? "Ativo" : "Inativo"}</Selo>;
-}
+const LinhasFantasma = ({ count }: { count: number }) => (
+  <SkeletonTableRows count={count} cols={COLS} rowHeight={ALTURA_LINHA}>
+    <SkeletonIdentityCell />
+    <div className="h-4 w-20 rounded-full bg-fg/[0.05]" />
+    <div className="h-3 w-16 rounded bg-fg/[0.05]" />
+    <div className="h-3 w-12 rounded bg-fg/[0.05]" />
+    <div className="ml-auto flex gap-1">
+      <div className="h-7 w-7 rounded-lg bg-fg/[0.05]" />
+      <div className="h-7 w-7 rounded-lg bg-fg/[0.05]" />
+    </div>
+  </SkeletonTableRows>
+);
 
 const FuncionariosPage = () => {
   const alert = useAlert();
@@ -48,16 +124,15 @@ const FuncionariosPage = () => {
   const [equipe, setEquipe] = useState<Equipe | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
-  const [salvando, setSalvando] = useState(false);
 
-  const [novo, setNovo] = useState(VAZIO);
-  const [showNovo, setShowNovo] = useState(false);
+  const [busca, setBusca] = useState("");
+  const buscaAdiada = useDebouncedValue(busca);
+  const [situacao, setSituacao] = useState<Situacao>("todas");
+  const [filtroAcesso, setFiltroAcesso] = useState<FiltroAcesso>("todos");
+  const [filtroPonto, setFiltroPonto] = useState<FiltroPonto>("todos");
 
-  const [editando, setEditando] = useState<Funcionario | null>(null);
-  const [edicao, setEdicao] = useState({ nome: "", cargo: "", permissao: "USUARIO" as PermissaoFuncionario });
-
-  const [senhaDe, setSenhaDe] = useState<Funcionario | null>(null);
-  const [novaSenha, setNovaSenha] = useState("");
+  /** `"novo"` abre o cadastro; um funcionário abre a ficha dele. */
+  const [editando, setEditando] = useState<Funcionario | "novo" | null>(null);
 
   const ehRoot = Boolean(user?.root);
 
@@ -69,8 +144,11 @@ const FuncionariosPage = () => {
       // A sidebar usa o mesmo dado para decidir se mostra "Funcionários".
       useEquipeStore.getState().definir(nova);
       setErro("");
+
+      return nova;
     } catch (e) {
       setErro((e as Error).message);
+      return null;
     } finally {
       setCarregando(false);
     }
@@ -80,81 +158,156 @@ const FuncionariosPage = () => {
     carregar();
   }, [carregar]);
 
-  const funcionarios = equipe?.funcionarios ?? [];
+  const funcionarios = useMemo(() => equipe?.funcionarios ?? [], [equipe]);
 
-  const vagas = useMemo(() => {
-    if (!equipe) return "";
-    if (equipe.limiteUsuarios === null) return `${equipe.usados} de ilimitados`;
-    return `${equipe.usados} de ${equipe.limiteUsuarios}`;
-  }, [equipe]);
+  /* ----------------------------- Filtros ----------------------------- */
+
+  /**
+   * A regra de filtragem, como função pura.
+   *
+   * Escrita assim, e não embutida num `useMemo`, porque ela é usada duas vezes
+   * com propósitos diferentes: para montar a lista e para CONTAR quantas
+   * pessoas cada opção do filtro deixaria passar. O número ao lado de "Sem
+   * acesso" só é confiável se sair exatamente da mesma regra que a lista
+   * aplica — duas cópias divergem no primeiro campo novo.
+   */
+  const passa = (
+    f: Funcionario,
+    filtro: { situacao: Situacao; acesso: FiltroAcesso; ponto: FiltroPonto; q: string },
+  ) => {
+    if (filtro.situacao === "trabalhando" && !f.ativo) return false;
+    if (filtro.situacao === "desligados" && f.ativo) return false;
+
+    if (filtro.acesso === "com" && !f.acesso) return false;
+    if (filtro.acesso === "sem" && f.acesso) return false;
+    /* "Administradores" inclui o master: ele é administrador por definição, e
+       escondê-lo faria a contagem não bater com o que a coluna mostra. */
+    if (filtro.acesso === "admin" && !(f.acesso?.permissao === "ADMIN" || f.acesso?.root)) return false;
+
+    if (filtro.ponto === "bate" && !f.batePonto) return false;
+    if (filtro.ponto === "nao" && f.batePonto) return false;
+
+    if (!filtro.q) return true;
+
+    /* O CPF casa por dígitos: quem digita "529" na busca não escreveu o ponto,
+       e quem cola "529.982.247-25" também precisa achar. */
+    const digitos = filtro.q.replace(/\D/g, "");
+
+    return (
+      f.nome.toLowerCase().includes(filtro.q)
+      || f.cargo.toLowerCase().includes(filtro.q)
+      || Boolean(f.acesso?.email.toLowerCase().includes(filtro.q))
+      || Boolean(digitos && f.cpf?.includes(digitos))
+    );
+  };
+
+  const q = buscaAdiada.trim().toLowerCase();
+  const atual = { situacao, acesso: filtroAcesso, ponto: filtroPonto, q };
+
+  const filtrados = useMemo(
+    () => funcionarios.filter((f) => passa(f, atual)),
+    [funcionarios, situacao, filtroAcesso, filtroPonto, q],
+  );
+
+  /**
+   * Quantas pessoas cada opção deixaria passar.
+   *
+   * Contado com os OUTROS filtros aplicados e o próprio suspenso — que é o que
+   * torna o número útil: dentro de "Desligados", "Sem acesso 2" quer dizer dois
+   * desligados sem acesso, não dois na equipe inteira. Contando com o próprio
+   * filtro junto, toda opção não escolhida marcaria zero.
+   */
+  const contar = (mudanca: Partial<typeof atual>) =>
+    funcionarios.filter((f) => passa(f, { ...atual, ...mudanca })).length;
+
+  const opcoesSituacao = useMemo(
+    () => SITUACOES.map((o) => ({ valor: o.valor, label: o.label, contagem: contar({ situacao: o.valor }) })),
+    [funcionarios, situacao, filtroAcesso, filtroPonto, q],
+  );
+
+  const opcoesAcesso = useMemo(
+    () => ACESSOS.map((o) => ({ valor: o.valor, label: o.label, contagem: contar({ acesso: o.valor }) })),
+    [funcionarios, situacao, filtroAcesso, filtroPonto, q],
+  );
+
+  const opcoesPonto = useMemo(
+    () => PONTOS.map((o) => ({
+      valor: o.valor,
+      label: o.label,
+      contagem: contar({ ponto: o.valor }),
+      /* Ponto pendente é o único aviso desta tela: alguém marcado para bater
+         ponto e sem jornada nenhuma configurada. O ponto vermelho só acende
+         quando há mesmo o caso — aviso sempre aceso deixa de ser aviso. */
+      alerta: o.valor === "bate" && funcionarios.some((f) => f.batePonto && f.jornada.length === 0),
+    })),
+    [funcionarios, situacao, filtroAcesso, filtroPonto, q],
+  );
+
+  /**
+   * As sugestões da busca.
+   *
+   * Saem da lista JÁ FILTRADA: sugerir alguém que os filtros escondem levaria a
+   * pessoa a uma ficha que ela não consegue achar de volta na tabela. Quem casa
+   * o texto com o rótulo é o próprio `BuscaSugestoes`.
+   */
+  const sugestoes = useMemo(
+    () => filtrados.map((f) => ({
+      id: f.id,
+      label: f.nome,
+      sub: [f.cargo, f.acesso ? f.acesso.email : "sem acesso"].filter(Boolean).join(" · "),
+    })),
+    [filtrados],
+  );
+
+  const temFiltro = Boolean(busca) || situacao !== "todas" || filtroAcesso !== "todos" || filtroPonto !== "todos";
+
+  const limpar = () => {
+    setBusca("");
+    setSituacao("todas");
+    setFiltroAcesso("todos");
+    setFiltroPonto("todos");
+  };
 
   /* ------------------------------ Ações ------------------------------ */
 
-  const cadastrar = async () => {
-    if (salvando) return;
-    setSalvando(true);
-    try {
-      await FuncionarioService.cadastrar(novo);
-      setShowNovo(false);
-      setNovo(VAZIO);
-      await carregar();
-      alert.success("Funcionário cadastrado", "Ele já pode entrar com o e-mail e a senha definidos.");
-    } catch (e) {
-      alert.error("Não foi possível cadastrar", (e as Error).message);
-    } finally {
-      setSalvando(false);
-    }
-  };
+  /**
+   * Depois de gravar, a ficha aberta é RECARREGADA em vez de fechada.
+   *
+   * As abas de acesso e ponto agem sozinhas (criar login, bater ponto), e
+   * fechar o modal a cada ação obrigaria a reabrir a ficha para fazer a
+   * seguinte. Só o botão de salvar a pessoa fecha — e é ele que passa `fechar`.
+   */
+  const aoMudar = async (fechar = false) => {
+    const nova = await carregar();
 
-  const abrirEdicao = (f: Funcionario) => {
-    setEditando(f);
-    setEdicao({ nome: f.nome, cargo: f.cargo, permissao: f.permissao });
-  };
-
-  const salvarEdicao = async () => {
-    if (!editando || salvando) return;
-    setSalvando(true);
-    try {
-      await FuncionarioService.alterar(editando.id, edicao);
+    if (fechar || !nova) {
       setEditando(null);
-      await carregar();
-      alert.success("Alterações salvas", `Os dados de ${editando.nome} foram atualizados.`);
-    } catch (e) {
-      alert.error("Não foi possível atualizar", (e as Error).message);
-    } finally {
-      setSalvando(false);
+      return;
     }
+
+    setEditando((atualEdicao) => {
+      if (!atualEdicao || atualEdicao === "novo") return atualEdicao;
+      return nova.funcionarios.find((f) => f.id === atualEdicao.id) ?? null;
+    });
   };
 
-  const alternarStatus = async (f: Funcionario) => {
-    const ativando = f.status !== "ATIVO";
+  const excluir = async (f: Funcionario) => {
+    const { confirmed } = await alert.confirm(
+      `Remover ${f.nome} da equipe?`,
+      f.acesso
+        ? "A ficha e o histórico de ponto são apagados, e o login dela sai junto. Se ela já registrou vendas, o login é apenas desativado — apagá-lo deixaria as vendas sem vendedor."
+        : "A ficha e o histórico de ponto são apagados. Essa ação não pode ser desfeita.",
+      { type: "warning", confirmText: "Remover" },
+    );
 
-    if (!ativando) {
-      const resposta = await alert.confirm("Desativar acesso?", `${f.nome} não conseguirá mais entrar no sistema até ser reativado.`);
-      if (!resposta.confirmed) return;
-    }
+    if (!confirmed) return;
 
     try {
-      await FuncionarioService.alterarStatus(f.id, ativando);
+      await FuncionarioService.excluir(f.id);
       await carregar();
-      alert.success(ativando ? "Acesso liberado" : "Acesso desativado", `${f.nome} ${ativando ? "já pode entrar no sistema." : "não consegue mais entrar."}`);
+      alert.success("Funcionário removido", `${f.nome} não faz mais parte da equipe.`);
     } catch (e) {
-      alert.error("As alterações não foram salvas", (e as Error).message);
-    }
-  };
-
-  const redefinirSenha = async () => {
-    if (!senhaDe || salvando) return;
-    setSalvando(true);
-    try {
-      await FuncionarioService.redefinirSenha(senhaDe.id, novaSenha);
-      setSenhaDe(null);
-      setNovaSenha("");
-      alert.success("Senha redefinida", "Passe a nova senha para o funcionário.");
-    } catch (e) {
-      alert.error("Não foi possível redefinir", (e as Error).message);
-    } finally {
-      setSalvando(false);
+      alert.error("Não foi possível remover", (e as Error).message);
     }
   };
 
@@ -166,14 +319,75 @@ const FuncionariosPage = () => {
       header: "Funcionário",
       cell: (f) => (
         <span className="flex min-w-0 flex-col">
-          <span className="truncate text-ink">{f.nome}</span>
-          <span className="truncate text-[11px] text-faint">{f.cargo}</span>
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-ink">{f.nome}</span>
+            {/* Desligado continua na lista: o histórico de ponto e as vendas
+                dele seguem valendo, e sumir com a linha esconderia isso. */}
+            {!f.ativo && <Selo tom="neutro">Desligado</Selo>}
+          </span>
+          <span className="truncate text-[11px] text-faint">
+            {f.cargo || "Sem cargo"}
+            {f.cpf ? ` · ${maskCpfCnpj(f.cpf)}` : ""}
+          </span>
         </span>
       ),
     },
-    { id: "email", header: "E-mail", cell: (f) => <span className="truncate text-mist">{f.email}</span> },
-    { id: "acesso", header: "Acesso", cell: (f) => <AcessoBadge f={f} /> },
-    { id: "status", header: "Status", cell: (f) => <StatusBadge status={f.status} /> },
+    {
+      id: "acesso",
+      header: "Acesso",
+      cell: (f) => (
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <AcessoBadge f={f} />
+          {f.acesso && (
+            <span className="truncate text-[10.5px] text-faint">
+              {f.acesso.status === "ATIVO" ? f.acesso.email : "desativado"}
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      id: "jornada",
+      header: "Ponto",
+      /*
+       * Três estados, e os três dizem coisas diferentes:
+       *
+       *   "Não bate ponto"   — decisão tomada (sócio, comissionado, autônomo).
+       *   "A configurar"     — bate ponto e a jornada ainda está vazia. É o
+       *                        único dos três que pede ação.
+       *   "44 h/sem"         — configurado.
+       *
+       * Colapsar os dois primeiros num "—" faria a pendência real desaparecer
+       * no meio de quem nunca vai ter jornada nenhuma.
+       */
+      cell: (f) => {
+        if (!f.batePonto) return <span className="text-[11.5px] text-faint">Não bate ponto</span>;
+
+        if (f.jornada.length === 0) return <span className="text-[11.5px] text-warning">A configurar</span>;
+
+        return (
+          <span className="flex items-center gap-1.5 text-[12px] text-mist">
+            <Clock size={12} className="shrink-0 text-muted" />
+            <span className="tabular-nums">{formatNumber(Number(horasDaSemana(f.jornada).toFixed(1)))} h/sem</span>
+          </span>
+        );
+      },
+    },
+    {
+      id: "comissao",
+      header: "Comissão",
+      cell: (f) =>
+        f.ganhaComissao ? (
+          <span className="flex items-center gap-1.5 text-[12px] text-mist">
+            <Percent size={12} className="shrink-0 text-muted" />
+            <span className="tabular-nums">
+              {f.comissaoPercentual != null ? `${formatNumber(f.comissaoPercentual)}%` : "a definir"}
+            </span>
+          </span>
+        ) : (
+          <span className="text-[11.5px] text-faint">Não</span>
+        ),
+    },
     {
       id: "acoes",
       header: "Ações",
@@ -182,34 +396,22 @@ const FuncionariosPage = () => {
         <span className="flex items-center justify-end gap-1">
           <button
             type="button"
-            onClick={() => abrirEdicao(f)}
-            title="Editar"
+            onClick={() => setEditando(f)}
+            title="Abrir ficha"
             className="focus-ring flex h-7 w-7 items-center justify-center rounded-lg border border-fg/[0.08] text-mist transition hover:bg-fg/[0.05] hover:text-ink"
           >
             <Pencil size={13} />
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setSenhaDe(f);
-              setNovaSenha("");
-            }}
-            title="Redefinir senha"
-            className="focus-ring flex h-7 w-7 items-center justify-center rounded-lg border border-fg/[0.08] text-mist transition hover:bg-fg/[0.05] hover:text-ink"
-          >
-            <KeyRound size={13} />
-          </button>
-          {/* O usuário master não se desativa: sobraria empresa sem administrador. */}
-          {!f.root && (
+
+          {/* O usuário master não sai da equipe: sobraria empresa sem dono. */}
+          {!f.acesso?.root && (
             <button
               type="button"
-              onClick={() => alternarStatus(f)}
-              title={f.status === "ATIVO" ? "Desativar" : "Ativar"}
-              className={`focus-ring flex h-7 w-7 items-center justify-center rounded-lg border transition ${
-                f.status === "ATIVO" ? "border-fg/[0.08] text-mist hover:bg-danger/10 hover:text-danger" : "border-success/30 text-success hover:bg-success/10"
-              }`}
+              onClick={() => void excluir(f)}
+              title="Remover da equipe"
+              className="focus-ring flex h-7 w-7 items-center justify-center rounded-lg border border-fg/[0.08] text-mist transition hover:bg-danger/10 hover:text-danger"
             >
-              <Power size={13} />
+              <Trash2 size={13} />
             </button>
           )}
         </span>
@@ -218,17 +420,6 @@ const FuncionariosPage = () => {
   ];
 
   /* ------------------------------ Render ------------------------------ */
-
-  const campo = "w-full rounded-lg border border-fg/[0.08] bg-fg/[0.035] px-3 py-2.5 text-[13px] text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/15";
-  const rotulo = "mb-1 block text-[10px] uppercase tracking-[0.7px] text-faint";
-
-  if (carregando) {
-    return (
-      <div className="flex min-h-[240px] items-center justify-center gap-2 text-[13px] text-mist">
-        <Loader2 className="h-4 w-4 animate-spin text-accent" /> Carregando equipe...
-      </div>
-    );
-  }
 
   // Vendedor não abre esta aba — a API responde 403 e a mensagem vem dela.
   if (erro) {
@@ -240,164 +431,155 @@ const FuncionariosPage = () => {
     );
   }
 
+  const aberto = editando !== null;
+  const emEdicao = editando && editando !== "novo" ? editando : null;
+
+  const controles = carregando ? (
+    <ControlesFantasma />
+  ) : (
+    <>
+      {/*
+       * A sugestão ABRE a ficha; ela não filtra a tabela.
+       *
+       * Filtrar já é o que o próprio texto faz enquanto se digita — a tabela
+       * reage sozinha. O que a lista acrescenta é o atalho para quem já sabe
+       * de quem está atrás e não quer procurar a linha depois.
+       */}
+      <BuscaSugestoes
+        valor={busca}
+        onValor={setBusca}
+        sugestoes={sugestoes}
+        onEscolher={(s) => {
+          const achado = funcionarios.find((f) => f.id === s.id);
+          if (achado) setEditando(achado);
+        }}
+        placeholder="Buscar pessoa…"
+        aria-label="Buscar funcionário por nome, cargo, CPF ou e-mail"
+        className="w-[190px] shrink-0"
+      />
+
+      <Select
+        valor={situacao}
+        onChange={(v) => setSituacao(v as Situacao)}
+        opcoes={opcoesSituacao}
+        icone={<ListFilter size={14} />}
+        aria-label="Filtrar por situação do funcionário"
+        className="w-[132px] shrink-0"
+      />
+
+      <Select
+        valor={filtroAcesso}
+        onChange={(v) => setFiltroAcesso(v as FiltroAcesso)}
+        opcoes={opcoesAcesso}
+        icone={<ShieldCheck size={14} />}
+        aria-label="Filtrar por acesso ao sistema"
+        className="w-[152px] shrink-0"
+      />
+
+      <Select
+        valor={filtroPonto}
+        onChange={(v) => setFiltroPonto(v as FiltroPonto)}
+        opcoes={opcoesPonto}
+        icone={<Clock size={14} />}
+        aria-label="Filtrar por registro de ponto"
+        className="w-[132px] shrink-0"
+      />
+
+      {temFiltro && (
+        <button
+          type="button"
+          onClick={limpar}
+          className="focus-ring h-[38px] shrink-0 cursor-pointer whitespace-nowrap rounded-xl px-2.5 text-[12px] text-faint transition-colors hover:text-ink"
+        >
+          Limpar
+        </button>
+      )}
+    </>
+  );
+
   return (
-    /* Tela própria: deixou de ser aba de Vendas, então traz a própria moldura. */
     <PageScreen
       icon={<UserCog className="h-5 w-5" />}
       title="Funcionários"
-      subtitle="Cadastro e acesso de quem trabalha na loja"
+      subtitle="Quem trabalha na loja, o que cada um ganha e o que cada um pode abrir"
     >
-    <div className="flex h-full min-h-0 flex-col gap-3">
-      {/* Vagas do plano — é a regra que limita o cadastro */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-fg/[0.07] bg-fg/[0.02] px-4 py-3">
-        <span className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/20">
-            <Users size={16} />
-          </span>
-          <span className="min-w-0">
-            <span className="block text-[13px] text-ink">
-              {vagas} {equipe?.limiteUsuarios === 1 ? "usuário" : "usuários"}
-            </span>
-            <span className="block text-[11px] text-faint">Plano {equipe?.planoNome ?? "—"}</span>
-          </span>
-        </span>
+      <div className="flex h-full min-h-0 flex-col gap-3">
+        {/*
+         * O contador de usuários do plano SAIU daqui.
+         *
+         * Ele ocupava uma faixa inteira no topo para dizer "3 de 10 usuários",
+         * um número que só importa no instante em que se cria um login — e a
+         * partir da migration 046 nem descreve mais a equipe, porque quem não
+         * tem acesso não ocupa vaga. O limite continua sendo dito no lugar
+         * onde ele decide alguma coisa: a aba "Acesso" da ficha.
+         */}
+        <TabelaCard
+          title="Equipe"
+          icon={<Users size={15} />}
+          count={carregando ? undefined : filtrados.length}
+          countLabel={filtrados.length === 1 ? "pessoa" : "pessoas"}
+          controles={controles}
+          /* O botão fica de pé durante o carregamento, e não escondido: some
+             daqui e a barra inteira se rearranja quando ele volta, que é
+             exatamente o salto que o esqueleto existe para evitar. Cadastrar
+             não depende da lista ter chegado — o formulário novo só precisa
+             dos campos da pessoa. */
+          onAdd={() => setEditando("novo")}
+          addLabel="Novo funcionário"
+          minWidth={720}
+        >
+          <TabelaHead colunas={colunas} cols={COLS} />
 
-        {!equipe?.podeAdicionar && (
-          <span className="rounded-full bg-warning/15 px-2.5 py-1 text-[11px] text-warning ring-1 ring-warning/25">
-            Limite do plano atingido — faça upgrade para cadastrar mais
-          </span>
-        )}
+          {carregando ? (
+            <LinhasFantasma count={8} />
+          ) : filtrados.length === 0 ? (
+            /* Dois vazios diferentes: "não achei com esse filtro" e "não há
+               ninguém cadastrado" pedem ações opostas — limpar a busca ou
+               cadastrar a primeira pessoa. */
+            temFiltro ? (
+              <TabelaVazia
+                icon={<ListFilter size={20} />}
+                title="Nenhuma pessoa nesse filtro"
+                description="Ajuste a busca ou os filtros para ver o resto da equipe."
+                action={<button type="button" onClick={limpar} className="focus-ring mt-1 cursor-pointer rounded-lg border border-fg/[0.1] px-3.5 py-2 text-[12px] text-mist transition-colors hover:text-ink">Limpar filtros</button>}
+              />
+            ) : (
+              <TabelaVazia
+                icon={<UserPlus size={20} />}
+                title="Nenhum funcionário cadastrado"
+                description="Cadastre quem trabalha na loja. O acesso ao sistema é opcional e se cria depois, na ficha de cada um."
+              />
+            )
+          ) : (
+            filtrados.map((f) => <TabelaRow key={f.id} colunas={colunas} cols={COLS} row={f} />)
+          )}
+        </TabelaCard>
+
+        {/* -------------------- Ficha do funcionário -------------------- */}
+        {/* `maxWidth` acima do `lg` padrão pelo mesmo motivo da ficha do
+            produto: a aba de ponto tem linhas de quatro horários, e em 672px
+            elas se espremem a ponto de "Volta almoço" caber em duas letras. */}
+        <Modal
+          open={aberto}
+          onClose={() => setEditando(null)}
+          title={emEdicao ? emEdicao.nome : "Novo funcionário"}
+          subtitle={emEdicao ? "Dados, ponto e acesso ao sistema" : "Só o nome é obrigatório"}
+          size="lg"
+          maxWidth="sm:max-w-3xl"
+        >
+          {/* `key` remonta o formulário ao trocar de funcionário: sem ela, os
+              campos guardariam o estado da ficha anterior. */}
+          <FuncionarioForm
+            key={emEdicao?.id ?? "novo"}
+            funcionario={emEdicao}
+            areas={equipe?.areas ?? []}
+            ehRoot={ehRoot}
+            podeCriarAcesso={Boolean(equipe?.podeAdicionar)}
+            onCancel={() => setEditando(null)}
+            onMudou={aoMudar}
+          />
+        </Modal>
       </div>
-
-      <TabelaCard
-        title="Funcionários"
-        icon={<Users size={15} />}
-        count={funcionarios.length}
-        countLabel={funcionarios.length === 1 ? "pessoa" : "pessoas"}
-        onAdd={equipe?.podeAdicionar ? () => setShowNovo(true) : undefined}
-        addLabel="Novo funcionário"
-        minWidth={640}
-      >
-        <TabelaHead colunas={colunas} cols={COLS} />
-        {funcionarios.length === 0 ? (
-          <TabelaVazia icon={<UserPlus size={20} />} title="Nenhum funcionário cadastrado" description="Cadastre seus vendedores para que cada um acesse o PDV com o próprio login." />
-        ) : (
-          funcionarios.map((f) => <TabelaRow key={f.id} colunas={colunas} cols={COLS} row={f} />)
-        )}
-      </TabelaCard>
-
-      {/* -------------------- Modal: novo funcionário -------------------- */}
-      <Modal open={showNovo} onClose={() => setShowNovo(false)} title="Novo funcionário" subtitle="Ele entra com o e-mail e a senha definidos aqui." size="sm">
-        <div className="flex flex-col gap-3">
-          <div>
-            <label className={rotulo}>Nome</label>
-            <input value={novo.nome} onChange={(e) => setNovo({ ...novo, nome: e.target.value })} placeholder="Nome do vendedor" className={campo} />
-          </div>
-
-          <div>
-            <label className={rotulo}>E-mail</label>
-            <input value={novo.email} onChange={(e) => setNovo({ ...novo, email: e.target.value })} type="email" placeholder="vendedor@empresa.com" className={campo} />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={rotulo}>Cargo</label>
-              <input value={novo.cargo} onChange={(e) => setNovo({ ...novo, cargo: e.target.value })} placeholder="Vendedor" className={campo} />
-            </div>
-            <div>
-              <label className={rotulo}>Senha inicial</label>
-              <input value={novo.senha} onChange={(e) => setNovo({ ...novo, senha: e.target.value })} type="text" placeholder="Mínimo 6 caracteres" className={campo} />
-            </div>
-          </div>
-
-          {/* Promover a admin é privilégio do dono. */}
-          {ehRoot && (
-            <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-fg/[0.07] bg-fg/[0.02] px-3 py-2.5">
-              <input
-                type="checkbox"
-                checked={novo.permissao === "ADMIN"}
-                onChange={(e) => setNovo({ ...novo, permissao: e.target.checked ? "ADMIN" : "USUARIO" })}
-                className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[rgb(var(--accent))]"
-              />
-              <span className="text-[12px] leading-relaxed text-mist">
-                <span className="text-ink">Administrador</span> — além de vender, gerencia funcionários e vê o financeiro e todas as vendas.
-              </span>
-            </label>
-          )}
-
-          <button
-            type="button"
-            onClick={cadastrar}
-            disabled={salvando}
-            className="focus-ring mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 text-[13px] text-white transition hover:brightness-110 disabled:opacity-60"
-          >
-            {salvando ? <Loader2 size={15} className="animate-spin" /> : <UserPlus size={15} />}
-            Cadastrar funcionário
-          </button>
-        </div>
-      </Modal>
-
-      {/* -------------------- Modal: editar -------------------- */}
-      <Modal open={!!editando} onClose={() => setEditando(null)} title="Editar funcionário" subtitle={editando?.email} size="sm">
-        <div className="flex flex-col gap-3">
-          <div>
-            <label className={rotulo}>Nome</label>
-            <input value={edicao.nome} onChange={(e) => setEdicao({ ...edicao, nome: e.target.value })} className={campo} />
-          </div>
-
-          <div>
-            <label className={rotulo}>Cargo</label>
-            <input value={edicao.cargo} onChange={(e) => setEdicao({ ...edicao, cargo: e.target.value })} className={campo} />
-          </div>
-
-          {ehRoot && !editando?.root && (
-            <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-fg/[0.07] bg-fg/[0.02] px-3 py-2.5">
-              <input
-                type="checkbox"
-                checked={edicao.permissao === "ADMIN"}
-                onChange={(e) => setEdicao({ ...edicao, permissao: e.target.checked ? "ADMIN" : "USUARIO" })}
-                className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[rgb(var(--accent))]"
-              />
-              <span className="text-[12px] leading-relaxed text-mist">
-                <span className="text-ink">Administrador</span> — gerencia funcionários e vê o financeiro.
-              </span>
-            </label>
-          )}
-
-          <button
-            type="button"
-            onClick={salvarEdicao}
-            disabled={salvando}
-            className="focus-ring mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 text-[13px] text-white transition hover:brightness-110 disabled:opacity-60"
-          >
-            {salvando ? <Loader2 size={15} className="animate-spin" /> : null}
-            Salvar alterações
-          </button>
-        </div>
-      </Modal>
-
-      {/* -------------------- Modal: redefinir senha -------------------- */}
-      <Modal open={!!senhaDe} onClose={() => setSenhaDe(null)} title="Redefinir senha" subtitle={senhaDe?.nome} size="sm">
-        <div className="flex flex-col gap-3">
-          <div>
-            <label className={rotulo}>Nova senha</label>
-            <input value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} type="text" placeholder="Mínimo 6 caracteres" className={campo} />
-          </div>
-
-          <p className="text-[11px] leading-relaxed text-faint">A senha aparece em texto para você conseguir passá-la ao funcionário. Peça que ele troque no primeiro acesso.</p>
-
-          <button
-            type="button"
-            onClick={redefinirSenha}
-            disabled={salvando}
-            className="focus-ring flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 text-[13px] text-white transition hover:brightness-110 disabled:opacity-60"
-          >
-            {salvando ? <Loader2 size={15} className="animate-spin" /> : <KeyRound size={15} />}
-            Redefinir senha
-          </button>
-        </div>
-      </Modal>
-    </div>
     </PageScreen>
   );
 };

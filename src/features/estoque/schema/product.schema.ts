@@ -1,34 +1,25 @@
 import { z } from "zod";
 
 /**
- * As grades de tamanho e seus valores.
+ * O formulário do item — produto ou serviço.
  *
- * Existe porque o lojista resolvia isso escrevendo no nome — "Camiseta preta
- * P", "Camiseta preta M", "Camiseta preta G" — e o mesmo produto virava três
- * cadastros que ninguém consegue somar depois. Com grade e tamanho separados,
- * o nome volta a ser o nome.
+ * ---------------------------------------------------------------------------
+ * O que saiu daqui, e por quê
+ * ---------------------------------------------------------------------------
+ * Havia uma constante `GRADES` com ROUPA/CALCADO/VOLUME e os tamanhos de cada
+ * uma escritos no código (PP..XGG, 33..46, 50ml..5kg). Ela resolvia o problema
+ * de quem vende roupa e ignorava todo o resto: a loja de tintas precisa de
+ * "3,6L", a de parafusos precisa de "M6", e nenhuma das duas podia
+ * acrescentar um valor sem alguém publicar uma versão nova do sistema.
  *
- * A ordem dentro de cada lista É a ordem de exibição: P vem antes de M porque
- * está antes aqui, e não por ordem alfabética (que poria G antes de M e GG
- * antes de P).
+ * O lugar dos tamanhos agora é o cadastro de ATRIBUTOS da empresa, e a peça
+ * que carrega tamanho e cor é a VARIAÇÃO — as duas na ficha do produto, onde
+ * há espaço para elas. Este formulário voltou a ser o que ele é: identidade,
+ * preço e as regras de estoque do item.
+ *
+ * `grade` e `tamanho` não aparecem nem no schema nem no payload. A API só
+ * altera o que recebe, então o que já estava gravado continua gravado.
  */
-export const GRADES = {
-  ROUPA: {
-    label: "Roupa",
-    tamanhos: ["PP", "P", "M", "G", "GG", "XG", "XGG"],
-  },
-  CALCADO: {
-    label: "Calçado",
-    tamanhos: ["33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46"],
-  },
-  VOLUME: {
-    label: "Volume / peso",
-    tamanhos: ["50ml", "100ml", "250ml", "500ml", "1L", "2L", "100g", "250g", "500g", "1kg", "5kg"],
-  },
-} as const;
-
-export type GradeId = keyof typeof GRADES;
-
 export const productSchema = z
   .object({
     nome: z.string().min(3, "Informe o nome do produto"),
@@ -47,24 +38,71 @@ export const productSchema = z
 
     quantidade: z.coerce.number().min(0, "Quantidade inválida"),
 
-    /** Vazio = o item não se vende por tamanho. */
-    grade: z.enum(["", "ROUPA", "CALCADO", "VOLUME"]).default(""),
-
-    tamanho: z.string().default(""),
-
     descricao: z.string().optional(),
 
     imagem: z.string().optional(),
+
+    /* ── Ficha ──────────────────────────────────────────────────────────── */
+
+    sku: z.string().optional(),
+    codigoBarras: z.string().optional(),
+    unidade: z.string().optional(),
+
+    /**
+     * A categoria é ESCOLHIDA, não digitada.
+     *
+     * Aqui havia um campo de texto livre. O que ele produzia em uso era o
+     * mesmo problema que a antiga constante `GRADES` produzia do outro lado:
+     * "Bebida", "Bebidas" e "bebidas" viravam três categorias para o sistema e
+     * uma só para quem vende — e o filtro da lista, que monta as opções a
+     * partir do que está gravado, mostrava as três com um pedaço dos produtos
+     * em cada.
+     *
+     * O que se manda é o id de uma categoria cadastrada (migration 045).
+     * String vazia = sem categoria, e isso é uma escolha válida: nem todo item
+     * pertence a uma gaveta.
+     */
+    categoriaId: z.string().optional(),
+
+    marca: z.string().optional(),
+    localizacao: z.string().optional(),
+    observacoes: z.string().optional(),
+
+    /**
+     * Abaixo disto a tela avisa.
+     *
+     * String vazia vira `null` — e `null` significa "usa o padrão da tela",
+     * não zero. Zero é um limite válido ("só me avise quando acabar"), e
+     * confundir os dois faria todo produto sem configuração parar de avisar.
+     * `preprocess` porque o input HTML devolve "" quando o campo é limpo, e
+     * `z.coerce.number()` transformaria isso em 0 silenciosamente.
+     */
+    estoqueMinimo: z.preprocess(
+      (v) => (v === "" || v === null || v === undefined ? null : Number(v)),
+      z.number().min(0, "Valor inválido").nullable(),
+    ),
+
+    controlaEstoque: z.boolean().default(true),
+
+    permiteVendaSemEstoque: z.boolean().default(false),
   })
   /*
-   * Escolher a grade e não escolher o tamanho deixa o cadastro pela metade: o
-   * produto fica marcado como "de roupa" sem dizer qual. É erro de
-   * preenchimento, não de digitação, então quem tem de pegar é o schema.
+   * Vender sem estoque só faz sentido para quem CONTA estoque.
+   *
+   * Marcar os dois não é contraditório a ponto de impedir o salvamento, mas
+   * deixa na tela uma opção que não faz nada — e uma opção que não faz nada é
+   * pior que uma opção ausente: quem a marcou acredita ter configurado algo.
+   * O `transform` desliga a segunda em vez de mostrar erro, porque o que a
+   * pessoa quis dizer não é ambíguo.
    */
-  .refine((d) => !d.grade || Boolean(d.tamanho), {
-    message: "Escolha o tamanho",
-    path: ["tamanho"],
-  });
+  .transform((d) => ({
+    ...d,
+    permiteVendaSemEstoque: d.controlaEstoque ? d.permiteVendaSemEstoque : false,
+    /* Serviço não conta unidades — a regra vale no dado, e não só no que a
+       tela esconde: item entra por importação e pela API também. */
+    controlaEstoque: d.tipo === "SERVICO" ? false : d.controlaEstoque,
+    quantidade: d.tipo === "SERVICO" ? 0 : d.quantidade,
+  }));
 
 /**
  * `z.coerce.number()` aceita string na entrada (o que o input HTML devolve) e

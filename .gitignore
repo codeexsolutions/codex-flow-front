@@ -27,3 +27,4 @@ graphify-out
 *.sln
 *.env
 
+.vercel

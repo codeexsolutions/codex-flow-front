@@ -13,6 +13,7 @@ import useAuth from "@/features/auth/store/auth.store";
 import { SkeletonListaPainel } from "@/shared/ui/skeleton";
 import Celula from "@/features/planilhas/components/Celula";
 import useEquipeStore from "@/features/funcionarios/store/equipe.store";
+import { podemReceberTarefa } from "@/shared/domain/funcionario";
 import Presenca from "@/features/planilhas/components/Presenca";
 import LinksCliente from "@/features/planilhas/components/LinksCliente";
 import MenuColuna from "@/features/planilhas/components/MenuColuna";
@@ -170,7 +171,10 @@ const PlanilhasPage = () => {
     if (gestor) buscarEquipe();
   }, [gestor, buscarEquipe]);
 
-  const funcionarios = useMemo(() => (equipe?.funcionarios ?? []).filter((f) => f.status === "ATIVO"), [equipe]);
+  /* O `id` aqui é o do LOGIN, não o do funcionário: ele é comparado com
+     `user?.id` da sessão para decidir quem edita a coluna. Ver a nota de
+     `podemReceberTarefa`. */
+  const funcionarios = useMemo(() => podemReceberTarefa(equipe?.funcionarios ?? []), [equipe]);
 
   /* A trava de plano saiu daqui junto com a das rotas: a planilha é a
      ferramenta de produção de todo mundo, e o pacote comercial ainda vai ser

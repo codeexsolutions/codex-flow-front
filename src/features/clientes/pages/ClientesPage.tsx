@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users, UserPlus, Search, AlertTriangle, ChevronRight, Cake, RotateCw, MapPin, MessageCircle, Pencil, Phone, ClipboardList } from "lucide-react";
+import { Users, UserPlus, AlertTriangle, ChevronRight, Cake, RotateCw, MapPin, MessageCircle, Pencil, Phone, ClipboardList, ListFilter } from "lucide-react";
 import CustomerService from "@/features/clientes/services/client.service";
 import useClienteStore from "@/features/clientes/store/cliente.store";
 import useSincronizacao from "@/shared/realtime/useSincronizacao";
@@ -20,18 +20,36 @@ import { SkeletonTableRows, SkeletonIdentityCell } from "@/shared/ui/skeleton";
 import { useAutoPageSize, ROW_HEIGHT } from "@/shared/hooks/useAutoPageSize";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { PageScreen } from "@/shared/ui/PageShell";
+import Select from "@/shared/ui/Select";
+import BuscaSugestoes from "@/shared/ui/BuscaSugestoes";
 import { ListaAcao, ListaCabecalho, ListaFantasmas, ListaLinha, TabelaPaginacao } from "@/shared/ui/DataTable";
 import { aniversarioBr, diaAniversario, ehAniversarianteDoMes, ehAniversarioHoje } from "@/features/clientes/utils/aniversario";
 
 type Filtro = "todos" | "ativo" | "inativo" | "incompletos";
 
 const FILTROS: { value: Filtro; label: string }[] = [
-  { value: "todos", label: "Todos" },
+  { value: "todos", label: "Todas" },
   { value: "ativo", label: "Ativos" },
   { value: "inativo", label: "Inativos" },
   /* Filtro novo: com CPF opcional, "quem está pela metade" virou uma pergunta
      que se faz de verdade — e sem ele não havia como agir sobre a resposta. */
   { value: "incompletos", label: "A completar" },
+];
+
+/**
+ * Aniversário como FILTRO, e não só como painel lateral.
+ *
+ * A lista de aniversariantes já existia na coluna da direita, mas ela é uma
+ * vitrine: mostra doze nomes e acaba. Como filtro, a mesma pergunta passa a
+ * devolver a tabela inteira — com telefone, WhatsApp e situação —, que é o que
+ * transforma "quem faz aniversário" em ligações de verdade.
+ */
+type Aniversario = "todos" | "mes" | "hoje";
+
+const ANIVERSARIOS: { value: Aniversario; label: string }[] = [
+  { value: "todos", label: "Todos" },
+  { value: "mes", label: "Aniversário no mês" },
+  { value: "hoje", label: "Aniversário hoje" },
 ];
 
 /*
@@ -103,6 +121,8 @@ const Clientes = () => {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search);
   const [filtro, setFiltro] = useState<Filtro>("todos");
+  const [local, setLocal] = useState("todos");
+  const [aniversario, setAniversario] = useState<Aniversario>("todos");
   const [page, setPage] = useState(1);
 
   const [showCreate, setShowCreate] = useState(false);
@@ -124,37 +144,120 @@ const Clientes = () => {
   /* Cliente cadastrado no PDV de outro balcão aparece aqui sem recarregar. */
   useSincronizacao(["clientes"], () => fetchClientes(true));
 
-  const filtered = useMemo(() => {
-    const q = debouncedSearch.trim().toLowerCase();
-    const digits = onlyDigits(q);
+  /**
+   * A regra de filtragem, como função pura.
+   *
+   * Escrita assim, e não embutida no `useMemo`, porque ela é usada duas vezes
+   * com propósitos diferentes: para montar a lista e para CONTAR quantos
+   * clientes cada opção do filtro deixaria passar. O número ao lado de "A
+   * completar" só é confiável se sair exatamente da mesma regra que a lista
+   * aplica — duas cópias divergem no primeiro campo novo, e aí o filtro promete
+   * doze e entrega nove.
+   */
+  const passa = (c: ClientType, f: { filtro: Filtro; local: string; aniversario: Aniversario; q: string }) => {
+    const situacaoOk =
+      f.filtro === "todos" ||
+      (f.filtro === "ativo" && c.status === eStatus.ATIVO) ||
+      (f.filtro === "inativo" && c.status === eStatus.INATIVO) ||
+      (f.filtro === "incompletos" && completudeCliente(c) < 100);
 
-    return (
+    if (!situacaoOk) return false;
+
+    if (f.local !== "todos" && localDoCliente(c) !== f.local) return false;
+
+    if (f.aniversario === "mes" && !ehAniversarianteDoMes(c.dataNascimento)) return false;
+    if (f.aniversario === "hoje" && !ehAniversarioHoje(c.dataNascimento)) return false;
+
+    if (!f.q) return true;
+
+    const digits = onlyDigits(f.q);
+
+    return Boolean(
+      c.nome?.toLowerCase().includes(f.q)
+      || c.contato?.email?.toLowerCase().includes(f.q)
+      || localDoCliente(c).toLowerCase().includes(f.q)
+      || (digits.length > 0 && (onlyDigits(c.cpfCnpj ?? "").includes(digits) || contactDigits(c.contato).includes(digits))),
+    );
+  };
+
+  const q = debouncedSearch.trim().toLowerCase();
+  const atual = { filtro, local, aniversario, q };
+
+  const filtered = useMemo(
+    () =>
       customers
-        .filter((c) => {
-          const matchStatus =
-            filtro === "todos" ||
-            (filtro === "ativo" && c.status === eStatus.ATIVO) ||
-            (filtro === "inativo" && c.status === eStatus.INATIVO) ||
-            (filtro === "incompletos" && completudeCliente(c) < 100);
-
-          if (!matchStatus) return false;
-          if (!q) return true;
-
-          const matchNome = c.nome?.toLowerCase().includes(q);
-          const matchEmail = c.contato?.email?.toLowerCase().includes(q);
-          const matchLocal = localDoCliente(c).toLowerCase().includes(q);
-          const matchDoc = digits.length > 0 && (onlyDigits(c.cpfCnpj ?? "").includes(digits) || contactDigits(c.contato).includes(digits));
-
-          return matchNome || matchEmail || matchLocal || matchDoc;
-        })
+        .filter((c) => passa(c, atual))
         // Mais recentes primeiro; clientes sem data vão para o fim.
         .sort((a, b) => {
           const da = a.created_at ? new Date(a.created_at).getTime() : 0;
           const db = b.created_at ? new Date(b.created_at).getTime() : 0;
           return db - da;
-        })
-    );
-  }, [customers, debouncedSearch, filtro]);
+        }),
+    [customers, filtro, local, aniversario, q],
+  );
+
+  /**
+   * As cidades saem do que ESTÁ cadastrado.
+   *
+   * Nenhuma lista fixa: quem nunca preencheu endereço não vê o filtro de
+   * cidade. Um select com opções que não existem em nenhum cliente só produz
+   * resultado vazio — e quem filtra por ele conclui que a busca está quebrada.
+   */
+  const locais = useMemo(
+    () => [...new Set(customers.map(localDoCliente).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [customers],
+  );
+
+  /**
+   * Quantos clientes cada opção deixaria passar.
+   *
+   * Contado com os OUTROS filtros aplicados e o próprio suspenso — que é o que
+   * torna o número útil: dentro de "São Paulo/SP", "Aniversário no mês 3" quer
+   * dizer três paulistanos fazendo aniversário, não três na base inteira.
+   * Contando com o próprio filtro junto, toda opção não escolhida marcaria zero.
+   */
+  const contar = (mudanca: Partial<typeof atual>) => customers.filter((c) => passa(c, { ...atual, ...mudanca })).length;
+
+  const opcoesFiltro = useMemo(
+    () => FILTROS.map((o) => ({
+      valor: o.value,
+      label: o.label,
+      contagem: contar({ filtro: o.value }),
+      /* O ponto vermelho só acende quando há mesmo ficha pela metade. Um
+         alerta permanentemente aceso deixa de ser alerta em uma semana. */
+      alerta: o.value === "incompletos" && contar({ filtro: "incompletos" }) > 0,
+    })),
+    [customers, filtro, local, aniversario, q],
+  );
+
+  const opcoesLocal = useMemo(
+    () => [
+      { valor: "todos", label: "Todas as cidades", contagem: contar({ local: "todos" }) },
+      ...locais.map((l) => ({ valor: l, label: l, contagem: contar({ local: l }) })),
+    ],
+    [customers, locais, filtro, local, aniversario, q],
+  );
+
+  const opcoesAniversario = useMemo(
+    () => ANIVERSARIOS.map((o) => ({ valor: o.value, label: o.label, contagem: contar({ aniversario: o.value }) })),
+    [customers, filtro, local, aniversario, q],
+  );
+
+  /**
+   * As sugestões da busca.
+   *
+   * Saem da lista JÁ FILTRADA: sugerir um cliente que os filtros escondem
+   * levaria a pessoa a uma ficha que ela não consegue achar de volta na tabela.
+   * Quem casa o texto com o rótulo é o próprio `BuscaSugestoes`.
+   */
+  const sugestoes = useMemo(
+    () => filtered.map((c) => ({
+      id: String(c.id ?? ""),
+      label: c.nome,
+      sub: [numeroDeContato(c) ? maskPhone(String(numeroDeContato(c))) : "", localDoCliente(c)].filter(Boolean).join(" · "),
+    })),
+    [filtered],
+  );
 
   const stats = useMemo(() => {
     const total = customers.length;
@@ -197,7 +300,7 @@ const Clientes = () => {
   const pageItems = filtered.slice((page - 1) * perPage, page * perPage);
   const emptySlots = Math.max(0, perPage - pageItems.length);
 
-  useEffect(() => setPage(1), [debouncedSearch, filtro]);
+  useEffect(() => setPage(1), [debouncedSearch, filtro, local, aniversario]);
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
@@ -247,7 +350,26 @@ const Clientes = () => {
     window.open(`https://wa.me/${destino}`, "_blank", "noopener,noreferrer");
   };
 
-  const hasFilters = Boolean(search) || filtro !== "todos";
+  const hasFilters = Boolean(search) || filtro !== "todos" || local !== "todos" || aniversario !== "todos";
+
+  const limpar = () => {
+    setSearch("");
+    setFiltro("todos");
+    setLocal("todos");
+    setAniversario("todos");
+  };
+
+  /*
+   * Cidade que deixou de existir não pode travar a lista.
+   *
+   * O único cliente de uma cidade muda de endereço e aquela opção some da
+   * lista — mas o filtro continua apontando para ela, o seletor fica sem
+   * rótulo e a tabela zera. Um beco sem saída em que a única pista é o botão
+   * "Limpar", que não parece ter relação com o que acabou de acontecer.
+   */
+  useEffect(() => {
+    if (local !== "todos" && !locais.includes(local)) setLocal("todos");
+  }, [locais, local]);
 
   if (mobile) {
     const itens: ClienteItem[] = filtered.map((c) => ({
@@ -316,35 +438,83 @@ const Clientes = () => {
               </div>
             </div>
 
-            <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
-              <div className="flex min-w-[200px] flex-1 items-center gap-2 rounded-lg border border-fg/[0.08] bg-fg/[0.04] px-3 transition-colors focus-within:border-accent/60 focus-within:bg-fg/[0.06] sm:max-w-xs">
-                <Search className="h-4 w-4 text-muted" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Nome, telefone, e-mail ou cidade…"
-                  aria-label="Buscar clientes"
-                  className="flex-1 bg-transparent py-2 text-[13px] text-ink outline-none placeholder:text-faint"
-                />
-              </div>
+            {/*
+             * Busca e filtros num grupo só, na ponta oposta ao título.
+             *
+             * As quatro coisas fazem o mesmo trabalho — restringir a lista — e
+             * separá-las pelas duas pontas obrigava o olho a atravessar a barra
+             * para montar um filtro só. É o mesmo arranjo do estoque e da
+             * equipe.
+             *
+             * A fileira de botões de situação virou um seletor: com quatro
+             * opções ela já ocupava metade da barra, e não sobrava largura para
+             * os filtros de cidade e aniversário. Fechado, um seletor ocupa o
+             * espaço de uma opção e mostra a contagem de todas.
+             */}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {/*
+               * A sugestão ABRE a ficha; ela não filtra a tabela.
+               *
+               * Filtrar já é o que o próprio texto faz enquanto se digita — a
+               * tabela reage sozinha. O que a lista acrescenta é o atalho para
+               * quem já sabe de quem está atrás e não quer procurar a linha na
+               * página certa depois.
+               */}
+              <BuscaSugestoes
+                valor={search}
+                onValor={setSearch}
+                sugestoes={sugestoes}
+                onEscolher={(s) => s.id && navigate(`/clientes/${s.id}`)}
+                placeholder="Buscar cliente…"
+                aria-label="Buscar cliente por nome, telefone, documento, e-mail ou cidade"
+                className="w-[212px] shrink-0"
+              />
 
-              <div className="flex items-center gap-1 rounded-lg border border-fg/[0.07] bg-fg/[0.03] p-1">
-                {FILTROS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setFiltro(opt.value)}
-                    aria-pressed={filtro === opt.value}
-                    className={`cursor-pointer whitespace-nowrap rounded-lg px-3 py-1.5 text-[12px] transition-colors ${filtro === opt.value ? "bg-accent text-white shadow-glow" : "text-mist hover:text-ink"}`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+              <Select
+                valor={filtro}
+                onChange={(v) => setFiltro(v as Filtro)}
+                opcoes={opcoesFiltro}
+                icone={<ListFilter size={14} />}
+                aria-label="Filtrar por situação do cliente"
+                className="w-[150px] shrink-0"
+              />
+
+              {/* Cidade só existe quando há o que escolher: um seletor com uma
+                  opção só ocupa espaço para não decidir nada. */}
+              {locais.length > 0 && (
+                <Select
+                  valor={local}
+                  onChange={setLocal}
+                  opcoes={opcoesLocal}
+                  icone={<MapPin size={14} />}
+                  aria-label="Filtrar por cidade"
+                  className="w-[168px] shrink-0"
+                />
+              )}
+
+              <Select
+                valor={aniversario}
+                onChange={(v) => setAniversario(v as Aniversario)}
+                opcoes={opcoesAniversario}
+                icone={<Cake size={14} />}
+                aria-label="Filtrar por aniversário"
+                className="w-[178px] shrink-0"
+              />
+
+              {hasFilters && (
+                <button
+                  type="button"
+                  onClick={limpar}
+                  className="focus-ring h-[38px] shrink-0 cursor-pointer whitespace-nowrap rounded-xl px-2.5 text-[12px] text-faint transition-colors hover:text-ink"
+                >
+                  Limpar
+                </button>
+              )}
 
               <button
                 type="button"
                 onClick={() => setShowCreate(true)}
-                className="focus-ring inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-gradient-to-br from-accent-soft to-accent px-3 py-2 text-[12.5px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98]"
+                className="focus-ring inline-flex h-[38px] shrink-0 cursor-pointer items-center gap-1.5 rounded-xl bg-gradient-to-br from-accent-soft to-accent px-3 text-[12.5px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98]"
               >
                 <UserPlus className="h-3.5 w-3.5" />
                 Novo cliente
@@ -378,7 +548,14 @@ const Clientes = () => {
                         <p className="text-[13px] text-mist">Nenhum cliente encontrado</p>
                         <p className="mt-0.5 text-[11px]">{hasFilters ? "Ajuste a busca ou os filtros." : "Comece cadastrando seu primeiro cliente."}</p>
                       </div>
-                      {!hasFilters && (
+                      {/* Dois vazios diferentes pedem ações opostas: limpar o
+                          que está escondendo a lista, ou criar a primeira
+                          linha dela. */}
+                      {hasFilters ? (
+                        <button onClick={limpar} className="mt-1 cursor-pointer rounded-xl border border-fg/[0.1] px-3.5 py-2 text-[12px] text-mist transition-colors hover:text-ink">
+                          Limpar filtros
+                        </button>
+                      ) : (
                         <button onClick={() => setShowCreate(true)} className="mt-1 cursor-pointer rounded-xl bg-accent px-3.5 py-2 text-[12px] text-white transition-colors hover:bg-accent">
                           Cadastrar primeiro cliente
                         </button>

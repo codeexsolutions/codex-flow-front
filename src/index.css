@@ -23,6 +23,30 @@
   --warning: 190 122 12;
   --danger: 208 62 62;
 
+  /*
+   * A SEGUNDA ação de peso igual — hoje o "Nova categoria" do estoque.
+   *
+   * Precisa ser um token próprio, e não `--accent` nem `--success`:
+   *
+   *   • `--accent` é a cor do BOTÃO PRIMÁRIO ("Novo item"), e o ponto deste
+   *     token é justamente destoar dele. Também não serve porque o acento é
+   *     escolhido pela empresa (roxo, azul, verde, rosa, laranja, teal,
+   *     vinho, dourado, preto) — qualquer derivação dele mudaria de hue junto.
+   *
+   *   • `--success` é um ESTADO ("em estoque", "lucro"), não uma ação, e no
+   *     tema escuro ele é um verde-menta claro (93 202 165) escolhido para ser
+   *     lido como TEXTO sobre fundo escuro. Usado como fundo de botão, texto
+   *     branco em cima dele fica em ~1.9:1 — ilegível.
+   *
+   * Estes valores são escolhidos para CARREGAR TEXTO BRANCO: ficam escuros o
+   * bastante nos dois temas, em vez de clarear no escuro como as cores
+   * semânticas fazem. O `soft` sobe pouco de propósito — ele é o canto claro
+   * do degradê, e é lá que o branco tem menos contraste. Como está, o pior
+   * ponto do botão fica em 4.7:1 (o mínimo da WCAG AA para texto é 4.5).
+   */
+  --acao-2: 10 122 79;
+  --acao-2-soft: 12 132 86;
+
   /* Vidro — no claro o vidro é branco e luminoso */
   --glass-bg: 255 255 255;
   --glass-alpha: 0.72;
@@ -73,6 +97,14 @@
   --success: 93 202 165;
   --warning: 250 199 117;
   --danger: 240 149 149;
+
+  /* Ver a nota no tema claro.
+     Quase o mesmo do claro, e isso é deliberado: `--accent` precisa clarear no
+     escuro porque também é usado como TEXTO; esta cor só existe como fundo de
+     botão, e clarear aqui só serviria para apagar o branco por cima. Contra o
+     fundo escuro do tema o verde já se destaca sozinho. */
+  --acao-2: 11 124 81;
+  --acao-2-soft: 14 138 91;
 
   --glass-bg: 36 33 64;
   --glass-alpha: 0.55;

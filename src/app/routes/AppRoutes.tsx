@@ -48,6 +48,7 @@ import ClientesPage from "@/features/clientes/pages/ClientesPage";
 import CustomerDetailPage from "@/features/clientes/pages/ClienteDetailPage";
 
 import TableStock from "@/features/estoque/pages/StockPage";
+import ProdutoDetalhe from "@/features/estoque/pages/ProdutoDetailPage";
 
 import ConfiguracoesPage from "@/features/config/pages/ConfigPage";
 import EmpresaPage from "@/features/config/pages/EmpresaPage";
@@ -199,6 +200,10 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
           <Route path="clientes/:clienteId" element={<CustomerDetailPage />} />
 
           <Route path="estoque" element={<TableStock />} />
+          {/* A ficha do produto tem endereço próprio de propósito: dá para
+              favoritar, mandar o link para o colega e voltar pelo histórico —
+              nada disso um modal oferece. Ver a nota no topo da página. */}
+          <Route path="estoque/:produtoId" element={<ProdutoDetalhe />} />
 
           {/* Vendas e Financeiro viraram uma tela só, em abas. A rota antiga
               continua respondendo para não quebrar link salvo ou atalho. */}

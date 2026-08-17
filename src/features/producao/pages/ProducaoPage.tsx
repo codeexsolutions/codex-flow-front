@@ -13,6 +13,7 @@ import useAuth from "@/features/auth/store/auth.store";
 import { SkeletonListaPainel } from "@/shared/ui/skeleton";
 import PlanilhaProducao from "@/features/producao/components/PlanilhaProducao";
 import useEquipeStore from "@/features/funcionarios/store/equipe.store";
+import { podemReceberTarefa } from "@/shared/domain/funcionario";
 
 type Periodo = "DIARIO" | "SEMANAL" | "MENSAL";
 
@@ -84,11 +85,10 @@ const ProducaoPage = () => {
     if (gestor) buscarEquipe();
   }, [gestor, buscarEquipe]);
 
-  const funcionarios = useMemo(
-    () => /* Só quem está ativo: linha de quem saiu da empresa é ruído na semana. */
-    (equipe?.funcionarios ?? []).filter((f) => f.status === "ATIVO").map((f) => ({ id: String(f.id), nome: f.nome })),
-    [equipe],
-  );
+  /* Só quem está ativo: linha de quem saiu da empresa é ruído na semana. E o
+     `id` é o do LOGIN, porque é ele que vai para `producao_itens.responsavel_fk`
+     — ver a nota de `podemReceberTarefa`. */
+  const funcionarios = useMemo(() => podemReceberTarefa(equipe?.funcionarios ?? []), [equipe]);
 
   const [novoAberto, setNovoAberto] = useState(false);
   const [etapaAberta, setEtapaAberta] = useState(false);

@@ -190,6 +190,48 @@ export const TextArea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(({ 
 });
 TextArea.displayName = "TextArea";
 
+type SwitchFieldProps = {
+  label: string;
+  /** Explica a CONSEQUÊNCIA de ligar. Ver a nota abaixo. */
+  hint?: string;
+  checked: boolean;
+  onChange: (valor: boolean) => void;
+  disabled?: boolean;
+};
+
+/**
+ * Chave liga/desliga com rótulo e explicação.
+ *
+ * A linha inteira é o alvo do clique, não só o quadradinho: num campo de
+ * 20 px, quem usa no celular erra mais do que acerta.
+ *
+ * O `hint` não é decoração. Estas chaves decidem regra de negócio ("pode
+ * vender sem estoque?"), e o rótulo sozinho não diz o que acontece ao ligar —
+ * a pessoa marca para descobrir, e descobre numa venda.
+ */
+export const SwitchField = ({ label, hint, checked, onChange, disabled }: SwitchFieldProps) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    disabled={disabled}
+    onClick={() => onChange(!checked)}
+    className="focus-ring flex w-full cursor-pointer items-start gap-3 rounded-lg border border-fg/[0.07] bg-fg/[0.02] px-3 py-2.5 text-left transition-colors hover:border-fg/[0.14] disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    <span
+      aria-hidden
+      className={`mt-0.5 flex h-[18px] w-[32px] shrink-0 items-center rounded-full p-[2px] transition-colors ${checked ? "bg-accent" : "bg-fg/[0.16]"}`}
+    >
+      <span className={`h-[14px] w-[14px] rounded-full bg-white shadow transition-transform ${checked ? "translate-x-[14px]" : "translate-x-0"}`} />
+    </span>
+
+    <span className="min-w-0 flex-1">
+      <span className="block text-[12.5px] text-ink">{label}</span>
+      {hint && <span className="mt-0.5 block text-[11px] leading-[15px] text-faint">{hint}</span>}
+    </span>
+  </button>
+);
+
 /* ───────────────────────────────── Ações ─────────────────────────────────── */
 
 /**
