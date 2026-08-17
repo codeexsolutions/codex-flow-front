@@ -162,7 +162,7 @@ const BottomNav = () => {
           initial={{ y: 80, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={reduzir ? { duration: 0 } : { type: "spring", stiffness: 300, damping: 30 }}
-          className="glass-strong pointer-events-auto mx-auto flex h-[52px] w-fit max-w-full items-center gap-0.5 rounded-full border px-1.5"
+          className="glass-strong pointer-events-auto mx-auto flex h-[62px] w-fit max-w-full items-center gap-1 rounded-full border px-2"
           style={{
             borderColor: "rgb(var(--glass-border) / calc(var(--glass-border-alpha) + 0.06))",
             boxShadow: "0 14px 32px -16px rgb(0 0 0 / 0.45)",
@@ -184,7 +184,7 @@ const BottomNav = () => {
                 /* `w-auto`, não `flex-1`: com flex-1 a aba ativa engolia toda a
                    sobra da barra e virava um bloco do tamanho de três botões.
                    Agora ela cresce só o que o nome precisa. */
-                className={`focus-ring relative flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-[14px] transition-colors ${on ? "px-3 text-accent-soft" : "w-10 text-faint"}`}
+                className={`focus-ring relative flex h-12 shrink-0 items-center justify-center gap-2 rounded-[16px] transition-colors ${on ? "px-3.5 text-accent-soft" : "w-12 text-faint"}`}
               >
                 {/* A pílula é um irmão posicionado, não o fundo do botão: assim
                     ela desliza entre os itens em vez de piscar no destino. */}
@@ -194,11 +194,15 @@ const BottomNav = () => {
                     transition={mola}
                     /* Fundo lavado com anel, no lugar do accent chapado: a aba
                        fica marcada sem virar o objeto mais pesado da tela. */
-                    className="absolute inset-0 rounded-[14px] bg-accent/[0.14] ring-1 ring-inset ring-accent/25"
+                    className="absolute inset-0 rounded-[16px] bg-accent/[0.14] ring-1 ring-inset ring-accent/25"
                   />
                 )}
 
-                <span className="relative shrink-0">{it.icon}</span>
+                {/* 21px, sobrescrevendo o `size={18}` do item por CSS.
+                    A lista de rotas é a MESMA da folha "Mais": trocar o `size`
+                    lá aumentaria também os ícones de dentro da folha, que já
+                    estão no tamanho certo para uma lista de texto. */}
+                <span className="relative shrink-0 [&_svg]:h-[21px] [&_svg]:w-[21px]">{it.icon}</span>
 
                 {/* O nome abre em largura, não em opacidade: surgir por cima dos
                     vizinhos e só depois empurrá-los seriam dois tempos. */}
@@ -210,7 +214,7 @@ const BottomNav = () => {
                       animate={{ opacity: 1, width: "auto" }}
                       exit={reduzir ? undefined : { opacity: 0, width: 0 }}
                       transition={mola}
-                      className="relative overflow-hidden whitespace-nowrap text-[11.5px] leading-none tracking-tight"
+                      className="relative overflow-hidden whitespace-nowrap text-[12.5px] leading-none tracking-tight"
                     >
                       {it.label}
                     </motion.span>
@@ -222,7 +226,7 @@ const BottomNav = () => {
 
           {/* Divisória: "Mais" abre uma folha, não navega. O fio separa as duas
               naturezas sem precisar de um rótulo explicando. */}
-          <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-fg/10" />
+          <span aria-hidden className="mx-1 h-6 w-px shrink-0 bg-fg/10" />
 
           <motion.button
             type="button"
@@ -232,19 +236,19 @@ const BottomNav = () => {
             aria-expanded={maisAberto}
             whileTap={reduzir ? undefined : { scale: 0.94 }}
             transition={mola}
-            className={`focus-ring relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] transition-colors ${maisAberto ? "text-accent-soft" : "text-faint"}`}
+            className={`focus-ring relative flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] transition-colors ${maisAberto ? "text-accent-soft" : "text-faint"}`}
           >
             {maisAberto && (
               <motion.span
                 initial={{ opacity: 0, scale: 0.75 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ type: "spring", stiffness: 480, damping: 30 }}
-                className="absolute inset-0 rounded-[14px] bg-accent/[0.14] ring-1 ring-inset ring-accent/25"
+                className="absolute inset-0 rounded-[16px] bg-accent/[0.14] ring-1 ring-inset ring-accent/25"
               />
             )}
 
             <motion.span className="relative" animate={reduzir ? {} : { rotate: maisAberto ? 90 : 0 }} transition={{ type: "spring", stiffness: 420, damping: 28 }}>
-              <MoreHorizontal size={18} />
+              <MoreHorizontal size={21} />
             </motion.span>
           </motion.button>
         </motion.nav>
