@@ -64,6 +64,24 @@ type InvoiceProps = {
    * cima em vez de criar uma segunda proposta com o mesmo conteúdo.
    */
   orcamentoId?: string;
+  /**
+   * Orçamento que esta venda substitui — ele é APAGADO quando a nota nasce.
+   *
+   * -------------------------------------------------------------------------
+   * Por que aqui dentro, e não ao fechar a tela
+   * -------------------------------------------------------------------------
+   * A marcação antiga vivia no `onClose` do PDV, apoiada na ideia de que
+   * fechar a nota significa tê-la salvado. Não significa: o mesmo `onClose`
+   * dispara quando a pessoa abre a conversão, muda de ideia e fecha no X.
+   * Marcar um orçamento como resolvido nesse caso já era errado; APAGÁ-LO
+   * seria perder a proposta sem nada em troca.
+   *
+   * Aqui a exclusão acontece depois de o servidor devolver o id da nota — ou
+   * seja, só quando a venda existe de fato. O pior desfecho possível passa a
+   * ser o orçamento sobreviver a uma venda (visível, e resolvido com o botão
+   * de apagar da lista), nunca o contrário.
+   */
+  converterOrcamentoId?: string;
 };
 
 
@@ -77,7 +95,7 @@ const STATUS_STYLE: Record<string, string> = {
 
 
 
-const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = false, itensIniciais, orcamentoId }: InvoiceProps) => {
+const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = false, itensIniciais, orcamentoId, converterOrcamentoId }: InvoiceProps) => {
   const alert = useAlert();
   const notaRef = useRef<HTMLDivElement>(null);
 
@@ -553,6 +571,22 @@ const Invoice = ({ id: idInicial, clienteId, nome, onSaved, modoOrcamento = fals
         if (novoId) setPedidoId(novoId);
         setFocarPagamento(true);
         alert.success("Nota criada!", "A venda foi registrada. Agora registre o pagamento.");
+
+        /*
+         * A proposta some agora que a venda existe.
+         *
+         * Depois do `novoId`, e não antes: a ordem é o que garante que nunca
+         * se apague um orçamento sem a venda no lugar dele. Se a exclusão
+         * falhar, o orçamento continua na lista — visível, e resolvível pelo
+         * botão de apagar. É a falha certa das duas possíveis.
+         */
+        if (novoId && converterOrcamentoId) {
+          try {
+            await OrcamentoService.excluir(converterOrcamentoId);
+          } catch {
+            /* A venda é o que importa e já está gravada. */
+          }
+        }
       }
 
       // Pagamentos acumulados seguem gravados (update) ou prontos (create).
