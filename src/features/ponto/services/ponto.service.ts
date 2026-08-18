@@ -18,6 +18,14 @@ export type PontoLink = {
   abertaAgora: boolean;
 };
 
+/** Quem é o dono de um CPF, e qual será a próxima batida dele. */
+export type QuemBate = {
+  nome: string;
+  indice: number;
+  total: number;
+  proxima: "ENTRADA" | "SAIDA" | "INTERVALO_INICIO" | "INTERVALO_FIM";
+};
+
 export type PontoBatido = {
   funcionarioNome: string;
   tipo: "ENTRADA" | "SAIDA" | "INTERVALO_INICIO" | "INTERVALO_FIM";
@@ -73,6 +81,25 @@ const PontoService = {
 
   abrir: (token: string): Promise<PontoLink> =>
     primeiro(sysgrafix.get<RetornoPadrao<PontoLink>>(`/publico/ponto/${token}`), "Este link não está mais disponível."),
+
+  /**
+   * Quem é o dono deste CPF.
+   *
+   * POST, e não GET com o CPF na URL: query string entra em log de servidor,
+   * em histórico de navegador e no `Referer` de qualquer recurso que a página
+   * carregue depois. CPF não pode passar por nenhum dos três.
+   *
+   * Devolve `null` quando não encontra — para a tela isto é "ainda não sei
+   * quem é" enquanto se digita, não um erro para pintar de vermelho.
+   */
+  identificar: async (token: string, cpf: string): Promise<QuemBate | null> => {
+    try {
+      const res = await sysgrafix.post<RetornoPadrao<QuemBate>>(`/publico/ponto/${token}/quem`, { cpf });
+      return res.data?.data?.[0] ?? null;
+    } catch {
+      return null;
+    }
+  },
 
   /**
    * Registra a batida.

@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Camera, Check, Clock, Loader2, MapPin, AlertTriangle, RotateCw } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { Camera, Check, Clock, Loader2, MapPin, AlertTriangle, RotateCw, User } from "lucide-react";
 
-import PontoService, { type PontoBatido, type PontoLink } from "@/features/ponto/services/ponto.service";
+import PontoService, { type PontoBatido, type PontoLink, type QuemBate } from "@/features/ponto/services/ponto.service";
 import { maskCpfCnpj } from "@/shared/validation/masks";
 import { cpfValido, soDigitos } from "@/shared/utils/documento";
+import { arquivoParaBase64, cameraAoVivoDisponivel, RESTRICOES_CAMERA } from "@/shared/utils/camera";
+import { motivoDoErroGps, gpsDisponivel } from "@/shared/utils/geo";
 
 /**
  * A tela em que o funcionário bate o ponto — sem login.
@@ -22,8 +25,17 @@ import { cpfValido, soDigitos } from "@/shared/utils/documento";
  * ---------------------------------------------------------------------------
  * A localização é pedida assim que a tela abre, porque é ela que pode recusar
  * a batida — e descobrir que está longe demais DEPOIS de tirar a foto é fazer
- * a pessoa trabalhar para nada. A câmera só é acionada quando já se sabe que o
- * lugar serve.
+ * a pessoa trabalhar para nada.
+ *
+ * ---------------------------------------------------------------------------
+ * A câmera tem dois caminhos
+ * ---------------------------------------------------------------------------
+ * `getUserMedia` só existe em `https://`. No iPhone abrindo pelo IP da rede,
+ * `navigator.mediaDevices` é `undefined` — a chamada estoura um `TypeError`
+ * que parece "permissão negada" e manda a pessoa liberar o que não é o
+ * problema. Onde ele não está disponível, a foto vem do app de câmera do
+ * próprio aparelho (`<input capture>`), que funciona em `http://` e não pede
+ * permissão de site. Ver `shared/utils/camera`.
  */
 
 const ROTULO: Record<PontoBatido["tipo"], string> = {
@@ -33,23 +45,25 @@ const ROTULO: Record<PontoBatido["tipo"], string> = {
   INTERVALO_FIM: "Volta do intervalo",
 };
 
-/** Câmera traseira não serve: o ponto quer o rosto de quem está batendo. */
-const CAMERA = { video: { facingMode: "user" as const }, audio: false };
-
 const BaterPontoPage = () => {
   const { token = "" } = useParams();
+  const reduzir = useReducedMotion();
 
   const [link, setLink] = useState<PontoLink | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erroLink, setErroLink] = useState("");
 
   const [cpf, setCpf] = useState("");
+  const [quem, setQuem] = useState<QuemBate | null>(null);
+  const [procurando, setProcurando] = useState(false);
+
   const [local, setLocal] = useState<{ lat: number; lng: number } | null>(null);
   const [erroLocal, setErroLocal] = useState("");
 
   const [foto, setFoto] = useState<string | null>(null);
   const [camAberta, setCamAberta] = useState(false);
   const [erroCam, setErroCam] = useState("");
+  const [lendoArquivo, setLendoArquivo] = useState(false);
 
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
@@ -57,6 +71,11 @@ const BaterPontoPage = () => {
 
   const video = useRef<HTMLVideoElement>(null);
   const stream = useRef<MediaStream | null>(null);
+  const arquivo = useRef<HTMLInputElement>(null);
+
+  /* Calculados no render: dependem só do navegador e não mudam na sessão. */
+  const camera = cameraAoVivoDisponivel();
+  const gps = gpsDisponivel();
 
   /* ── O link ───────────────────────────────────────────────────────────── */
 
@@ -67,33 +86,54 @@ const BaterPontoPage = () => {
       .finally(() => setCarregando(false));
   }, [token]);
 
+  /* ── Quem é o dono do CPF ─────────────────────────────────────────────── */
+
+  /**
+   * O nome aparece enquanto se digita, com uma pausa curta.
+   *
+   * A pausa existe para não disparar uma consulta por tecla — são onze
+   * dígitos, e o freio do servidor é por minuto. Só busca com o CPF completo e
+   * válido: mandar número pela metade só gastaria tentativa do limite.
+   */
+  useEffect(() => {
+    const digitos = soDigitos(cpf);
+
+    if (!cpfValido(digitos)) {
+      setQuem(null);
+      setProcurando(false);
+      return;
+    }
+
+    setProcurando(true);
+
+    const id = setTimeout(async () => {
+      setQuem(await PontoService.identificar(token, digitos));
+      setProcurando(false);
+    }, 350);
+
+    return () => clearTimeout(id);
+  }, [cpf, token]);
+
   /* ── A localização, pedida de saída ───────────────────────────────────── */
 
   const pedirLocal = () => {
     setErroLocal("");
 
-    if (!navigator.geolocation) {
-      setErroLocal("Este aparelho não informa a localização. Use outro para bater o ponto.");
+    if (!gps.ok) {
+      setErroLocal(gps.motivo ?? "Localização indisponível.");
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
       (pos) => setLocal({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      /* A mensagem separa os dois casos porque as saídas são diferentes:
-         negado se resolve na permissão do navegador; indisponível, andando
-         alguns passos para fora. */
-      (e) => setErroLocal(
-        e.code === e.PERMISSION_DENIED
-          ? "Você precisa permitir o acesso à localização para bater o ponto."
-          : "Não foi possível obter sua localização. Saia de baixo de cobertura e tente de novo.",
-      ),
+      (e) => setErroLocal(motivoDoErroGps(e)),
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
     );
   };
 
   useEffect(pedirLocal, []);
 
-  /* ── A câmera ─────────────────────────────────────────────────────────── */
+  /* ── A câmera ao vivo ─────────────────────────────────────────────────── */
 
   const fecharCamera = () => {
     stream.current?.getTracks().forEach((t) => t.stop());
@@ -101,28 +141,42 @@ const BaterPontoPage = () => {
     setCamAberta(false);
   };
 
-  /* A câmera é desligada ao sair da tela: deixá-la ligada mantém a luz do
-     aparelho acesa e o navegador marcando "em uso" depois do ponto batido. */
+  /* Desligada ao sair da tela: deixá-la ligada mantém a luz do aparelho acesa
+     e o navegador marcando "em uso" depois do ponto batido. */
   useEffect(() => fecharCamera, []);
 
+  /**
+   * Abre a câmera dentro da página.
+   *
+   * O `<video>` já está no DOM antes do clique (escondido por CSS), então o
+   * `srcObject` e o `play()` acontecem aqui mesmo, logo depois do `await`.
+   * Montá-lo só agora e atribuir num `requestAnimationFrame` posterior é o que
+   * quebrava no Safari — ele exige que o `play()` fique perto do gesto.
+   */
   const abrirCamera = async () => {
     setErroCam("");
 
     try {
-      const s = await navigator.mediaDevices.getUserMedia(CAMERA);
+      const s = await navigator.mediaDevices.getUserMedia(RESTRICOES_CAMERA);
 
       stream.current = s;
       setCamAberta(true);
 
-      /* O `srcObject` é atribuído depois do render que monta o `<video>`. */
-      requestAnimationFrame(() => {
-        if (video.current) {
-          video.current.srcObject = s;
-          void video.current.play();
-        }
-      });
-    } catch {
-      setErroCam("Não foi possível abrir a câmera. Autorize o acesso e tente de novo.");
+      if (video.current) {
+        video.current.srcObject = s;
+        await video.current.play().catch(() => undefined);
+      }
+    } catch (e) {
+      const nome = (e as DOMException)?.name;
+
+      setErroCam(
+        nome === "NotAllowedError"
+          ? "Permissão negada. Libere a câmera nas configurações do site e tente de novo."
+          : nome === "NotFoundError"
+            ? "Nenhuma câmera encontrada neste aparelho."
+            : "Não foi possível abrir a câmera. Use o botão de tirar foto pelo aparelho.",
+      );
+      fecharCamera();
     }
   };
 
@@ -142,6 +196,29 @@ const BaterPontoPage = () => {
 
     setFoto(canvas.toDataURL("image/jpeg", 0.8));
     fecharCamera();
+  };
+
+  /* ── A câmera do aparelho (o caminho que funciona em http) ────────────── */
+
+  const aoEscolherArquivo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const escolhido = e.target.files?.[0];
+
+    /* O valor é limpo para que escolher a MESMA foto de novo dispare o evento
+       outra vez — sem isso, refazer a foto depois de recusar não funciona. */
+    e.target.value = "";
+
+    if (!escolhido) return;
+
+    setErroCam("");
+    setLendoArquivo(true);
+
+    try {
+      setFoto(await arquivoParaBase64(escolhido));
+    } catch {
+      setErroCam("Não foi possível ler a foto. Tente novamente.");
+    } finally {
+      setLendoArquivo(false);
+    }
   };
 
   /* ── Registrar ────────────────────────────────────────────────────────── */
@@ -189,17 +266,21 @@ const BaterPontoPage = () => {
     );
   }
 
-  /* Confirmação: a tela troca de assunto por inteiro. Quem bateu o ponto não
-     tem mais nada a fazer aqui, e deixar o formulário à vista convida a bater
-     de novo. */
+  /* Confirmação: a tela troca de assunto por inteiro. Quem bateu não tem mais
+     nada a fazer aqui, e deixar o formulário à vista convida a bater de novo. */
   if (batido) {
     const quando = new Date(batido.momento);
 
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-canvas px-6 text-center">
-        <span className="flex h-20 w-20 items-center justify-center rounded-full bg-success/15 text-success ring-1 ring-success/30">
+        <motion.span
+          initial={reduzir ? false : { scale: 0.7, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 420, damping: 22 }}
+          className="flex h-20 w-20 items-center justify-center rounded-full bg-success/15 text-success ring-1 ring-success/30"
+        >
           <Check size={38} />
-        </span>
+        </motion.span>
 
         <div>
           <p className="text-[22px] leading-tight text-ink">{ROTULO[batido.tipo]} registrada</p>
@@ -221,7 +302,7 @@ const BaterPontoPage = () => {
     <div className="flex min-h-[100dvh] flex-col items-center bg-canvas px-5 py-8">
       <div className="flex w-full max-w-sm flex-col gap-5">
 
-        {/* Identidade da empresa — e nada além dela. Ver a nota do serviço. */}
+        {/* Identidade da empresa — e nada além dela. */}
         <div className="flex flex-col items-center gap-2 text-center">
           {link.logoUrl
             ? <img src={link.logoUrl} alt="" className="h-14 w-14 rounded-2xl object-cover" />
@@ -246,19 +327,69 @@ const BaterPontoPage = () => {
         )}
 
         {/* ---------- CPF ---------- */}
-        <label className="flex flex-col gap-1.5">
-          <span className="text-[11px] uppercase tracking-[0.08em] text-faint">Seu CPF</span>
-          <input
-            value={cpf}
-            onChange={(e) => setCpf(maskCpfCnpj(e.target.value))}
-            inputMode="numeric"
-            autoComplete="off"
-            placeholder="000.000.000-00"
-            /* 17px: abaixo de 16 o iOS dá zoom sozinho ao focar, e a tela
-               inteira salta na cara de quem está batendo o ponto. */
-            className={`${caixa} nums tracking-wide`}
-          />
-        </label>
+        <div className="flex flex-col gap-2">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[11px] uppercase tracking-[0.08em] text-faint">Seu CPF</span>
+            <input
+              value={cpf}
+              onChange={(e) => setCpf(maskCpfCnpj(e.target.value))}
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="000.000.000-00"
+              /* 17px: abaixo de 16 o iOS dá zoom sozinho ao focar, e a tela
+                 inteira salta na cara de quem está batendo o ponto. */
+              className={`${caixa} nums tracking-wide`}
+            />
+          </label>
+
+          {/*
+            O nome confirma o CPF ANTES da foto.
+            Errar um dígito e só descobrir depois da selfie é a ida e volta que
+            faz alguém desistir na porta da loja.
+          */}
+          <AnimatePresence mode="wait" initial={false}>
+            {procurando ? (
+              <motion.p
+                key="procurando"
+                initial={reduzir ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex items-center gap-2 px-1 text-[12.5px] text-faint"
+              >
+                <Loader2 size={13} className="animate-spin" /> Conferindo…
+              </motion.p>
+            ) : quem ? (
+              <motion.div
+                key={quem.nome}
+                initial={reduzir ? false : { opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                className="flex items-center gap-2.5 rounded-xl border border-success/25 bg-success/[0.07] px-3.5 py-3"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
+                  <User size={17} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[14.5px] text-ink">{quem.nome}</span>
+                  <span className="block text-[11.5px] text-mist">
+                    {ROTULO[quem.proxima]} · batida {quem.indice} de {quem.total}
+                  </span>
+                </span>
+              </motion.div>
+            ) : cpfValido(cpf) ? (
+              <motion.p
+                key="nao-achou"
+                initial={reduzir ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="px-1 text-[12.5px] text-warning"
+              >
+                Não encontramos este CPF entre quem bate ponto aqui.
+              </motion.p>
+            ) : null}
+          </AnimatePresence>
+        </div>
 
         {/* ---------- Localização ---------- */}
         <div className="flex items-center gap-2.5 rounded-xl border border-fg/[0.07] bg-fg/[0.02] px-3.5 py-3">
@@ -280,25 +411,50 @@ const BaterPontoPage = () => {
         {/* ---------- Foto ---------- */}
         {link.exigeFoto && (
           <div className="flex flex-col gap-2">
-            {camAberta ? (
-              <>
-                {/* `-scale-x-100`: sem o espelho a pessoa se vê invertida e
-                    move a cabeça para o lado errado ao se enquadrar. */}
-                <video ref={video} playsInline muted className="aspect-[3/4] w-full -scale-x-100 rounded-2xl bg-fg/[0.06] object-cover" />
+            {/*
+              O `<video>` fica SEMPRE montado, escondido por CSS quando a
+              câmera está fechada. É isso que permite atribuir o `srcObject` e
+              chamar `play()` logo depois do clique — o Safari do iPhone exige
+              essa proximidade com o gesto.
+            */}
+            <video
+              ref={video}
+              playsInline
+              muted
+              autoPlay
+              className={camAberta
+                ? "aspect-[3/4] w-full -scale-x-100 rounded-2xl bg-fg/[0.06] object-cover"
+                : "hidden"}
+            />
 
-                <div className="flex gap-2">
-                  <button type="button" onClick={fecharCamera} className="focus-ring flex-1 rounded-xl border border-fg/[0.1] py-3 text-[13px] text-mist">
-                    Cancelar
-                  </button>
-                  <button type="button" onClick={capturar} className="focus-ring flex-[2] rounded-xl bg-accent py-3 text-[13px] text-white">
-                    Tirar foto
-                  </button>
-                </div>
-              </>
+            {/* A câmera do próprio aparelho. Funciona em http e não pede
+                permissão de site — é o caminho do iPhone na rede local. */}
+            <input
+              ref={arquivo}
+              type="file"
+              accept="image/*"
+              capture="user"
+              onChange={(e) => void aoEscolherArquivo(e)}
+              className="hidden"
+            />
+
+            {camAberta ? (
+              <div className="flex gap-2">
+                <button type="button" onClick={fecharCamera} className="focus-ring flex-1 rounded-xl border border-fg/[0.1] py-3 text-[13px] text-mist">
+                  Cancelar
+                </button>
+                <button type="button" onClick={capturar} className="focus-ring flex-[2] rounded-xl bg-accent py-3 text-[13px] text-white">
+                  Tirar foto
+                </button>
+              </div>
             ) : foto ? (
               <>
                 <img src={foto} alt="Foto do ponto" className="aspect-[3/4] w-full rounded-2xl object-cover" />
-                <button type="button" onClick={() => { setFoto(null); void abrirCamera(); }} className="focus-ring rounded-xl border border-fg/[0.1] py-2.5 text-[12.5px] text-mist">
+                <button
+                  type="button"
+                  onClick={() => { setFoto(null); if (camera.ok) void abrirCamera(); else arquivo.current?.click(); }}
+                  className="focus-ring rounded-xl border border-fg/[0.1] py-2.5 text-[12.5px] text-mist"
+                >
                   Tirar outra
                 </button>
               </>
@@ -306,12 +462,24 @@ const BaterPontoPage = () => {
               <>
                 <button
                   type="button"
-                  onClick={() => void abrirCamera()}
-                  className="focus-ring flex min-h-[64px] w-full items-center justify-center gap-2.5 rounded-2xl border border-dashed border-fg/[0.14] text-[14px] text-mist transition-colors hover:border-accent/40 hover:text-ink"
+                  disabled={lendoArquivo}
+                  /* Um botão só, com dois caminhos por trás: quem usa não
+                     precisa saber que existe diferença entre eles. */
+                  onClick={() => { if (camera.ok) void abrirCamera(); else arquivo.current?.click(); }}
+                  className="focus-ring flex min-h-[64px] w-full items-center justify-center gap-2.5 rounded-2xl border border-dashed border-fg/[0.14] text-[14px] text-mist transition-colors hover:border-accent/40 hover:text-ink disabled:opacity-50"
                 >
-                  <Camera size={19} /> Tirar a foto
+                  {lendoArquivo ? <Loader2 size={19} className="animate-spin" /> : <Camera size={19} />}
+                  {lendoArquivo ? "Carregando a foto…" : "Tirar a foto"}
                 </button>
-                {erroCam && <p className="text-[12px] text-danger">{erroCam}</p>}
+
+                {/* Quando a câmera ao vivo não existe, o motivo fica à vista —
+                    senão o botão parece se comportar de forma diferente sem
+                    explicação. */}
+                {!camera.ok && (
+                  <p className="px-1 text-[11.5px] leading-[16px] text-faint">{camera.motivo}</p>
+                )}
+
+                {erroCam && <p className="px-1 text-[12px] text-danger">{erroCam}</p>}
               </>
             )}
           </div>
@@ -333,7 +501,7 @@ const BaterPontoPage = () => {
           className="focus-ring flex min-h-[56px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-accent-soft to-accent text-[16px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45"
         >
           {enviando ? <Loader2 size={19} className="animate-spin" /> : <Clock size={19} />}
-          {enviando ? "Registrando…" : "Bater ponto"}
+          {enviando ? "Registrando…" : quem ? `Bater ${ROTULO[quem.proxima].toLowerCase()}` : "Bater ponto"}
         </button>
 
         <p className="text-center text-[11px] leading-[16px] text-faint">
