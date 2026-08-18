@@ -4,18 +4,18 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   ChevronLeft, Pencil, Loader2, AlertTriangle, RotateCw, Wallet, Percent,
   Clock, IdCard, Cake, Briefcase, ShieldCheck, Crown, MapPin, Camera,
-  FileText, UserCog, CalendarDays,
+  UserCog, CalendarDays, Receipt,
 } from "lucide-react";
 
 import { PageScreen } from "@/shared/ui/PageShell";
 import { Modal } from "@/shared/ui/Modal";
 import { Selo } from "@/shared/ui/StatusBadge";
-import { useAlert } from "@/shared/ui/Alert";
 import { formatCurrency } from "@/shared/utils/currency";
 import { formatNumber, EMPTY } from "@/shared/utils/format";
 import { maskCpfCnpj } from "@/shared/validation/masks";
 import FuncionarioService from "@/features/funcionarios/services/funcionario.service";
 import FuncionarioForm from "@/features/funcionarios/components/FuncionarioForm";
+import ReciboSalarioModal from "@/features/funcionarios/components/ReciboSalarioModal";
 import { PONTO_LABEL, type Equipe, type Funcionario, type PontoRegistro } from "@/shared/domain/funcionario";
 
 /**
@@ -105,13 +105,13 @@ const agruparPorDia = (pontos: PontoRegistro[]): Dia[] => {
 const FuncionarioDetalhe = () => {
   const { funcionarioId } = useParams();
   const navigate = useNavigate();
-  const alert = useAlert();
 
   const [equipe, setEquipe] = useState<Equipe | null>(null);
   const [pontos, setPontos] = useState<PontoRegistro[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
   const [editando, setEditando] = useState(false);
+  const [recibo, setRecibo] = useState(false);
   const [foto, setFoto] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
@@ -208,20 +208,17 @@ const FuncionarioDetalhe = () => {
         <div className="flex-1" />
 
         {/*
-          Ação rápida da folha.
+          Ação rápida do recibo.
           Ela está aqui porque é o que se faz DEPOIS de olhar o ponto e o
-          salário — os dois blocos desta página. O que a folha contém ainda
-          precisa ser definido; ver o aviso no rodapé.
+          salário — os dois blocos desta página. O modal já abre com o que
+          esta tela mostra: só falta o que variou no mês.
         */}
         <button
           type="button"
-          onClick={() => alert.info(
-            "Folha de pagamento",
-            "A ação está no lugar, mas o documento ainda não foi definido: falta combinar o que entra (salário, comissão, descontos, horas) e o formato de saída.",
-          )}
+          onClick={() => setRecibo(true)}
           className="focus-ring inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-fg/[0.08] bg-fg/[0.04] px-3 py-2 text-[13px] text-mist transition-colors hover:text-ink"
         >
-          <FileText className="h-4 w-4" /> Emitir folha
+          <Receipt className="h-4 w-4" /> Emitir recibo
         </button>
 
         <button
@@ -422,6 +419,8 @@ const FuncionarioDetalhe = () => {
       <Modal open={Boolean(foto)} onClose={() => setFoto(null)} title="Foto do ponto" size="sm">
         {foto && <img src={foto} alt="Foto registrada no ponto" className="w-full rounded-xl" />}
       </Modal>
+
+      <ReciboSalarioModal funcionario={funcionario} open={recibo} onClose={() => setRecibo(false)} />
     </PageScreen>
   );
 };

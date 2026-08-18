@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Users, ShieldCheck, UserPlus, Crown, AlertTriangle, Pencil,
-  UserCog, Trash2, Percent, Clock, ListFilter, Link2,
+  UserCog, Trash2, Percent, Clock, ListFilter, Link2, Receipt,
 } from "lucide-react";
 
 import { TabelaCard, TabelaHead, TabelaRow, TabelaVazia, type Coluna } from "@/shared/ui/DataTable";
@@ -15,6 +15,7 @@ import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import useAuth from "@/features/auth/store/auth.store";
 import FuncionarioService from "@/features/funcionarios/services/funcionario.service";
 import FuncionarioForm from "@/features/funcionarios/components/FuncionarioForm";
+import ReciboSalarioModal from "@/features/funcionarios/components/ReciboSalarioModal";
 import PontoConfigPainel from "@/features/ponto/components/PontoConfigPainel";
 import useEquipeStore from "@/features/funcionarios/store/equipe.store";
 import { PageScreen } from "@/shared/ui/PageShell";
@@ -122,6 +123,11 @@ const LinhasFantasma = ({ count }: { count: number }) => (
 const FuncionariosPage = () => {
   const alert = useAlert();
   const navigate = useNavigate();
+
+  /* Quem está com o recibo aberto. Um de cada vez: o documento é montado
+     fora da tela para ser rasterizado, e um nó por linha da lista seria uma
+     folha inteira renderizada para cada funcionário sem ninguém pedir. */
+  const [recibo, setRecibo] = useState<Funcionario | null>(null);
   const { user } = useAuth();
 
   const [equipe, setEquipe] = useState<Equipe | null>(null);
@@ -398,6 +404,19 @@ const FuncionariosPage = () => {
       align: "right",
       cell: (f) => (
         <span className="flex items-center justify-end gap-1">
+          {/* O recibo abre da LISTA porque emitir folha é trabalho de lote:
+              fim do mês, a equipe inteira, um depois do outro. Obrigar a
+              entrar na página de cada pessoa e voltar transformaria seis
+              recibos em dezoito cliques. */}
+          <button
+            type="button"
+            onClick={() => setRecibo(f)}
+            title="Emitir recibo de salário"
+            className="focus-ring flex h-7 w-7 items-center justify-center rounded-lg border border-fg/[0.08] text-mist transition hover:bg-fg/[0.05] hover:text-ink"
+          >
+            <Receipt size={13} />
+          </button>
+
           <button
             type="button"
             onClick={() => navigate(`/funcionarios/${f.id}`)}
@@ -605,6 +624,17 @@ const FuncionariosPage = () => {
             onMudou={aoMudar}
           />
         </Modal>
+
+        {/* `key` pelo id: trocar de funcionário com o recibo aberto precisa
+            recarregar salário, cargo e rascunho da pessoa certa. */}
+        {recibo && (
+          <ReciboSalarioModal
+            key={recibo.id}
+            funcionario={recibo}
+            open
+            onClose={() => setRecibo(null)}
+          />
+        )}
       </div>
     </PageScreen>
   );
