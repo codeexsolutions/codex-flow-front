@@ -20,6 +20,7 @@ export type NovoFuncionario = {
   dataNascimento?: string | null;
   cpf?: string | null;
   cargo?: string;
+  salario?: number | null;
   ganhaComissao?: boolean;
   comissaoPercentual?: number | null;
   batePonto?: boolean;

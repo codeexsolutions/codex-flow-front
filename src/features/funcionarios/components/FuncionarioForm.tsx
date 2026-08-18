@@ -1,21 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
-  User, Percent, Clock, ShieldCheck, Check, Loader2, KeyRound, Power,
-  Trash2, UserPlus, IdCard, Cake, Briefcase, AlertTriangle,
+  User, Percent, ShieldCheck, Check, Loader2, KeyRound, Power,
+  Trash2, UserPlus, IdCard, Cake, Briefcase, AlertTriangle, Wallet,
 } from "lucide-react";
 
-import {
-  DIAS_SEMANA, horasDaSemana, PONTO_LABEL,
-  type AreaSistema, type Funcionario, type JornadaDia, type PermissaoFuncionario,
-  type PontoRegistro,
-} from "@/shared/domain/funcionario";
+import type { AreaSistema, Funcionario, PermissaoFuncionario } from "@/shared/domain/funcionario";
 import FuncionarioService from "@/features/funcionarios/services/funcionario.service";
 import { Form, FormGrid, FormSection, TextField, SwitchField, FormActions } from "@/shared/ui/form/FormKit";
 import { useAlert } from "@/shared/ui/Alert";
 import { maskCpfCnpj } from "@/shared/validation/masks";
 import { cpfValido, soDigitos } from "@/shared/utils/documento";
-import { formatNumber } from "@/shared/utils/format";
 
 /**
  * A ficha do funcionário.
@@ -50,21 +45,14 @@ import { formatNumber } from "@/shared/utils/format";
  * um e-mail repetido impediria de salvar a data de nascimento.
  */
 
-type Aba = "dados" | "ponto" | "acesso";
+type Aba = "dados" | "contrato" | "acesso" | "permissoes";
 
 const ABAS: { id: Aba; titulo: string; icone: typeof User }[] = [
   { id: "dados", titulo: "Dados", icone: User },
-  { id: "ponto", titulo: "Ponto", icone: Clock },
-  { id: "acesso", titulo: "Acesso", icone: ShieldCheck },
+  { id: "contrato", titulo: "Contrato", icone: Wallet },
+  { id: "acesso", titulo: "Acesso", icone: KeyRound },
+  { id: "permissoes", titulo: "Permissões", icone: ShieldCheck },
 ];
-
-/** O horário que um dia recém-marcado nasce com — o comercial mais comum. */
-const PADRAO_DIA: Omit<JornadaDia, "diaSemana"> = {
-  entrada: "08:00",
-  saida: "18:00",
-  intervaloInicio: "12:00",
-  intervaloFim: "13:00",
-};
 
 type Props = {
   /** Ausente = cadastro novo. */
@@ -94,6 +82,7 @@ const FuncionarioForm = ({ funcionario, areas, ehRoot, podeCriarAcesso, onCancel
   const [nascimento, setNascimento] = useState(funcionario?.dataNascimento ?? "");
   const [cpf, setCpf] = useState(funcionario?.cpf ? maskCpfCnpj(funcionario.cpf) : "");
   const [cargo, setCargo] = useState(funcionario?.cargo ?? "");
+  const [salario, setSalario] = useState(funcionario?.salario != null ? String(funcionario.salario) : "");
 
   const [ganhaComissao, setGanhaComissao] = useState(funcionario?.ganhaComissao ?? false);
   const [percentual, setPercentual] = useState(
@@ -101,7 +90,6 @@ const FuncionarioForm = ({ funcionario, areas, ehRoot, podeCriarAcesso, onCancel
   );
 
   const [batePonto, setBatePonto] = useState(funcionario?.batePonto ?? false);
-  const [jornada, setJornada] = useState<JornadaDia[]>(funcionario?.jornada ?? []);
 
   /* ── O acesso ─────────────────────────────────────────────────────────── */
 
@@ -113,28 +101,20 @@ const FuncionarioForm = ({ funcionario, areas, ehRoot, podeCriarAcesso, onCancel
   const [marcadas, setMarcadas] = useState<string[]>(acesso?.areas ?? []);
   const [novaSenha, setNovaSenha] = useState("");
 
-  const [pontos, setPontos] = useState<PontoRegistro[]>([]);
-  const [pontosCarregados, setPontosCarregados] = useState(false);
-
   /* ── Quais abas existem agora ─────────────────────────────────────────── */
 
   /*
-   * "Ponto" e "Acesso" precisam de um funcionário JÁ GRAVADO — a jornada e o
-   * login se penduram num id que ainda não existe no cadastro novo. E "Ponto"
-   * depende também da chave: ver a nota do cabeçalho.
+   * "Acesso" e "Permissões" precisam de um funcionário JÁ GRAVADO: o login se
+   * pendura num id que ainda não existe no cadastro novo. "Dados" e "Contrato"
+   * descrevem a pessoa e valem desde o primeiro campo.
    */
   const abas = useMemo(
-    () => ABAS.filter((a) => {
-      if (novo) return a.id === "dados";
-      if (a.id === "ponto") return batePonto;
-      return true;
-    }),
-    [novo, batePonto],
+    () => ABAS.filter((a) => (novo ? a.id === "dados" || a.id === "contrato" : true)),
+    [novo],
   );
 
-  /* Desligar "bate ponto" com a aba aberta deixaria a tela em branco: a aba
-     deixa de existir e nenhum bloco casa com o valor. Volta para Dados, que é
-     onde a chave acabou de ser desligada. */
+  /* Se a aba aberta deixar de existir, a tela ficaria em branco: nenhum bloco
+     casa com o valor. Volta para Dados. */
   useEffect(() => {
     if (!abas.some((a) => a.id === aba)) setAba("dados");
   }, [abas, aba]);
@@ -157,7 +137,7 @@ const FuncionarioForm = ({ funcionario, areas, ehRoot, podeCriarAcesso, onCancel
    * continua na tela depois de corrigido.
    */
   const erros = useMemo(() => {
-    const lista: Partial<Record<"nome" | "nascimento" | "cpf" | "percentual", string>> = {};
+    const lista: Partial<Record<"nome" | "nascimento" | "cpf" | "percentual" | "salario", string>> = {};
 
     if (!nome.trim()) lista.nome = "Informe o nome";
     else if (nome.trim().length < 3) lista.nome = "Nome muito curto";
@@ -173,8 +153,13 @@ const FuncionarioForm = ({ funcionario, areas, ehRoot, podeCriarAcesso, onCancel
       if (Number.isNaN(pct) || pct < 0 || pct > 100) lista.percentual = "Entre 0 e 100";
     }
 
+    if (salario) {
+      const valor = Number(salario.replace(",", "."));
+      if (Number.isNaN(valor) || valor < 0) lista.salario = "Valor inválido";
+    }
+
     return lista;
-  }, [nome, nascimento, cpf, ganhaComissao, percentual]);
+  }, [nome, nascimento, cpf, ganhaComissao, percentual, salario]);
 
   const temErro = Object.keys(erros).length > 0;
 
@@ -204,7 +189,10 @@ const FuncionarioForm = ({ funcionario, areas, ehRoot, podeCriarAcesso, onCancel
    */
   const salvar = async () => {
     if (temErro) {
-      setAba("dados");
+      /* O erro pode estar em qualquer uma das duas abas da pessoa; a submissão
+         leva junto para onde ele está, senão o aviso manda "revise os campos
+         destacados" sem nada destacado à vista. */
+      setAba(erros.salario || erros.percentual ? "contrato" : "dados");
       alert.error("Campos inválidos", "Revise os campos destacados e tente novamente.");
       return;
     }
@@ -214,6 +202,9 @@ const FuncionarioForm = ({ funcionario, areas, ehRoot, podeCriarAcesso, onCancel
       dataNascimento: nascimento || null,
       cpf: soDigitos(cpf) || null,
       cargo: cargo.trim(),
+      /* Vazio é `null` ("não informado"), e não zero ("sem salário fixo"):
+         confundir os dois faria a folha tratar "não sei" como "não deve". */
+      salario: salario ? Number(salario.replace(",", ".")) : null,
       ganhaComissao,
       comissaoPercentual: ganhaComissao && percentual ? Number(percentual.replace(",", ".")) : null,
       batePonto,
@@ -224,10 +215,7 @@ const FuncionarioForm = ({ funcionario, areas, ehRoot, podeCriarAcesso, onCancel
       return;
     }
 
-    await executar(async () => {
-      await FuncionarioService.alterar(funcionario.id, base);
-      if (batePonto) await FuncionarioService.salvarJornada(funcionario.id, jornada);
-    }, "Alterações salvas!", true);
+    await executar(() => FuncionarioService.alterar(funcionario.id, base), "Alterações salvas!", true);
   };
 
   const criarAcesso = () =>
@@ -277,49 +265,7 @@ const FuncionarioForm = ({ funcionario, areas, ehRoot, podeCriarAcesso, onCancel
     void executar(() => FuncionarioService.removerAcesso(funcionario!.id), "Acesso removido.");
   };
 
-  /* ── Jornada ──────────────────────────────────────────────────────────── */
-
-  const diaMarcado = (valor: number) => jornada.find((j) => j.diaSemana === valor);
-
-  const alternarDia = (valor: number) =>
-    setJornada((atual) =>
-      atual.some((j) => j.diaSemana === valor)
-        ? atual.filter((j) => j.diaSemana !== valor)
-        : [...atual, { diaSemana: valor, ...PADRAO_DIA }].sort((a, b) => a.diaSemana - b.diaSemana),
-    );
-
-  const mudarDia = (valor: number, campo: keyof Omit<JornadaDia, "diaSemana">, texto: string) =>
-    setJornada((atual) => atual.map((j) => (j.diaSemana === valor ? { ...j, [campo]: texto || null } : j)));
-
-  const horasSemana = horasDaSemana(jornada);
-
-  /* ── Ponto batido ─────────────────────────────────────────────────────── */
-
-  const carregarPontos = async () => {
-    if (!funcionario || pontosCarregados) return;
-    setPontosCarregados(true);
-
-    try {
-      setPontos(await FuncionarioService.ponto(funcionario.id, 20));
-    } catch {
-      /* A lista de batidas é acessório da aba: falhar nela não pode impedir de
-         configurar a jornada, que é o que se veio fazer aqui. */
-      setPontos([]);
-    }
-  };
-
-  const baterPonto = async (tipo: PontoRegistro["tipo"]) => {
-    if (!funcionario) return;
-
-    const ok = await executar(() => FuncionarioService.registrarPonto(funcionario.id, tipo), "Ponto registrado!");
-
-    if (ok) {
-      setPontos(await FuncionarioService.ponto(funcionario.id, 20).catch(() => []));
-      setPontosCarregados(true);
-    }
-  };
-
-  /* ── Áreas, agrupadas ─────────────────────────────────────────────────── */
+  /* ── Áreas, agrupadas ────────────────────────────────────────────────── */
 
   const areasPorGrupo = useMemo(() => {
     const mapa = new Map<string, AreaSistema[]>();
@@ -347,8 +293,9 @@ const FuncionarioForm = ({ funcionario, areas, ehRoot, podeCriarAcesso, onCancel
 
   const preenchida: Record<Aba, boolean> = {
     dados: Boolean(nome.trim()),
-    ponto: jornada.length > 0,
+    contrato: salario !== "" || ganhaComissao || batePonto,
     acesso: Boolean(acesso),
+    permissoes: Boolean(acesso),
   };
 
   return (
@@ -370,7 +317,7 @@ const FuncionarioForm = ({ funcionario, areas, ehRoot, podeCriarAcesso, onCancel
               <button
                 key={a.id}
                 type="button"
-                onClick={() => { setAba(a.id); if (a.id === "ponto") void carregarPontos(); }}
+                onClick={() => setAba(a.id)}
                 aria-current={on ? "step" : undefined}
                 className="focus-ring relative flex min-h-[38px] cursor-pointer items-center justify-center gap-1.5 rounded-[10px] px-2 text-[12.5px] transition-colors"
               >
@@ -455,7 +402,49 @@ const FuncionarioForm = ({ funcionario, areas, ehRoot, podeCriarAcesso, onCancel
                   onChange={(e) => setCargo(e.target.value)}
                 />
 
-                <FormSection title="Como esta pessoa trabalha" icon={<Percent size={13} />}>
+                {funcionario && (
+                  <SwitchField
+                    label="Trabalha aqui"
+                    hint="Desligue quando a pessoa sair da empresa. O histórico de ponto e as vendas dela continuam guardados."
+                    checked={funcionario.ativo}
+                    onChange={(v) => void executar(
+                      () => FuncionarioService.alterar(funcionario.id, { ativo: v }),
+                      v ? "Funcionário reativado." : "Funcionário desligado.",
+                    )}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* ═══════════════════════ Contrato ═══════════════════════ */}
+            {/*
+              Salário, comissão e ponto numa aba só.
+              As três respondem a mesma pergunta — o que esta pessoa custa e
+              como ela trabalha — e antes dividiam espaço com nome, CPF e
+              nascimento, que respondem outra. Junto de tudo, a aba "Dados"
+              virou uma coluna de oito campos e três chaves.
+            */}
+            {aba === "contrato" && (
+              <div className="flex flex-col gap-3">
+                <FormGrid cols={2}>
+                  {/*
+                   * Vazio e zero dizem coisas diferentes, e os dois existem:
+                   * vazio é "ainda não sei", zero é "não tem salário fixo" —
+                   * o comissionado puro. Por isso o campo não nasce em 0.
+                   */}
+                  <TextField
+                    label="Salário mensal"
+                    icon={<Wallet className="h-3.5 w-3.5" />}
+                    placeholder="2.000,00"
+                    inputMode="decimal"
+                    hint="Vazio = não informado. Zero = só comissão."
+                    value={salario}
+                    onChange={(e) => setSalario(e.target.value)}
+                    error={erros.salario}
+                  />
+                </FormGrid>
+
+                <FormSection title="Comissão e ponto" icon={<Percent size={13} />}>
                   <div className="flex flex-col gap-2">
                     <SwitchField
                       label="Ganha comissão"
@@ -510,18 +499,6 @@ const FuncionarioForm = ({ funcionario, areas, ehRoot, podeCriarAcesso, onCancel
                       checked={batePonto}
                       onChange={setBatePonto}
                     />
-
-                    {funcionario && (
-                      <SwitchField
-                        label="Trabalha aqui"
-                        hint="Desligue quando a pessoa sair da empresa. O histórico de ponto e as vendas dela continuam guardados."
-                        checked={funcionario.ativo}
-                        onChange={(v) => void executar(
-                          () => FuncionarioService.alterar(funcionario.id, { ativo: v }),
-                          v ? "Funcionário reativado." : "Funcionário desligado.",
-                        )}
-                      />
-                    )}
                   </div>
                 </FormSection>
 
@@ -531,116 +508,6 @@ const FuncionarioForm = ({ funcionario, areas, ehRoot, podeCriarAcesso, onCancel
                     Por enquanto isto é só o cadastro do percentual. O cálculo da comissão sobre as vendas e o relatório de quanto cada um tem a receber ainda não existem.
                   </p>
                 )}
-              </div>
-            )}
-
-            {/* ═══════════════════════ Ponto ═══════════════════════ */}
-            {aba === "ponto" && funcionario && (
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-faint">Jornada da semana</p>
-                  {/* O total responde "isso fecha 44 horas?" — a pergunta que
-                      se faz ao montar a escala, e que ninguém quer somar à mão
-                      sete vezes. */}
-                  <span className="text-[11.5px] tabular-nums text-mist">
-                    {formatNumber(Number(horasSemana.toFixed(1)))} h por semana
-                  </span>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  {DIAS_SEMANA.map((dia) => {
-                    const marcado = diaMarcado(dia.valor);
-
-                    return (
-                      <div
-                        key={dia.valor}
-                        className={`rounded-lg border px-2.5 py-2 transition-colors ${marcado ? "border-fg/[0.1] bg-fg/[0.03]" : "border-fg/[0.06]"}`}
-                      >
-                        <label className="flex cursor-pointer items-center gap-2.5">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(marcado)}
-                            onChange={() => alternarDia(dia.valor)}
-                            className="h-3.5 w-3.5 shrink-0 accent-[rgb(var(--accent))]"
-                          />
-                          <span className={`w-[62px] shrink-0 text-[12.5px] ${marcado ? "text-ink" : "text-faint"}`}>{dia.longo}</span>
-
-                          {/* Dia desmarcado é FOLGA — e é assim que ela é
-                              gravada: pela ausência da linha. */}
-                          {!marcado && <span className="text-[11.5px] text-faint">folga</span>}
-                        </label>
-
-                        {marcado && (
-                          <div className="mt-2 grid grid-cols-2 gap-1.5 pl-[26px] sm:grid-cols-4">
-                            {([
-                              ["entrada", "Entrada", marcado.entrada],
-                              ["intervaloInicio", "Saída almoço", marcado.intervaloInicio ?? ""],
-                              ["intervaloFim", "Volta almoço", marcado.intervaloFim ?? ""],
-                              ["saida", "Saída", marcado.saida],
-                            ] as const).map(([campo, rotulo, valor]) => (
-                              <label key={campo} className="flex flex-col gap-0.5">
-                                <span className="text-[10px] uppercase tracking-[0.06em] text-faint">{rotulo}</span>
-                                <input
-                                  type="time"
-                                  value={valor ?? ""}
-                                  onChange={(e) => mudarDia(dia.valor, campo, e.target.value)}
-                                  className="w-full rounded-md border border-fg/[0.09] bg-transparent px-1.5 py-1 text-[12px] tabular-nums text-ink outline-none transition-colors focus:border-accent/60"
-                                />
-                              </label>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* ---------- O que foi batido ---------- */}
-                <div className="mt-1 flex flex-col gap-2 border-t border-fg/[0.06] pt-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-[11px] uppercase tracking-[0.08em] text-faint">Últimas batidas</p>
-
-                    <div className="flex flex-wrap gap-1.5">
-                      {(["ENTRADA", "INTERVALO_INICIO", "INTERVALO_FIM", "SAIDA"] as const).map((tipo) => (
-                        <button
-                          key={tipo}
-                          type="button"
-                          disabled={salvando}
-                          onClick={() => void baterPonto(tipo)}
-                          className="focus-ring cursor-pointer rounded-lg border border-fg/[0.09] px-2 py-1 text-[11px] text-mist transition-colors hover:border-fg/[0.16] hover:text-ink disabled:opacity-50"
-                        >
-                          {PONTO_LABEL[tipo].texto}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {pontos.length === 0 ? (
-                    <p className="rounded-lg border border-dashed border-fg/[0.1] px-3 py-4 text-center text-[11.5px] text-faint">
-                      Nada registrado ainda.
-                    </p>
-                  ) : (
-                    <ul className="flex flex-col divide-y divide-fg/[0.05] overflow-hidden rounded-lg border border-fg/[0.07]">
-                      {pontos.map((p) => {
-                        const quando = new Date(p.momento);
-
-                        return (
-                          <li key={p.id} className="flex items-center gap-2 px-2.5 py-1.5 text-[11.5px]">
-                            <span className={`w-[132px] shrink-0 ${PONTO_LABEL[p.tipo].tom === "entrada" ? "text-success" : PONTO_LABEL[p.tipo].tom === "saida" ? "text-warning" : "text-mist"}`}>
-                              {PONTO_LABEL[p.tipo].texto}
-                            </span>
-                            <span className="flex-1 tabular-nums text-mist">
-                              {quando.toLocaleDateString("pt-BR")} às {quando.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                            </span>
-                            {p.registradoPorNome && (
-                              <span className="shrink-0 truncate text-[10.5px] text-faint">por {p.registradoPorNome}</span>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
               </div>
             )}
 
@@ -716,6 +583,63 @@ const FuncionarioForm = ({ funcionario, areas, ehRoot, podeCriarAcesso, onCancel
                   </div>
                 )}
 
+                {/* ---------- Ações do acesso ---------- */}
+                <div className="flex flex-wrap items-center gap-2 border-t border-fg/[0.06] pt-3">
+                  {!acesso ? (
+                    <button
+                      type="button"
+                      onClick={() => void criarAcesso()}
+                      disabled={salvando || !podeCriarAcesso || !email.trim() || senha.length < 6}
+                      className="focus-ring inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-accent px-3 py-2 text-[12.5px] text-white transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {salvando ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+                      Criar acesso
+                    </button>
+                  ) : (
+                    <>
+                      {/* Só o que mexe no LOGIN. O "salvar permissões" foi para
+                          a aba Permissões, ao lado das caixinhas que ele grava —
+                          um botão longe do que ele salva é um botão que ninguém
+                          associa ao próprio efeito. */}
+                      <span className="flex flex-1 items-center gap-1.5">
+                        <input
+                          value={novaSenha}
+                          onChange={(e) => setNovaSenha(e.target.value)}
+                          placeholder="Nova senha (mín. 6)"
+                          className="min-w-[130px] flex-1 rounded-lg border border-fg/[0.09] bg-transparent px-2.5 py-2 text-[12px] text-ink outline-none transition-colors focus:border-accent/60 placeholder:text-faint"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void redefinirSenha()}
+                          disabled={salvando || novaSenha.length < 6}
+                          title="Redefinir senha"
+                          className="focus-ring flex h-[34px] w-[34px] shrink-0 cursor-pointer items-center justify-center rounded-lg border border-fg/[0.09] text-mist transition-colors hover:text-ink disabled:opacity-40"
+                        >
+                          <KeyRound size={14} />
+                        </button>
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ═══════════════════════ Permissões ═══════════════════════ */}
+            {/*
+              O nível e as áreas em aba própria.
+              Eram doze caixinhas em três grupos empilhadas embaixo do e-mail e
+              da senha — a aba "Acesso" rolava três telas e a pessoa perdia de
+              vista o que tinha acabado de marcar. Aqui elas ocupam a tela toda,
+              que é o que doze opções pedem.
+            */}
+            {aba === "permissoes" && funcionario && (
+              <div className="flex flex-col gap-3">
+                {!acesso && (
+                  <p className="rounded-lg border border-fg/[0.07] bg-fg/[0.02] px-3 py-2.5 text-[11.5px] leading-[16px] text-faint">
+                    As permissões valem a partir do momento em que {funcionario.nome} tiver um acesso. Marque aqui e crie o login na aba ao lado — ele já nasce com o que estiver escolhido.
+                  </p>
+                )}
+
                 {/* ---------- Nível ---------- */}
                 {ehRoot && !acesso?.root && (
                   <SwitchField
@@ -756,50 +680,20 @@ const FuncionarioForm = ({ funcionario, areas, ehRoot, podeCriarAcesso, onCancel
                   )}
                 </div>
 
-                {/* ---------- Ações do acesso ---------- */}
-                <div className="flex flex-wrap items-center gap-2 border-t border-fg/[0.06] pt-3">
-                  {!acesso ? (
+
+                {acesso && (
+                  <div className="flex flex-wrap items-center gap-2 border-t border-fg/[0.06] pt-3">
                     <button
                       type="button"
-                      onClick={() => void criarAcesso()}
-                      disabled={salvando || !podeCriarAcesso || !email.trim() || senha.length < 6}
-                      className="focus-ring inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-accent px-3 py-2 text-[12.5px] text-white transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={() => void salvarPermissoes()}
+                      disabled={salvando}
+                      className="focus-ring inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-accent px-3 py-2 text-[12.5px] text-white transition-all hover:brightness-110 disabled:opacity-50"
                     >
-                      {salvando ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
-                      Criar acesso
+                      {salvando ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                      Salvar permissões
                     </button>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => void salvarPermissoes()}
-                        disabled={salvando}
-                        className="focus-ring inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-accent px-3 py-2 text-[12.5px] text-white transition-all hover:brightness-110 disabled:opacity-50"
-                      >
-                        {salvando ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
-                        Salvar permissões
-                      </button>
-
-                      <span className="flex flex-1 items-center gap-1.5">
-                        <input
-                          value={novaSenha}
-                          onChange={(e) => setNovaSenha(e.target.value)}
-                          placeholder="Nova senha (mín. 6)"
-                          className="min-w-[130px] flex-1 rounded-lg border border-fg/[0.09] bg-transparent px-2.5 py-2 text-[12px] text-ink outline-none transition-colors focus:border-accent/60 placeholder:text-faint"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => void redefinirSenha()}
-                          disabled={salvando || novaSenha.length < 6}
-                          title="Redefinir senha"
-                          className="focus-ring flex h-[34px] w-[34px] shrink-0 cursor-pointer items-center justify-center rounded-lg border border-fg/[0.09] text-mist transition-colors hover:text-ink disabled:opacity-40"
-                        >
-                          <KeyRound size={14} />
-                        </button>
-                      </span>
-                    </>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             )}
 

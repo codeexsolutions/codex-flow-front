@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Users, ShieldCheck, UserPlus, Crown, AlertTriangle, Pencil,
-  UserCog, Trash2, Percent, Clock, ListFilter,
+  UserCog, Trash2, Percent, Clock, ListFilter, Link2,
 } from "lucide-react";
 
 import { TabelaCard, TabelaHead, TabelaRow, TabelaVazia, type Coluna } from "@/shared/ui/DataTable";
@@ -14,6 +15,7 @@ import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import useAuth from "@/features/auth/store/auth.store";
 import FuncionarioService from "@/features/funcionarios/services/funcionario.service";
 import FuncionarioForm from "@/features/funcionarios/components/FuncionarioForm";
+import PontoConfigPainel from "@/features/ponto/components/PontoConfigPainel";
 import useEquipeStore from "@/features/funcionarios/store/equipe.store";
 import { PageScreen } from "@/shared/ui/PageShell";
 import { Selo } from "@/shared/ui/StatusBadge";
@@ -119,6 +121,7 @@ const LinhasFantasma = ({ count }: { count: number }) => (
 
 const FuncionariosPage = () => {
   const alert = useAlert();
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   const [equipe, setEquipe] = useState<Equipe | null>(null);
@@ -133,6 +136,7 @@ const FuncionariosPage = () => {
 
   /** `"novo"` abre o cadastro; um funcionário abre a ficha dele. */
   const [editando, setEditando] = useState<Funcionario | "novo" | null>(null);
+  const [configPonto, setConfigPonto] = useState(false);
 
   const ehRoot = Boolean(user?.root);
 
@@ -396,8 +400,8 @@ const FuncionariosPage = () => {
         <span className="flex items-center justify-end gap-1">
           <button
             type="button"
-            onClick={() => setEditando(f)}
-            title="Abrir ficha"
+            onClick={() => navigate(`/funcionarios/${f.id}`)}
+            title="Abrir a página do funcionário"
             className="focus-ring flex h-7 w-7 items-center justify-center rounded-lg border border-fg/[0.08] text-mist transition hover:bg-fg/[0.05] hover:text-ink"
           >
             <Pencil size={13} />
@@ -449,10 +453,7 @@ const FuncionariosPage = () => {
         valor={busca}
         onValor={setBusca}
         sugestoes={sugestoes}
-        onEscolher={(s) => {
-          const achado = funcionarios.find((f) => f.id === s.id);
-          if (achado) setEditando(achado);
-        }}
+        onEscolher={(s) => navigate(`/funcionarios/${s.id}`)}
         placeholder="Buscar pessoa…"
         aria-label="Buscar funcionário por nome, cargo, CPF ou e-mail"
         className="w-[190px] shrink-0"
@@ -484,6 +485,18 @@ const FuncionariosPage = () => {
         aria-label="Filtrar por registro de ponto"
         className="w-[132px] shrink-0"
       />
+
+      {/* A configuração do ponto é de TELA, não de linha: ela vale para a
+          empresa inteira, e por isso mora na barra e não na ficha de alguém. */}
+      <button
+        type="button"
+        onClick={() => setConfigPonto(true)}
+        title="Link do ponto, horário de funcionamento e localização da loja"
+        className="focus-ring inline-flex h-[38px] shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-fg/[0.08] bg-fg/[0.04] px-3 text-[12.5px] text-mist transition-colors hover:border-fg/[0.16] hover:text-ink"
+      >
+        <Link2 className="h-3.5 w-3.5" />
+        Ponto
+      </button>
 
       {temFiltro && (
         <button
@@ -554,6 +567,19 @@ const FuncionariosPage = () => {
             filtrados.map((f) => <TabelaRow key={f.id} colunas={colunas} cols={COLS} row={f} />)
           )}
         </TabelaCard>
+
+        {/* -------------------- Configuração do ponto -------------------- */}
+        <Modal
+          open={configPonto}
+          onClose={() => setConfigPonto(false)}
+          title="Ponto por link"
+          subtitle="O funcionário bate sem ter login no sistema"
+          size="lg"
+        >
+          {/* Montado só quando abre: o painel busca a configuração no `useEffect`,
+              e deixá-lo montado faria essa chamada a cada visita à tela. */}
+          {configPonto && <PontoConfigPainel />}
+        </Modal>
 
         {/* -------------------- Ficha do funcionário -------------------- */}
         {/* `maxWidth` acima do `lg` padrão pelo mesmo motivo da ficha do

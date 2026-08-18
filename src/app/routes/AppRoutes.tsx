@@ -30,10 +30,12 @@ import SalesPage from "@/features/vendas/pages/SalesPage";
 import SalesOverviewPage from "@/features/vendas/pages/SalesOverviewPage";
 import SalesList from "@/features/vendas/pages/SalesListPage";
 import FuncionariosPage from "@/features/funcionarios/pages/FuncionariosPage";
+import FuncionarioDetalhe from "@/features/funcionarios/pages/FuncionarioDetailPage";
 import OrcamentosPage from "@/features/orcamentos/pages/OrcamentosPage";
 import AjudaPage from "@/features/ajuda/pages/AjudaPage";
 import PlanilhasPage from "@/features/planilhas/pages/PlanilhasPage";
 import AcompanharProducaoPage from "@/features/acompanhamento/pages/AcompanharProducaoPage";
+import BaterPontoPage from "@/features/ponto/pages/BaterPontoPage";
 import { ehGestor } from "@/features/vendas/components/TabsVendas";
 
 import CheckoutPage from "@/features/checkout/pages/CheckoutPage";
@@ -69,6 +71,15 @@ const PUBLIC_PATHS = ["/login", "/cadastro", "/planos", "/page"];
  * pareceria quebrado para quem só queria conferi-lo.
  */
 const ehAcompanhamento = (path: string) => path.startsWith("/p/");
+
+/**
+ * O link de ponto também não é do sistema.
+ *
+ * Quem abre `/ponto/<token>` é o funcionário na porta da loja, sem conta e sem
+ * senha. Mandá-lo para o login transformaria o link num beco — e o `/ponto/`
+ * precisa vir ANTES da checagem de sessão pelo mesmo motivo do `/p/`.
+ */
+const ehPonto = (path: string) => path.startsWith("/ponto/");
 
 /**
  * No celular a tela de carregamento não aparece: ela competia com a animação
@@ -115,10 +126,11 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
   /* Antes de qualquer desvio, e depois de todos os hooks: quem chega por um
      link de acompanhamento não é usuário do sistema e não deve ser mandado a
      lugar nenhum. Ver `ehAcompanhamento`. */
-  if (ehAcompanhamento(path)) {
+  if (ehAcompanhamento(path) || ehPonto(path)) {
     return (
       <Routes>
         <Route path="/p/:token" element={<AcompanharProducaoPage />} />
+        <Route path="/ponto/:token" element={<BaterPontoPage />} />
       </Routes>
     );
   }
@@ -211,6 +223,7 @@ function AppRoutesContent({ isLogged, mobile }: { isLogged: boolean; mobile: boo
           <Route path="vendas/orcamentos" element={<Navigate to="/pdv/orcamentos" replace />} />
 
           <Route path="funcionarios" element={<FuncionariosPage />} />
+          <Route path="funcionarios/:funcionarioId" element={<FuncionarioDetalhe />} />
 
           {/* Módulos que dependem do plano. O `RecursoDoPlano` mostra a
               oferta no lugar da tela — não redireciona: quem clicou em

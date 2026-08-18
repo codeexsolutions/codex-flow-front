@@ -49,6 +49,14 @@ export type Funcionario = {
   cpf: string | null;
   cargo: string;
 
+  /**
+   * Salário mensal. `null` = não informado; `0` = sem salário fixo.
+   *
+   * Os dois existem e são diferentes: confundi-los faria a folha tratar
+   * "não sei" como "não deve nada".
+   */
+  salario: number | null;
+
   ganhaComissao: boolean;
   /** Nulo quando não ganha comissão, ou quando ainda não foi definido. */
   comissaoPercentual: number | null;
@@ -173,6 +181,16 @@ export type PontoRegistro = {
   momento: string;
   observacao: string | null;
   registradoPorNome: string | null;
+
+  /* ── A prova do ponto batido pelo link ────────────────────────────────── */
+
+  /** `null` no ponto lançado pelo gestor, que não precisa provar nada. */
+  fotoUrl: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  /** Distância da loja no MOMENTO da batida. */
+  distanciaMetros: number | null;
+  origem: "PUBLICO" | "GESTOR";
 };
 
 /**
