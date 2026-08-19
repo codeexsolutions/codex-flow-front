@@ -5,6 +5,7 @@ import type { LucideIcon } from "lucide-react";
 
 import PagamentoForm from "@/shared/ui/PagamentoForm";
 import PrazoNota from "@/features/vendas/components/PrazoNota";
+import RecebimentosNota from "@/features/financeiro/components/RecebimentosNota";
 import { formatCurrency } from "@/shared/utils/currency";
 import type { AcordoVenda } from "@/features/financeiro/services/conta.service";
 
@@ -238,9 +239,12 @@ const PainelPagamento = ({
               transition={{ duration: 0.18, ease: "easeOut" }}
             >
               {aba === "receber" && (
-                <>
+                /* O formulário em cima, o extrato embaixo — nessa ordem porque
+                   o gesto comum é lançar, e o incomum é conferir o que já foi
+                   lançado. */
+                <div className="flex flex-col gap-3">
                   {destacar && (
-                    <p className="mb-3 rounded-xl border border-accent/30 bg-accent/[0.1] px-3.5 py-2.5 text-[12px] leading-relaxed text-accent-soft">
+                    <p className="rounded-xl border border-accent/30 bg-accent/[0.1] px-3.5 py-2.5 text-[12px] leading-relaxed text-accent-soft">
                       Nota salva! Informe como o cliente pagou para quitar.
                     </p>
                   )}
@@ -280,8 +284,13 @@ const PainelPagamento = ({
                         <Check size={17} />
                       </span>
                       <p className="text-[12.5px] text-success">Nota quitada</p>
+                      {/* "recebidos em dinheiro" era mentira na venda paga em
+                          duas formas: a nota guarda só a última. O extrato
+                          logo abaixo diz a verdade inteira, uma linha por
+                          recebimento — e é lá que se desfaz o que foi lançado
+                          errado. */}
                       <p className="text-[11px] leading-relaxed text-faint">
-                        {formatCurrency(totalPago)} recebidos em {formaPagamento.toLowerCase()}.
+                        {formatCurrency(totalPago)} recebidos. O extrato abaixo diz como.
                       </p>
                     </div>
                   ) : (
@@ -294,7 +303,24 @@ const PainelPagamento = ({
                       onConfirmar={(valor, forma) => void onPagar(valor, forma)}
                     />
                   )}
-                </>
+
+                  {/*
+                   * O que já entrou, linha a linha — e o único lugar de
+                   * desfazer.
+                   *
+                   * Ele mora AQUI, e não numa quarta aba, porque quem lançou
+                   * 300 no lugar de 30 percebe o erro no instante seguinte ao
+                   * de receber: a correção precisa estar embaixo do formulário
+                   * que a causou, não atrás de um clique em outro menu. E é o
+                   * que responde à nota quitada por engano — apagar o
+                   * lançamento devolve a venda para "em aberto", sem botão de
+                   * "desquitar" nenhum.
+                   *
+                   * `versao={totalPago}` faz a lista reler quando o pagamento
+                   * muda por fora (recebimento novo, baixa de parcela).
+                   */}
+                  <RecebimentosNota pedidoId={pedidoId} versao={totalPago} onAlterado={onAtualizar} compacto />
+                </div>
               )}
 
               {aba === "parcelas" && (

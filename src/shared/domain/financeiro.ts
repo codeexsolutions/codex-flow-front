@@ -6,7 +6,19 @@ export type NotaFinanceiroType = {
   data_pedido: string;
   valor_pago: number;
   status_pagamento: "PENDENTE" | "PAGO";
+  /** A forma do ÚLTIMO recebimento — resumo, não a verdade completa. */
   forma_pagamento: string | null;
+  /**
+   * Quanto entrou por forma, nesta nota.
+   *
+   * Existe porque `forma_pagamento` guarda só a última: uma venda recebida
+   * metade no Pix e metade em dinheiro entrava inteira em dinheiro no gráfico
+   * do caixa. Vem do extrato de recebimentos (migration 050), somado por
+   * forma e ordenado da maior para a menor.
+   */
+  formas: { forma: string; valor: number }[];
+  /** Quantos lançamentos compõem o `valor_pago`. */
+  recebimentos: number;
   data_pagamento: string | null;
   cliente_id: string;
   cliente_nome: string;

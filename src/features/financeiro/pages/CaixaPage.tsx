@@ -19,6 +19,7 @@ import type { MovimentacaoType, NotaFinanceiroType, NovaMovimentacaoType } from 
 import { formatCurrency as brl, money } from "@/shared/utils/currency";
 import { brDate, MONTHS } from "@/shared/utils/date";
 import FiltroPeriodo, { dentroDoPeriodo, periodoPadrao, rotuloPeriodo, type Periodo } from "@/features/financeiro/components/FiltroPeriodo";
+import RecebimentosNota from "@/features/financeiro/components/RecebimentosNota";
 
 /**
  * Caixa — o dinheiro que entrou e saiu, num período.
@@ -67,7 +68,16 @@ export default function CaixaPage() {
   const [periodo, setPeriodo] = useState<Periodo>(periodoPadrao);
   const [showNovaMovimentacao, setShowNovaMovimentacao] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [detalhe, setDetalhe] = useState<NotaFinanceiroType | null>(null);
+  /*
+   * O detalhe é guardado por ID, não por cópia da linha.
+   *
+   * Com a nota copiada para o estado, corrigir um recebimento dentro do modal
+   * deixava a janela mostrando os números de antes — a lista já tinha sido
+   * relida do servidor e o modal continuava exibindo o retrato tirado no
+   * clique. Derivando de `notas`, a correção aparece no mesmo instante em que
+   * a lista atrás dela muda.
+   */
+  const [detalheId, setDetalheId] = useState<string | null>(null);
 
   const [novaMovimentacao, setNovaMovimentacao] = useState<NovaMovimentacaoType>({
     tipo: "ENTRADA",
@@ -80,6 +90,8 @@ export default function CaixaPage() {
   useEffect(() => {
     fetchFinanceiro();
   }, [fetchFinanceiro]);
+
+  const detalhe = useMemo(() => notas.find((n) => String(n.pedido_id) === detalheId) ?? null, [notas, detalheId]);
 
   /* ---------------- Recorte do período ---------------- */
 
@@ -194,8 +206,22 @@ export default function CaixaPage() {
     const mapa = new Map<string, number>();
 
     for (const n of recebimentos) {
-      const f = n.forma_pagamento?.trim() || "Não informado";
-      mapa.set(f, (mapa.get(f) ?? 0) + Number(n.valor_pago ?? 0));
+      /* Uma nota pode ter entrado por duas portas. O extrato diz quanto por
+         cada uma; a coluna `forma_pagamento` só saberia dizer a última, e era
+         por isso que a fatia do dinheiro crescia com venda paga no Pix. Nota
+         sem extrato (dado antigo) cai no comportamento de antes, para o total
+         do gráfico continuar batendo com o recebido do período. */
+      const detalhado = n.formas ?? [];
+
+      if (detalhado.length === 0) {
+        const f = n.forma_pagamento?.trim() || "Não informado";
+        mapa.set(f, (mapa.get(f) ?? 0) + Number(n.valor_pago ?? 0));
+        continue;
+      }
+
+      for (const { forma, valor } of detalhado) {
+        mapa.set(forma, (mapa.get(forma) ?? 0) + Number(valor ?? 0));
+      }
     }
 
     for (const m of movimentacoesDoPeriodo) {
@@ -258,12 +284,25 @@ export default function CaixaPage() {
     {
       id: "forma",
       header: "Forma",
-      cell: (n) => (
-        <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-fg/[0.1] px-2.5 py-0.5 text-[11px] text-mist">
-          <CreditCard size={11} className="text-muted" />
-          {n.forma_pagamento?.trim() || "Não informado"}
-        </span>
-      ),
+      /* Nota recebida em duas formas mostra a primeira e conta as outras
+         ("Pix +1"): escrever as duas estoura a largura da coluna, e mostrar só
+         a última — que é o que a nota guarda — dizia que a venda inteira tinha
+         sido em dinheiro quando metade entrou no Pix. */
+      cell: (n) => {
+        const formas = n.formas ?? [];
+        const extras = Math.max(formas.length - 1, 0);
+
+        return (
+          <span
+            className="inline-flex w-fit items-center gap-1.5 rounded-full border border-fg/[0.1] px-2.5 py-0.5 text-[11px] text-mist"
+            title={formas.length > 1 ? formas.map((f) => `${f.forma}: ${money(f.valor)}`).join(" · ") : undefined}
+          >
+            <CreditCard size={11} className="text-muted" />
+            {formas[0]?.forma || n.forma_pagamento?.trim() || "Não informado"}
+            {extras > 0 && <span className="text-faint">+{extras}</span>}
+          </span>
+        );
+      },
     },
     { id: "valor", header: "Recebido", align: "right", cell: (n) => <span className="nums text-success">{money(Number(n.valor_pago ?? 0))}</span> },
     { id: "data", header: "Pago em", align: "right", cell: (n) => <span className="nums text-mist">{brDate(n.data_pagamento ?? n.data_pedido)}</span> },
@@ -343,19 +382,32 @@ export default function CaixaPage() {
         </Form>
       </Modal>
 
-      {/* Detalhe do recebimento — consulta, não edição. Quem precisa mexer no
-          valor faz isso na nota, onde o histórico do pedido está junto. */}
-      <Modal open={!!detalhe} onClose={() => setDetalhe(null)} title="Recebimento" subtitle={detalhe ? `${detalhe.cliente_nome} · nota #${detalhe.codigo_pedido}` : ""} maxWidth="max-w-sm">
+      {/*
+       * Detalhe do recebimento.
+       *
+       * Deixou de ser só consulta: era daqui que a pessoa percebia o valor
+       * errado — e daqui que ela era mandada procurar a nota em outra tela para
+       * poder corrigir. O extrato abaixo edita e apaga no mesmo lugar em que o
+       * erro aparece; apagar o lançamento a mais desquita a nota, porque a
+       * situação é recalculada da soma das linhas.
+       */}
+      <Modal open={!!detalhe} onClose={() => setDetalheId(null)} title="Recebimento" subtitle={detalhe ? `${detalhe.cliente_nome} · nota #${detalhe.codigo_pedido}` : ""} maxWidth="max-w-sm">
         {detalhe && (
           <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-fg/[0.06]">
             {(
               [
                 ["Total da nota", money(Number(detalhe.total ?? 0))],
                 ["Recebido", money(Number(detalhe.valor_pago ?? 0))],
-                ["Forma", detalhe.forma_pagamento?.trim() || "Não informado"],
+                /* Duas formas na mesma venda são a regra, não a exceção
+                   ("metade no Pix, metade em dinheiro"). Dizer só a última
+                   fazia a conferência com a maquininha nunca fechar. */
+                ["Forma", (detalhe.formas ?? []).length > 1 ? (detalhe.formas ?? []).map((f) => f.forma).join(" · ") : (detalhe.formas ?? [])[0]?.forma || detalhe.forma_pagamento?.trim() || "Não informado"],
                 ["Pago em", brDate(detalhe.data_pagamento)],
                 ["Venda em", brDate(detalhe.data_pedido)],
-                ["Situação", Number(detalhe.valor_pago ?? 0) >= Number(detalhe.total ?? 0) ? "Quitada" : "Parcial"],
+                /* "Parcial" com R$ 0,00 seria contradição — e é o que a
+                   janela mostra logo depois de alguém apagar o único
+                   recebimento para desquitar a nota. */
+                ["Situação", Number(detalhe.valor_pago ?? 0) >= Number(detalhe.total ?? 0) ? "Quitada" : Number(detalhe.valor_pago ?? 0) > 0 ? "Parcial" : "Em aberto"],
               ] as [string, string][]
             ).map(([rot, val]) => (
               <div key={rot} className="min-w-0 bg-surface px-3.5 py-3">
@@ -364,6 +416,14 @@ export default function CaixaPage() {
               </div>
             ))}
           </dl>
+        )}
+
+        {/* O extrato: de onde veio cada real, e onde se conserta o que foi
+            lançado errado. */}
+        {detalhe && (
+          <div className="mt-4">
+            <RecebimentosNota pedidoId={String(detalhe.pedido_id)} versao={Number(detalhe.valor_pago ?? 0)} onAlterado={() => fetchFinanceiro(true)} />
+          </div>
         )}
 
         {/* Recibo: só de nota quitada.
@@ -551,7 +611,7 @@ export default function CaixaPage() {
           <>
             <TabelaHead cols={COLS_RECEBIDO} colunas={colRecebido} />
             {recebimentos.map((n) => (
-              <TabelaRow key={String(n.pedido_id)} cols={COLS_RECEBIDO} colunas={colRecebido} row={n} onClick={() => setDetalhe(n)} />
+              <TabelaRow key={String(n.pedido_id)} cols={COLS_RECEBIDO} colunas={colRecebido} row={n} onClick={() => setDetalheId(String(n.pedido_id))} />
             ))}
           </>
         )}

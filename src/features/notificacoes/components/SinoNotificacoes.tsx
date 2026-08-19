@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { io, type Socket } from "socket.io-client";
-import { Bell, BellRing, BellOff, Package, ShoppingCart, UserPlus, Wallet, Users, Trash2, CheckCheck, BadgeCheck } from "lucide-react";
+import { Bell, BellRing, BellOff, Package, ShoppingCart, UserPlus, Wallet, Users, Trash2, CheckCheck, BadgeCheck, Undo2 } from "lucide-react";
 
 import NotificacaoService, { type Mural, type Notificacao, type TipoNotificacao } from "@/features/notificacoes/services/notificacao.service";
 import { formatDateTime } from "@/shared/utils/date";
@@ -20,6 +20,9 @@ const LOOK: Record<TipoNotificacao, { icon: React.ReactNode; cls: string }> = {
   VENDA_ALTERADA: { icon: <ShoppingCart size={14} />, cls: "bg-warning/15 text-warning" },
   CLIENTE_CADASTRADO: { icon: <UserPlus size={14} />, cls: "bg-accent/15 text-accent-soft" },
   PAGAMENTO_RECEBIDO: { icon: <BadgeCheck size={14} />, cls: "bg-success/15 text-success" },
+  /* Dinheiro que sai do registro é evento de equipe: quem conferir o caixa
+     amanhã precisa saber que alguém apagou um recebimento hoje. */
+  PAGAMENTO_ESTORNADO: { icon: <Undo2 size={14} />, cls: "bg-warning/15 text-warning" },
   CAIXA_LANCAMENTO: { icon: <Wallet size={14} />, cls: "bg-accent/15 text-accent-soft" },
   CONTA_CRIADA: { icon: <Wallet size={14} />, cls: "bg-warning/15 text-warning" },
   CAIXA_EXCLUSAO: { icon: <Trash2 size={14} />, cls: "bg-danger/15 text-danger" },
