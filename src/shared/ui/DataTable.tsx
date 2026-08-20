@@ -13,6 +13,67 @@ export type Coluna<T> = {
 
 const MIN_TABLE_WIDTH = 720;
 
+/**
+ * A barra que fica ENTRE o cabeçalho do cartão e a tabela.
+ *
+ * ---------------------------------------------------------------------------
+ * Por que ela desceu do cabeçalho
+ * ---------------------------------------------------------------------------
+ * Busca e filtros moravam na mesma fileira do título e dos botões de criar —
+ * sete controles de ponta a ponta, e o que restringe a lista ficava a meia
+ * tela de distância da linha que ele acabou de sumir. Aqui embaixo, o filtro
+ * encosta na fileira de rótulos ("Custo", "Venda", "Qtd."): as duas coisas
+ * falam das mesmas colunas — uma diz o que a coluna é, a outra decide quais
+ * linhas entram — e o olho lê filtro e resultado num movimento só.
+ *
+ * ---------------------------------------------------------------------------
+ * Navegação à esquerda, filtros à direita
+ * ---------------------------------------------------------------------------
+ * São coisas de naturezas diferentes e a barra as separa pelas duas pontas.
+ * `navegacao` TROCA a lista (as abas "Vendas · Orçamentos", "Variações ·
+ * Movimentações") e por isso vem primeiro, na margem onde a leitura começa;
+ * os filtros restringem a lista que já está aberta e ficam na ponta oposta,
+ * alinhados com os controles do cabeçalho acima. Misturados numa fileira só,
+ * trocar de aba e filtrar viravam o mesmo gesto — e não são: um zera o que o
+ * outro fez.
+ *
+ * A barra fica FORA do quadro que rola na horizontal: os controles cabem em
+ * qualquer largura, e arrastá-los junto com as colunas faria a busca sair da
+ * tela quando alguém rolasse a tabela.
+ *
+ * No celular a fileira inteira rola na horizontal em vez de quebrar linha —
+ * são controles de largura fixa, e em 360px eles empilhariam em quatro
+ * fileiras, tomando meia tela antes de a lista começar.
+ */
+export const BarraFiltros = ({ navegacao, pagina, children }: { navegacao?: ReactNode; pagina?: { label: string; icon?: ReactNode }; children?: ReactNode }) => (
+  <div className="flex max-w-full shrink-0 items-center gap-3 overflow-x-auto border-b border-fg/[0.06] px-4 py-2.5 [scrollbar-width:none] sm:overflow-visible [&::-webkit-scrollbar]:hidden">
+    {navegacao ? (
+      <div className="flex shrink-0 items-center gap-0.5">{navegacao}</div>
+    ) : pagina ? (
+      /*
+       * Sem abas, o lugar da navegação recebe a PRÓPRIA PÁGINA.
+       *
+       * A lista que não se divide em duas ainda é uma lista de alguma coisa, e
+       * a ponta esquerda da barra é onde o olho já aprendeu a procurar essa
+       * resposta nas telas que têm aba. Deixá-la vazia faria os filtros
+       * flutuarem sozinhos numa faixa sem começo — e o mesmo componente
+       * pareceria dois, conforme a tela tivesse abas ou não.
+       *
+       * É uma aba única e por isso NÃO é botão: não há para onde ir.
+       */
+      <span className="flex shrink-0 items-center gap-1.5 rounded-lg bg-fg/[0.06] px-3 py-1.5 text-[12.5px] text-ink">
+        {pagina.icon}
+        {pagina.label}
+      </span>
+    ) : null}
+
+    {/* `ml-auto` empurra os filtros para a direita mesmo sem navegação — sem
+        ele, uma barra só de filtros começaria colada na margem esquerda e
+        deixaria de estar alinhada com o botão de criar do cabeçalho. */}
+    <div className="ml-auto flex shrink-0 items-center gap-2 sm:flex-wrap sm:justify-end">{children}</div>
+  </div>
+);
+
 export const TabelaCard = ({
   title,
   icon,
@@ -20,6 +81,9 @@ export const TabelaCard = ({
   countLabel,
   onAdd,
   addLabel = "Adicionar",
+  acoes,
+  navegacao,
+  pagina,
   controles,
   filters,
   children,
@@ -34,17 +98,31 @@ export const TabelaCard = ({
   onAdd?: () => void;
   addLabel?: string;
   /**
-   * Busca e filtros da lista — um grupo só, empurrado para a ponta oposta ao
-   * título.
+   * Ações próprias do cabeçalho, quando `onAdd` não dá conta — duas portas de
+   * criar, por exemplo. Ficam à direita, no lugar do botão padrão.
+   */
+  acoes?: ReactNode;
+  /**
+   * Abas que TROCAM a lista. Vão para a ponta esquerda da `BarraFiltros`.
+   *
+   * Separadas dos filtros de propósito: trocar de aba e filtrar não são o
+   * mesmo gesto — um zera o que o outro fez.
+   */
+  navegacao?: ReactNode;
+  /** Sem `navegacao`, é o nome da própria página que ocupa a ponta esquerda. */
+  pagina?: { label: string; icon?: ReactNode };
+  /**
+   * Busca e filtros da lista — um grupo só, na `BarraFiltros` logo abaixo do
+   * cabeçalho, encostado na tabela que eles restringem.
    *
    * Juntos porque as três coisas fazem o mesmo trabalho (restringir a lista) e
    * separá-las pelas duas pontas obrigava o olho a atravessar a barra para
-   * montar um filtro só. Longe do título porque o título é o que a lista É, e
-   * os controles são o que se faz com ela: encostados, viram um bloco de texto
-   * e caixas sem hierarquia nenhuma.
+   * montar um filtro só. Fora do cabeçalho porque o título é o que a lista É e
+   * o botão de criar é o que se acrescenta a ela; o filtro fala das colunas, e
+   * é ao lado delas que ele pertence — ver a nota da `BarraFiltros`.
    */
   controles?: ReactNode;
-  /** Controles à direita, colados no botão de criar. */
+  /** Mais filtros, à direita dos `controles` na mesma barra. */
   filters?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
@@ -69,23 +147,30 @@ export const TabelaCard = ({
             </p>
           )}
         </div>
-
-        {/* `ml-auto` come a sobra da linha: o título fica na ponta esquerda e
-            o grupo de controles na direita, sem depender de o cartão ter
-            `filters` ou botão de criar para empurrá-lo. */}
-        {controles && <div className="ml-auto flex flex-wrap items-center justify-end gap-2">{controles}</div>}
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        {filters}
-        {onAdd && (
-          <button type="button" onClick={onAdd} className="focus-ring inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-gradient-to-br from-accent-soft to-accent px-3 py-2 text-[12.5px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98]">
-            <Plus className="h-3.5 w-3.5" />
-            {addLabel}
-          </button>
-        )}
-      </div>
+      {(onAdd || acoes) && (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {acoes}
+
+          {onAdd && (
+            <button type="button" onClick={onAdd} className="focus-ring inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-gradient-to-br from-accent-soft to-accent px-3 py-2 text-[12.5px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98]">
+              <Plus className="h-3.5 w-3.5" />
+              {addLabel}
+            </button>
+          )}
+        </div>
+      )}
     </header>
+
+    {/* `pagina` sozinha NÃO cria a barra: uma faixa inteira só para repetir o
+        nome da tela é altura tirada da tabela em troca de nada. */}
+    {(navegacao || controles || filters) && (
+      <BarraFiltros navegacao={navegacao} pagina={pagina}>
+        {controles}
+        {filters}
+      </BarraFiltros>
+    )}
 
     <div ref={bodyRef} className="min-h-0 flex-1 overflow-auto">
       <div className="min-w-0 sm:[min-width:var(--tabela-min)]" style={{ "--tabela-min": `${minWidth}px` } as CSSProperties}>
@@ -101,7 +186,7 @@ const alignCls = { left: "text-left", right: "text-right", center: "text-center"
 
 export function TabelaHead<T>({ colunas, cols }: { colunas: Coluna<T>[]; cols: string }) {
   return (
-    <div className={`sticky top-0 z-10 hidden ${cols} gap-2 border-b border-fg/[0.07] bg-surface/80 px-4 py-2 text-[10.5px] uppercase tracking-wider text-faint backdrop-blur sm:grid`}>
+    <div className={`sticky top-0 z-10 hidden ${cols} gap-2 border-b border-fg/[0.1] bg-fg/[0.05] px-4 py-2.5 text-[10.5px] uppercase tracking-[0.12em] text-mist backdrop-blur sm:grid`}>
       {colunas.map((c) => (
         <span key={c.id} className={alignCls[c.align ?? "left"]}>
           {c.header}
@@ -119,7 +204,8 @@ export function TabelaRow<T>({ colunas, cols, row, onClick }: { colunas: Coluna<
   return (
     <Tag
       {...(onClick ? { type: "button" as const, onClick } : {})}
-      className={`group relative block w-full border-b border-fg/[0.04] text-left text-[12.5px] text-ink transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[2px] before:bg-accent before:opacity-0 before:transition-opacity ${onClick ? "cursor-pointer hover:bg-fg/[0.035] hover:before:opacity-100" : ""}`}
+      /* Mesma zebra da `ListaLinha` — ver a nota lá. */
+      className={`group relative block w-full border-b border-fg/[0.04] text-left text-[12.5px] text-ink transition-colors odd:bg-fg/[0.025] before:absolute before:left-0 before:top-0 before:h-full before:w-[2px] before:bg-accent before:opacity-0 before:transition-opacity ${onClick ? "cursor-pointer hover:bg-fg/[0.05] hover:before:opacity-100" : ""}`}
     >
       <span className={`hidden ${cols} items-center gap-2 px-4 py-2.5 sm:grid`}>
         {colunas.map((c) => (
@@ -162,7 +248,16 @@ export function TabelaRow<T>({ colunas, cols, row, onClick }: { colunas: Coluna<
  * empilhados não rotula nada: fica sobrando no topo, desalinhado do conteúdo.
  */
 export const ListaCabecalho = ({ cols, children }: { cols: string; children: ReactNode }) => (
-  <div className={`hidden shrink-0 ${cols} border-b border-fg/[0.06] bg-fg/[0.02] px-5 py-2.5 text-[10px] uppercase tracking-[0.12em] text-muted sm:grid`}>{children}</div>
+  /*
+   * A fileira de rótulos precisa PESAR mais que as linhas.
+   *
+   * Ela era quase invisível — 10px em `text-muted` sobre um fundo 2% acima do
+   * cartão — e num cartão de sessenta linhas o olho perdia de vista qual
+   * coluna era qual assim que rolava. Agora tem fundo próprio, borda de baixo
+   * cheia e o texto em `text-mist`: continua sendo rótulo (caixa alta, miúdo,
+   * espaçado), mas se lê como o começo da tabela em vez de sobra do cabeçalho.
+   */
+  <div className={`hidden shrink-0 ${cols} border-b border-fg/[0.1] bg-fg/[0.05] px-5 py-2.5 text-[10.5px] uppercase tracking-[0.12em] text-mist sm:grid`}>{children}</div>
 );
 
 /**
@@ -223,7 +318,22 @@ export const ListaLinha = ({
 }) => {
   const Tag = onClick ? "button" : "div";
 
-  const fundo = destaque === "danger" ? "bg-danger/[0.055] hover:bg-danger/[0.09]" : destaque === "warning" ? "bg-warning/[0.05] hover:bg-warning/[0.085]" : "hover:bg-fg/[0.03]";
+  /*
+   * Linha sim, linha não.
+   *
+   * Numa tabela de seis colunas o olho tem de atravessar a largura inteira
+   * para casar o nome da esquerda com a situação da direita, e sem faixa ele
+   * escorrega uma linha no caminho — o erro clássico de ler o estoque de um
+   * item na linha do outro. A faixa é de 2,5%: o bastante para o olho se
+   * apoiar, pouco o bastante para não virar listra.
+   *
+   * `odd:` conta os IRMÃOS: onde o cabeçalho das colunas é o primeiro filho do
+   * mesmo container, a alternância começa na segunda linha. Continua alternando
+   * — que é a única coisa que importa aqui.
+   *
+   * A linha com `destaque` não recebe faixa: o fundo dela já é o aviso.
+   */
+  const fundo = destaque === "danger" ? "bg-danger/[0.055] hover:bg-danger/[0.09]" : destaque === "warning" ? "bg-warning/[0.05] hover:bg-warning/[0.085]" : "odd:bg-fg/[0.025] hover:bg-fg/[0.05]";
   const marca = destaque === "danger" ? "before:bg-danger" : destaque === "warning" ? "before:bg-warning" : "before:bg-accent";
 
   /* As células como array: é o que permite pareá-las com os rótulos no cartão.

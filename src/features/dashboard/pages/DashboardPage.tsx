@@ -33,6 +33,7 @@ import useAuth from "@/features/auth/store/auth.store";
 import useVendaStore from "@/features/vendas/store/venda.store";
 import useClienteStore from "@/features/clientes/store/cliente.store";
 import useProdutoStore, { stockLevel } from "@/features/estoque/store/produto.store";
+import { ehVendavel } from "@/shared/domain/produto";
 
 import { estaAberto, estaFechado, estaCancelado, totalDoPedido } from "@/shared/domain/pedido";
 import { formatCurrency } from "@/shared/utils/currency";
@@ -558,7 +559,11 @@ const DashboardPage = () => {
             rodape={<Variacao atual={dados.ticketMes} anterior={dados.ticketMesPassado} />}
             tone="accent"
           />
-          <Kpi icon={<Users size={16} />} label="Clientes" valor={clientes.length} moeda={false} hint={`${formatNumber(produtos.length)} produtos cadastrados`} tone="danger" />
+          <Kpi icon={<Users size={16} />} label="Clientes" valor={clientes.length} moeda={false} /* Só o que se vende: a frase diz "produtos", e insumo não é um.
+                       A lista de estoque crítico logo abaixo continua
+                       incluindo material — material acabando é exatamente
+                       o que um painel precisa avisar. */
+            hint={`${formatNumber(produtos.filter(ehVendavel).length)} produtos cadastrados`} tone="danger" />
         </Bloco>
       )}
 
@@ -741,7 +746,7 @@ const DashboardPage = () => {
 
       {/* Listas */}
       <Bloco i={3} className="grid min-h-[280px] shrink-0 grid-cols-1 gap-3 lg:grid-cols-2">
-        <Painel title="Últimas vendas" icon={<ShoppingCart size={15} />} action={<VerTudo onClick={() => navigate("/vendas/lista")} />}>
+        <Painel title="Últimas vendas" icon={<ShoppingCart size={15} />} action={<VerTudo onClick={() => navigate("/vendas")} />}>
           {carregando ? (
             <SkeletonListaPainel />
           ) : dados.recentes.length === 0 ? (

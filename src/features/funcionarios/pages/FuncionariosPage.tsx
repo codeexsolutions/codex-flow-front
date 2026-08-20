@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Users, ShieldCheck, UserPlus, Crown, AlertTriangle, Pencil,
+  Users, ShieldCheck, UserPlus, Crown, AlertTriangle,
   UserCog, Trash2, Percent, Clock, ListFilter, Link2, Receipt,
 } from "lucide-react";
 
@@ -20,11 +21,11 @@ import PontoConfigPainel from "@/features/ponto/components/PontoConfigPainel";
 import useEquipeStore from "@/features/funcionarios/store/equipe.store";
 import { PageScreen } from "@/shared/ui/PageShell";
 import { Selo } from "@/shared/ui/StatusBadge";
-import { horasDaSemana, type Equipe, type Funcionario } from "@/shared/domain/funcionario";
+import type { Equipe, Funcionario } from "@/shared/domain/funcionario";
 import { formatNumber } from "@/shared/utils/format";
 import { maskCpfCnpj } from "@/shared/validation/masks";
 
-const COLS = "grid-cols-[1.5fr_150px_130px_120px_96px]";
+const COLS = "grid-cols-[1.5fr_150px_130px_96px]";
 
 /** Altura de uma linha da tabela — o esqueleto precisa dela para não saltar. */
 const ALTURA_LINHA = 56;
@@ -105,6 +106,25 @@ const ControlesFantasma = () => (
     <Skeleton className="h-[38px] w-[152px] rounded-xl" />
     <Skeleton className="h-[38px] w-[132px] rounded-xl" />
   </>
+);
+
+/** Card de destaque numérico — o mesmo visual da fichaIndividual, em formato compacto. */
+const KpiCard = ({ icon, label, value, hint, tom }: { icon: ReactNode; label: string; value: string; hint?: string; tom?: "danger" | "warning" | "success" }) => (
+  <div className="card glass-sheen flex items-center gap-2.5 rounded-xl px-3 py-2.5">
+    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ${
+      tom === "danger" ? "bg-danger/[0.14] text-danger ring-danger/20"
+        : tom === "warning" ? "bg-warning/[0.14] text-warning ring-warning/20"
+        : tom === "success" ? "bg-success/[0.14] text-success ring-success/20"
+        : "bg-accent/[0.14] text-accent-soft ring-accent/20"
+    }`}>
+      {icon}
+    </span>
+    <div className="flex min-w-0 flex-1 flex-col">
+      <p className="truncate text-[10px] uppercase tracking-[0.09em] text-faint">{label}</p>
+      <p className="truncate text-[15px] leading-[19px] tabular-nums tracking-tight text-ink">{value}</p>
+      {hint && <p className="truncate text-[10px] leading-[13px] text-faint">{hint}</p>}
+    </div>
+  </div>
 );
 
 const LinhasFantasma = ({ count }: { count: number }) => (
@@ -357,33 +377,6 @@ const FuncionariosPage = () => {
       ),
     },
     {
-      id: "jornada",
-      header: "Ponto",
-      /*
-       * Três estados, e os três dizem coisas diferentes:
-       *
-       *   "Não bate ponto"   — decisão tomada (sócio, comissionado, autônomo).
-       *   "A configurar"     — bate ponto e a jornada ainda está vazia. É o
-       *                        único dos três que pede ação.
-       *   "44 h/sem"         — configurado.
-       *
-       * Colapsar os dois primeiros num "—" faria a pendência real desaparecer
-       * no meio de quem nunca vai ter jornada nenhuma.
-       */
-      cell: (f) => {
-        if (!f.batePonto) return <span className="text-[11.5px] text-faint">Não bate ponto</span>;
-
-        if (f.jornada.length === 0) return <span className="text-[11.5px] text-warning">A configurar</span>;
-
-        return (
-          <span className="flex items-center gap-1.5 text-[12px] text-mist">
-            <Clock size={12} className="shrink-0 text-muted" />
-            <span className="tabular-nums">{formatNumber(Number(horasDaSemana(f.jornada).toFixed(1)))} h/sem</span>
-          </span>
-        );
-      },
-    },
-    {
       id: "comissao",
       header: "Comissão",
       cell: (f) =>
@@ -415,15 +408,6 @@ const FuncionariosPage = () => {
             className="focus-ring flex h-7 w-7 items-center justify-center rounded-lg border border-fg/[0.08] text-mist transition hover:bg-fg/[0.05] hover:text-ink"
           >
             <Receipt size={13} />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigate(`/funcionarios/${f.id}`)}
-            title="Abrir a página do funcionário"
-            className="focus-ring flex h-7 w-7 items-center justify-center rounded-lg border border-fg/[0.08] text-mist transition hover:bg-fg/[0.05] hover:text-ink"
-          >
-            <Pencil size={13} />
           </button>
 
           {/* O usuário master não sai da equipe: sobraria empresa sem dono. */}
@@ -545,11 +529,42 @@ const FuncionariosPage = () => {
          * tem acesso não ocupa vaga. O limite continua sendo dito no lugar
          * onde ele decide alguma coisa: a aba "Acesso" da ficha.
          */}
+
+        {/* KPIs da equipe */}
+        <section className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
+          <KpiCard
+            icon={<Users size={14} />}
+            label="Total"
+            value={carregando ? "—" : formatNumber(funcionarios.length)}
+            hint={funcionarios.length === 1 ? "pessoa" : "pessoas"}
+          />
+          <KpiCard
+            icon={<UserCog size={14} />}
+            label="Ativos"
+            value={carregando ? "—" : formatNumber(funcionarios.filter((f) => f.ativo).length)}
+            hint={funcionarios.filter((f) => f.ativo).length === 1 ? "trabalhando" : "trabalham"}
+            tom={funcionarios.length > 0 && funcionarios.filter((f) => f.ativo).length === 0 ? "danger" : undefined}
+          />
+          <KpiCard
+            icon={<ShieldCheck size={14} />}
+            label="Com acesso"
+            value={carregando ? "—" : formatNumber(funcionarios.filter((f) => f.acesso).length)}
+            hint="usuários cadastrados"
+          />
+          <KpiCard
+            icon={<Percent size={14} />}
+            label="Comissão"
+            value={carregando ? "—" : formatNumber(funcionarios.filter((f) => f.ganhaComissao).length)}
+            hint="recebem comissão"
+          />
+        </section>
+
         <TabelaCard
           title="Equipe"
           icon={<Users size={15} />}
           count={carregando ? undefined : filtrados.length}
           countLabel={filtrados.length === 1 ? "pessoa" : "pessoas"}
+          pagina={{ label: "Funcionários", icon: <UserCog className="h-3.5 w-3.5" /> }}
           controles={controles}
           /* O botão fica de pé durante o carregamento, e não escondido: some
              daqui e a barra inteira se rearranja quando ele volta, que é
@@ -583,7 +598,15 @@ const FuncionariosPage = () => {
               />
             )
           ) : (
-            filtrados.map((f) => <TabelaRow key={f.id} colunas={colunas} cols={COLS} row={f} />)
+            filtrados.map((f) => (
+              <TabelaRow
+                key={f.id}
+                colunas={colunas}
+                cols={COLS}
+                row={f}
+                onClick={() => navigate(`/funcionarios/${f.id}`)}
+              />
+            ))
           )}
         </TabelaCard>
 

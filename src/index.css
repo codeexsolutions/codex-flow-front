@@ -22,39 +22,15 @@
   --success: 22 155 110;
   --warning: 190 122 12;
   --danger: 208 62 62;
-
-  /*
-   * A SEGUNDA ação de peso igual — hoje o "Nova categoria" do estoque.
-   *
-   * Precisa ser um token próprio, e não `--accent` nem `--success`:
-   *
-   *   • `--accent` é a cor do BOTÃO PRIMÁRIO ("Novo item"), e o ponto deste
-   *     token é justamente destoar dele. Também não serve porque o acento é
-   *     escolhido pela empresa (roxo, azul, verde, rosa, laranja, teal,
-   *     vinho, dourado, preto) — qualquer derivação dele mudaria de hue junto.
-   *
-   *   • `--success` é um ESTADO ("em estoque", "lucro"), não uma ação, e no
-   *     tema escuro ele é um verde-menta claro (93 202 165) escolhido para ser
-   *     lido como TEXTO sobre fundo escuro. Usado como fundo de botão, texto
-   *     branco em cima dele fica em ~1.9:1 — ilegível.
-   *
-   * Estes valores são escolhidos para CARREGAR TEXTO BRANCO: ficam escuros o
-   * bastante nos dois temas, em vez de clarear no escuro como as cores
-   * semânticas fazem. O `soft` sobe pouco de propósito — ele é o canto claro
-   * do degradê, e é lá que o branco tem menos contraste. Como está, o pior
-   * ponto do botão fica em 4.7:1 (o mínimo da WCAG AA para texto é 4.5).
-   */
   --acao-2: 10 122 79;
   --acao-2-soft: 12 132 86;
 
-  /* Vidro — no claro o vidro é branco e luminoso */
   --glass-bg: 255 255 255;
   --glass-alpha: 0.72;
   --glass-border: 26 24 46;
   --glass-border-alpha: 0.08;
   --glass-highlight: 255 255 255;
 
-  /* Sombras — no claro precisam ser suaves e coloridas, não pretas */
   --shadow-color: 60 50 120;
   --shadow-1: 0 1px 2px rgb(var(--shadow-color) / 0.06), 0 2px 8px -2px rgb(var(--shadow-color) / 0.08);
   --shadow-2: 0 2px 4px rgb(var(--shadow-color) / 0.06), 0 8px 24px -6px rgb(var(--shadow-color) / 0.12);
@@ -65,15 +41,13 @@
   --aurora-2: 120 160 255;
   --aurora-alpha: 0.1;
 
-  /* Nível de efeito (sobrescrito por [data-fx]) */
+
   --blur-sm: 8px;
   --blur-md: 16px;
   --blur-lg: 28px;
 
   --ring-focus: 0 0 0 3px rgb(var(--accent) / 0.28);
 
-  /* Carregadas em `main.tsx` a partir do pacote — ver o comentário de lá.
-     A pilha de reserva só vale para o instante antes de a fonte pintar. */
   --font-display: "Sora Variable", "Sora", system-ui, sans-serif;
   --font-body: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
@@ -900,15 +874,68 @@ input[type="number"]::-webkit-outer-spin-button {
  * A barra inferior é fixa e cobriria o fim do conteúdo. O respiro entra no
  * corpo rolável das telas, e só no celular — no desktop a barra nem existe.
  *
- * O número acompanha a barra: 62px de pílula + 10px de recuo do rodapé (ver
- * `BottomNav`) + 10px de folga, para a última linha não encostar nela. Quem
- * mudar a altura da pílula precisa mudar aqui — foi o que aconteceu quando ela
- * passou de 52px para 62px e este valor continuou em 72, deixando a última
- * linha exatamente embaixo da barra.
+ * O número acompanha a barra: 58px de altura (ver `mobile/TabBar`) + 8px de
+ * folga, para a última linha não encostar nela. A área segura do aparelho já
+ * está dentro da barra, então entra aqui só uma vez. Quem mudar a altura da
+ * barra precisa mudar aqui — foi o que aconteceu quando ela passou de 52px
+ * para 62px e este valor continuou em 72, deixando a última linha exatamente
+ * embaixo dela.
  */
 @media (max-width: 767px) {
   main .overflow-y-auto {
-    padding-bottom: calc(82px + env(safe-area-inset-bottom));
+    padding-bottom: calc(66px + env(safe-area-inset-bottom));
+  }
+}
+
+/*
+ * No celular a tela vai até a BORDA.
+ *
+ * O corpo das telas usa `px-4` (16px de cada lado, ver `PAGE_PAD`), e dentro
+ * dele quase todo conteúdo é um cartão com borda e raio próprios. No monitor
+ * isso é respiro; num aparelho de 390px são 32px — 8% da largura — gastos
+ * numa moldura em volta de outra moldura, e o que sobra espreme tabela,
+ * gráfico e formulário.
+ *
+ * Aqui o recuo lateral do corpo vira zero e quem encosta na borda são os
+ * cartões, que perdem o raio nos lados e viram FAIXAS — a forma que um
+ * aplicativo usa numa lista de tela cheia. O respiro vertical continua: é ele
+ * que separa uma faixa da outra.
+ */
+/*
+ * `main main` — o corpo rolável da tela dentro do `main` do layout.
+ *
+ * O alvo é o `<main>` que o `PageBody` renderiza, e ele é o único `main`
+ * dentro de outro `main` no app inteiro. Casar por classe não serviria: as
+ * classes vêm do Tailwind e mudam quando o espaçamento muda.
+ */
+@media (max-width: 767px) {
+  main main.overflow-y-auto {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* O que NÃO é moldura (título de tela, aviso de erro, botão solto) mantém o
+     recuo — senão o texto encosta na borda do aparelho e fica ilegível. */
+  main main.overflow-y-auto > :not(.card):not(section) {
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
+  }
+
+  /* Cartão encostado na borda perde o raio e a borda dos LADOS, e vira faixa.
+     O de cima e o de baixo ficam: são eles que separam uma faixa da outra. */
+  main main.overflow-y-auto > .card,
+  main main.overflow-y-auto > section > .card {
+    border-left-width: 0;
+    border-right-width: 0;
+    border-radius: 0;
+  }
+
+  /* Grade de cartões (os números do topo) mantém o respiro lateral: sem ele os
+     dois primeiros encostam nas bordas e o vão do meio some, e três cartões
+     colados viram um bloco só. */
+  main main.overflow-y-auto > section:not(.card) {
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
   }
 }
 

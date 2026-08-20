@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import type { ReactNode } from "react";
+import { ChevronLeft } from "lucide-react";
 
 export interface HeaderTab {
   label: string;
@@ -15,6 +16,19 @@ interface HeaderPageProps {
   tabs?: HeaderTab[];
   /** Controles da própria tela. Ver a nota sobre a exceção abaixo. */
   actions?: ReactNode;
+  /**
+   * Para onde o "voltar" leva. Ausente = a tela não tem de onde voltar.
+   *
+   * Fica AQUI, colado no título, e não numa barra dentro do corpo: o voltar
+   * pertence à identidade da tela ("você está em X, veio de Y"), não ao
+   * conteúdo dela. Numa barra própria ele custava uma faixa inteira de altura
+   * — 52 px acima do primeiro dado — para um botão que a pessoa procura no
+   * canto superior esquerdo, que é onde todo navegador e todo aplicativo o
+   * põem.
+   */
+  onVoltar?: () => void;
+  /** O que o voltar diz — "Estoque", "Clientes". Vira o `title` do botão. */
+  voltarPara?: string;
 }
 
 /**
@@ -31,7 +45,7 @@ interface HeaderPageProps {
  *
  * Opcional de propósito: nenhuma tela que não passe `actions` muda de aparência.
  */
-const HeaderPage = ({ title, subtitle, icon, tabs, actions }: HeaderPageProps) => {
+const HeaderPage = ({ title, subtitle, icon, tabs, actions, onVoltar, voltarPara }: HeaderPageProps) => {
   const hasTabs = Boolean(tabs && tabs.length > 0);
 
   return (
@@ -46,6 +60,18 @@ const HeaderPage = ({ title, subtitle, icon, tabs, actions }: HeaderPageProps) =
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 py-3 lg:px-6">
         {/* Identidade */}
         <div className="flex min-w-0 items-center gap-3">
+          {onVoltar && (
+            <button
+              type="button"
+              onClick={onVoltar}
+              title={voltarPara ? `Voltar para ${voltarPara}` : "Voltar"}
+              aria-label={voltarPara ? `Voltar para ${voltarPara}` : "Voltar"}
+              className="focus-ring -ml-1 flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-fg/[0.08] bg-fg/[0.04] text-mist transition-colors hover:text-ink"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          )}
+
           {icon && (
             <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/[0.12] text-accent-soft ring-1 ring-inset ring-accent/20">
               <span aria-hidden className="absolute -inset-1 rounded-2xl bg-accent/25 blur-md" style={{ opacity: "calc(0.5 * var(--fx-glow, 1))" }} />

@@ -4,9 +4,10 @@ import type { ReactNode } from "react";
 import {
   Tags, PackagePlus, Package, AlertTriangle, RotateCw, Boxes, Wallet,
   Infinity as InfinityIcon, Layers, Wrench, ListFilter, Tag, Bookmark, FolderTree,
+  Blocks,
 } from "lucide-react";
 
-import ProductType, { nivelEstoque, SEM_CATEGORIA, type NivelEstoque } from "@/shared/domain/produto";
+import ProductType, { nivelEstoque, SEM_CATEGORIA, TIPO_ITEM, tipoDoItem, type NivelEstoque, type TipoItem } from "@/shared/domain/produto";
 import type { Categoria } from "@/shared/domain/estoque";
 import ProductService from "@/features/estoque/services/product.service";
 import EstoqueService from "@/features/estoque/services/estoque.service";
@@ -17,7 +18,7 @@ import { Modal } from "@/shared/ui/Modal";
 import Select from "@/shared/ui/Select";
 import BuscaSugestoes from "@/shared/ui/BuscaSugestoes";
 import { PageScreen } from "@/shared/ui/PageShell";
-import { ListaCabecalho, ListaFantasmas, ListaLinha, TabelaPaginacao } from "@/shared/ui/DataTable";
+import { BarraFiltros, ListaCabecalho, ListaFantasmas, ListaLinha, TabelaPaginacao } from "@/shared/ui/DataTable";
 import { useAlert } from "@/shared/ui/Alert";
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import { formatNumber, EMPTY } from "@/shared/utils/format";
@@ -75,13 +76,27 @@ const ESTILO_ACAO_2 = {
   boxShadow: `0 0 0 1px rgb(${VERDE} / 0.25), 0 8px 32px -8px rgb(${VERDE} / 0.45)`,
 };
 
-/** O que se conta: produto de prateleira ou serviço prestado. */
-type Tipo = "tudo" | "PRODUTO" | "SERVICO";
+/** O que se conta: produto de prateleira, serviço prestado ou insumo. */
+type Tipo = "catalogo" | TipoItem;
 
+/**
+ * O filtro de tipo, e por que o primeiro item não se chama "Tudo".
+ *
+ * "Catálogo" é PRODUTO + SERVIÇO — o que a empresa vende. Insumo fica de
+ * fora dele de propósito: material de produção no meio das camisetas faz a
+ * lista mentir sobre o que há para vender, faz "132 itens" contar rolo de
+ * tecido junto com peça pronta e faz "valor do estoque" somar duas vezes o
+ * mesmo dinheiro (o do material e o da peça feita com ele).
+ *
+ * Chamar isso de "Tudo" seria pior do que o problema: um filtro que promete
+ * tudo e esconde uma parte é um filtro em que ninguém confia depois da
+ * primeira vez que descobre. Insumo tem a opção dele, ao lado.
+ */
 const TIPOS: { value: Tipo; label: string; icone: typeof Package }[] = [
-  { value: "tudo", label: "Tudo", icone: Layers },
-  { value: "PRODUTO", label: "Produtos", icone: Package },
-  { value: "SERVICO", label: "Serviços", icone: Wrench },
+  { value: "catalogo", label: "Catálogo", icone: Layers },
+  { value: "PRODUTO", label: TIPO_ITEM.PRODUTO.plural, icone: Package },
+  { value: "SERVICO", label: TIPO_ITEM.SERVICO.plural, icone: Wrench },
+  { value: "INSUMO", label: TIPO_ITEM.INSUMO.plural, icone: Blocks },
 ];
 
 type Situacao = "todos" | NivelEstoque;
@@ -239,7 +254,7 @@ const Estoque = () => {
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search);
-  const [tipo, setTipo] = useState<Tipo>("tudo");
+  const [tipo, setTipo] = useState<Tipo>("catalogo");
   const [situacao, setSituacao] = useState<Situacao>("todos");
   const [categoria, setCategoria] = useState("todas");
   const [marca, setMarca] = useState("todas");
@@ -296,10 +311,7 @@ const Estoque = () => {
     try {
       await ProductService.create(data);
       await load();
-      alert.success(
-        data.tipo === "SERVICO" ? "Serviço cadastrado!" : "Produto cadastrado!",
-        "Já pode cadastrar o próximo.",
-      );
+      alert.success(`${TIPO_ITEM[data.tipo].singular} cadastrado!`, "Já pode cadastrar o próximo.");
     } catch (err) {
       alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível cadastrar o produto."));
     }
@@ -344,9 +356,11 @@ const Estoque = () => {
    * entrega dois.
    */
   const passa = (p: ProductType, f: { tipo: Tipo; situacao: Situacao; categoria: string; marca: string; q: string }) => {
-    /* Serviço é `tipo === "SERVICO"`; o que não tem tipo é produto (cadastro
-       anterior à migration 017 não gravava a coluna). */
-    if (f.tipo !== "tudo" && (p.tipo ?? "PRODUTO") !== f.tipo) return false;
+    /* "Catálogo" é tudo MENOS insumo — ver a nota de `TIPOS`. O item sem
+       tipo é produto: cadastro anterior à migration 017 não gravava a coluna. */
+    const tipoItem = tipoDoItem(p);
+
+    if (f.tipo === "catalogo" ? tipoItem === "INSUMO" : tipoItem !== f.tipo) return false;
     if (f.situacao !== "todos" && stockLevel(p) !== f.situacao) return false;
 
     /* Categoria casa por ID, não por nome: dois produtos podem mostrar o mesmo
@@ -489,8 +503,8 @@ const Estoque = () => {
    *
    * Sem isto, apagar a categoria que está filtrando deixa o seletor sem
    * rótulo (nenhuma opção casa com o valor) e a tabela com zero linhas — um
-   * beco sem saída em que a única pista é o botão "Limpar", que não parece ter
-   * relação com o que acabou de acontecer.
+   * beco sem saída em que a única pista é o "Limpar filtros" do estado vazio,
+   * que não parece ter relação com o que acabou de acontecer.
    */
   useEffect(() => {
     if (categoria === "todas" || categoria === FILTRO_SEM_CATEGORIA) return;
@@ -502,11 +516,11 @@ const Estoque = () => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  const hasFilters = Boolean(search) || tipo !== "tudo" || situacao !== "todos" || categoria !== "todas" || marca !== "todas";
+  const hasFilters = Boolean(search) || tipo !== "catalogo" || situacao !== "todos" || categoria !== "todas" || marca !== "todas";
 
   const limparFiltros = () => {
     setSearch("");
-    setTipo("tudo");
+    setTipo("catalogo");
     setSituacao("todos");
     setCategoria("todas");
     setMarca("todas");
@@ -602,7 +616,7 @@ const Estoque = () => {
             </span>
             <div className="min-w-0">
               <h2 className="truncate text-[13px] text-ink">
-                {tipo === "SERVICO" ? "Serviços" : tipo === "PRODUTO" ? "Produtos" : "Tudo que você vende"}
+                {tipo === "catalogo" ? "Tudo que você vende" : TIPO_ITEM[tipo].plural}
               </h2>
               <p className="text-[11px] text-faint">
                 {formatNumber(filtered.length)} {filtered.length === 1 ? "item" : "itens"}
@@ -612,99 +626,16 @@ const Estoque = () => {
           </div>
 
           {/*
-           * Busca e filtros num grupo só, na ponta oposta ao título.
+           * Em cima ficam só as duas portas de CRIAR.
            *
-           * As quatro coisas fazem o mesmo trabalho — restringir a lista — e
-           * separá-las pelas duas pontas obrigava o olho a atravessar a barra
-           * para montar um filtro só. É o mesmo arranjo da lista de notas.
+           * Criar e filtrar são movimentos opostos — um acrescenta ao
+           * catálogo, o outro esconde parte dele — e estavam na mesma fileira,
+           * sete controles de ponta a ponta, com os dois botões coloridos no
+           * fim de uma fila de caixas cinzas. Os filtros desceram para junto
+           * da tabela que eles governam (ver a barra logo abaixo); aqui ficam
+           * o título, a contagem e as duas ações.
            */}
-          {/*
-           * No celular a fileira de controles ROLA na horizontal em vez de
-           * quebrar linha.
-           *
-           * São cinco controles de largura fixa: em 360px eles empilhariam em
-           * quatro fileiras e a barra tomaria metade da tela antes de a lista
-           * começar. Rolando, a barra continua com uma linha de altura e todos
-           * os filtros continuam alcançáveis — inclusive os que o celular não
-           * tinha, porque a versão separada não os conhecia.
-           */}
-          <div className="-mx-4 flex max-w-full items-center gap-2 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:justify-end sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
-            {/*
-             * A sugestão ABRE a ficha; ela não filtra a tabela.
-             *
-             * Filtrar já é o que o próprio texto faz enquanto se digita — a
-             * tabela reage sozinha. O que a lista acrescenta é o atalho para
-             * quem já sabe qual item quer e não quer procurá-lo na página
-             * certa da tabela depois.
-             */}
-            <BuscaSugestoes
-              valor={search}
-              onValor={setSearch}
-              sugestoes={sugestoes}
-              onEscolher={(s) => navigate(`/estoque/${s.id}`)}
-              placeholder="Buscar item…"
-              aria-label="Buscar item por nome, SKU ou código de barras"
-              className="w-[210px] shrink-0"
-            />
-
-            <Select
-              valor={tipo}
-              onChange={(v) => setTipo(v as Tipo)}
-              opcoes={opcoesTipo}
-              icone={<Layers size={14} />}
-              aria-label="Filtrar entre produtos e serviços"
-              className="w-[150px] shrink-0"
-            />
-
-            <Select
-              valor={situacao}
-              onChange={(v) => setSituacao(v as Situacao)}
-              opcoes={opcoesSituacao}
-              icone={<ListFilter size={14} />}
-              aria-label="Filtrar por situação do estoque"
-              className="w-[168px] shrink-0"
-            />
-
-            {/*
-             * O filtro de categoria fica SEMPRE, ao contrário do de marca.
-             *
-             * Marca só existe se alguém digitou uma; categoria é cadastro, e
-             * a lista sempre tem ao menos "Sem categoria" — que é a opção
-             * mais útil das duas primeiras semanas de uso, porque é ela que
-             * mostra o que ainda falta organizar. Escondê-lo enquanto não
-             * houvesse categoria criada esconderia justamente de quem ainda
-             * não começou.
-             */}
-            <Select
-              valor={categoria}
-              onChange={setCategoria}
-              opcoes={opcoesCategoria}
-              icone={<Tag size={14} />}
-              aria-label="Filtrar por categoria"
-              className="w-[168px] shrink-0"
-            />
-
-            {marcas.length > 0 && (
-              <Select
-                valor={marca}
-                onChange={setMarca}
-                opcoes={opcoesMarca}
-                icone={<Bookmark size={14} />}
-                aria-label="Filtrar por marca"
-                className="w-[156px] shrink-0"
-              />
-            )}
-
-            {hasFilters && (
-              <button
-                type="button"
-                onClick={limparFiltros}
-                className="focus-ring h-[38px] shrink-0 cursor-pointer whitespace-nowrap rounded-xl px-2.5 text-[12px] text-faint transition-colors hover:text-ink"
-              >
-                Limpar
-              </button>
-            )}
-
+          <div className="flex shrink-0 items-center gap-2">
             {/*
              * Dois botões de mesmo peso, separados pela COR.
              *
@@ -742,6 +673,74 @@ const Estoque = () => {
           </div>
         </div>
 
+        <BarraFiltros pagina={{ label: "Estoque", icon: <Tags className="h-3.5 w-3.5" /> }}>
+          {/*
+           * A sugestão ABRE a ficha; ela não filtra a tabela.
+           *
+           * Filtrar já é o que o próprio texto faz enquanto se digita — a
+           * tabela reage sozinha. O que a lista acrescenta é o atalho para
+           * quem já sabe qual item quer e não quer procurá-lo na página
+           * certa da tabela depois.
+           */}
+          <BuscaSugestoes
+            valor={search}
+            onValor={setSearch}
+            sugestoes={sugestoes}
+            onEscolher={(s) => navigate(`/estoque/${s.id}`)}
+            placeholder="Buscar item…"
+            aria-label="Buscar item por nome, SKU ou código de barras"
+            className="w-[210px] shrink-0"
+          />
+
+          <Select
+            valor={tipo}
+            onChange={(v) => setTipo(v as Tipo)}
+            opcoes={opcoesTipo}
+            icone={<Layers size={14} />}
+            aria-label="Filtrar entre produtos e serviços"
+            className="w-[150px] shrink-0"
+          />
+
+          <Select
+            valor={situacao}
+            onChange={(v) => setSituacao(v as Situacao)}
+            opcoes={opcoesSituacao}
+            icone={<ListFilter size={14} />}
+            aria-label="Filtrar por situação do estoque"
+            className="w-[168px] shrink-0"
+          />
+
+          {/*
+           * O filtro de categoria fica SEMPRE, ao contrário do de marca.
+           *
+           * Marca só existe se alguém digitou uma; categoria é cadastro, e
+           * a lista sempre tem ao menos "Sem categoria" — que é a opção
+           * mais útil das duas primeiras semanas de uso, porque é ela que
+           * mostra o que ainda falta organizar. Escondê-lo enquanto não
+           * houvesse categoria criada esconderia justamente de quem ainda
+           * não começou.
+           */}
+          <Select
+            valor={categoria}
+            onChange={setCategoria}
+            opcoes={opcoesCategoria}
+            icone={<Tag size={14} />}
+            aria-label="Filtrar por categoria"
+            className="w-[168px] shrink-0"
+          />
+
+          {marcas.length > 0 && (
+            <Select
+              valor={marca}
+              onChange={setMarca}
+              opcoes={opcoesMarca}
+              icone={<Bookmark size={14} />}
+              aria-label="Filtrar por marca"
+              className="w-[156px] shrink-0"
+            />
+          )}
+        </BarraFiltros>
+
         {/* Colunas + linhas rolam juntas na horizontal quando a tela é estreita. */}
         {/* A largura mínima é do DESKTOP: ela existe para as seis colunas não
             se esmagarem. No celular a linha virou cartão (ver `ListaLinha`), e
@@ -778,7 +777,7 @@ const Estoque = () => {
                     </div>
                     <div>
                       <p className="text-[13px] text-mist">
-                        {tipo === "SERVICO" ? "Nenhum serviço encontrado" : "Nenhum item encontrado"}
+                        {tipo === "catalogo" ? "Nenhum item encontrado" : `Nenhum ${TIPO_ITEM[tipo].singular.toLowerCase()} encontrado`}
                       </p>
                       <p className="mt-0.5 text-[11px]">{hasFilters ? "Ajuste a busca ou os filtros." : "Comece cadastrando seu primeiro item."}</p>
                     </div>
@@ -831,8 +830,14 @@ const Estoque = () => {
                                 <Layers className="h-2.5 w-2.5" /> variações
                               </span>
                             )}
-                            {product.tipo === "SERVICO" && (
-                              <span className="shrink-0 rounded bg-accent/[0.12] px-1.5 py-px text-[10px] leading-[15px] text-accent-soft">serviço</span>
+                            {/* O selo só aparece no que NÃO é produto: numa
+                                lista majoritariamente de produtos, marcar
+                                todos com "produto" é ruído que esconde
+                                justamente as duas linhas diferentes. */}
+                            {tipoDoItem(product) !== "PRODUTO" && (
+                              <span className="shrink-0 rounded bg-accent/[0.12] px-1.5 py-px text-[10px] leading-[15px] text-accent-soft">
+                                {TIPO_ITEM[tipoDoItem(product)].singular.toLowerCase()}
+                              </span>
                             )}
                           </span>
                           <span className="truncate text-[11px] text-faint">{product.sku || product.descricao || `#${product.id}`}</span>

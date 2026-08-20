@@ -1,5 +1,50 @@
-/** PRODUTO controla estoque; SERVICO não tem o que estocar. */
-export type TipoItem = "PRODUTO" | "SERVICO";
+/**
+ * O que um item é (migration 051).
+ *
+ * PRODUTO e INSUMO controlam estoque; SERVICO não tem o que estocar. A
+ * diferença entre os dois primeiros não é o estoque e sim a VENDA: insumo é
+ * material de produção — o transfer da caneca, o tecido da camiseta —, fica
+ * fora do catálogo, fora da busca do PDV e fora dos números do topo da lista
+ * de produtos, mas tem ficha, saldo e extrato como qualquer item que acaba.
+ */
+export type TipoItem = "PRODUTO" | "SERVICO" | "INSUMO";
+
+/**
+ * Como cada tipo se chama na tela, no singular e no plural.
+ *
+ * Um mapa só, e não a palavra escrita em cada arquivo: o rótulo aparece no
+ * filtro da lista, no seletor do cadastro, no subtítulo da ficha e nas
+ * mensagens de sucesso. Quatro grafias de "Insumo" fariam parecer quatro
+ * coisas diferentes na primeira vez que alguém escrevesse "Material".
+ */
+export const TIPO_ITEM: Record<TipoItem, { singular: string; plural: string }> = {
+  PRODUTO: { singular: "Produto", plural: "Produtos" },
+  SERVICO: { singular: "Serviço", plural: "Serviços" },
+  INSUMO: { singular: "Insumo", plural: "Insumos" },
+};
+
+/**
+ * O tipo do item, com o padrão de quem foi cadastrado antes da coluna existir.
+ *
+ * Cadastro anterior à migration 017 chega sem `tipo`, e a resposta certa para
+ * ele é PRODUTO — era a única coisa que dava para cadastrar naquela época.
+ * Escrito uma vez porque toda tela que filtra precisa da mesma resposta.
+ */
+export const tipoDoItem = (produto: { tipo?: string | null }): TipoItem =>
+  (produto.tipo as TipoItem) || "PRODUTO";
+
+/** Material de produção: tem estoque, não entra no catálogo de venda. */
+export const ehInsumo = (produto: { tipo?: string | null }): boolean => tipoDoItem(produto) === "INSUMO";
+
+/**
+ * O que se VENDE — produto e serviço, nunca insumo.
+ *
+ * É o recorte que o PDV, o orçamento e a listagem de estoque usam. Como
+ * função, e não como `p.tipo !== "INSUMO"` repetido em cinco arquivos: no dia
+ * em que aparecer um quarto tipo que também não se vende, há um lugar para
+ * dizer isso.
+ */
+export const ehVendavel = (produto: { tipo?: string | null }): boolean => !ehInsumo(produto);
 
 /**
  * Conjunto de tamanhos herdado do cadastro antigo.

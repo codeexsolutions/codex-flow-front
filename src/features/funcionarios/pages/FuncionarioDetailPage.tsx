@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  ChevronLeft, Pencil, Loader2, AlertTriangle, RotateCw, Wallet, Percent,
+  Pencil, Loader2, AlertTriangle, RotateCw, Wallet, Percent,
   Clock, IdCard, Cake, Briefcase, ShieldCheck, Crown, MapPin, Camera,
   UserCog, CalendarDays, Receipt,
 } from "lucide-react";
@@ -10,6 +10,7 @@ import {
 import { PageScreen } from "@/shared/ui/PageShell";
 import { Modal } from "@/shared/ui/Modal";
 import { Selo } from "@/shared/ui/StatusBadge";
+import { ListaCabecalho } from "@/shared/ui/DataTable";
 import { formatCurrency } from "@/shared/utils/currency";
 import { formatNumber, EMPTY } from "@/shared/utils/format";
 import { maskCpfCnpj } from "@/shared/validation/masks";
@@ -44,8 +45,8 @@ import { PONTO_LABEL, type Equipe, type Funcionario, type PontoRegistro } from "
 /* -------------------------------------------------------------------------- */
 
 const StatCard = ({ icon, label, value, hint, tom }: { icon: ReactNode; label: string; value: string; hint?: string; tom?: "danger" | "warning" | "success" }) => (
-  <div className="card glass-sheen rounded-2xl p-4">
-    <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-inset ${
+  <div className="card glass-sheen rounded-xl p-2.5">
+    <div className={`mb-1.5 flex h-7 w-7 items-center justify-center rounded-lg ring-1 ring-inset ${
       tom === "danger" ? "bg-danger/[0.14] text-danger ring-danger/20"
         : tom === "warning" ? "bg-warning/[0.14] text-warning ring-warning/20"
         : tom === "success" ? "bg-success/[0.14] text-success ring-success/20"
@@ -53,9 +54,9 @@ const StatCard = ({ icon, label, value, hint, tom }: { icon: ReactNode; label: s
     }`}>
       {icon}
     </div>
-    <p className="text-[11px] uppercase tracking-[0.1em] text-faint">{label}</p>
-    <p className="mt-1 truncate text-lg tabular-nums tracking-tight text-ink sm:text-xl">{value}</p>
-    {hint && <p className="mt-0.5 truncate text-[11px] text-faint">{hint}</p>}
+    <p className="truncate text-[9.5px] uppercase tracking-[0.08em] text-faint">{label}</p>
+    <p className="mt-0.5 truncate text-[14px] tabular-nums tracking-tight text-ink sm:text-[15px]">{value}</p>
+    {hint && <p className="truncate text-[9.5px] text-faint">{hint}</p>}
   </div>
 );
 
@@ -67,16 +68,32 @@ const StatCard = ({ icon, label, value, hint, tom }: { icon: ReactNode; label: s
  * informação mais acionável desta tela.
  */
 const Dado = ({ icon, label, valor }: { icon: ReactNode; label: string; valor?: string | null }) => (
-  <div className="flex items-center gap-3 px-5 py-2.5">
-    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-fg/[0.04] text-muted">{icon}</span>
-    <span className="w-[104px] shrink-0 text-[11px] uppercase tracking-[0.08em] text-faint">{label}</span>
-    <span className={`min-w-0 flex-1 truncate text-[12.5px] ${valor ? "text-ink" : "text-faint"}`}>{valor || EMPTY}</span>
+  <div className="flex items-center gap-2.5 px-3.5 py-2">
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-fg/[0.04] text-muted">{icon}</span>
+    <span className="w-[74px] shrink-0 text-[9.5px] uppercase tracking-[0.06em] text-faint">{label}</span>
+    {/* O valor alinha à DIREITA e leva `title`: numa coluna com a largura de
+       um KPI ele é a metade que trunca, e um salário cortado ("R$ 1.2…") sem
+       jeito de ler inteiro é pior que apertado. */}
+    <span title={valor || undefined} className={`min-w-0 flex-1 truncate text-right text-[12px] ${valor ? "text-ink" : "text-faint"}`}>{valor || EMPTY}</span>
   </div>
 );
 
-const Cartao = ({ children }: { children: ReactNode }) => (
-  <div className="card glass-sheen overflow-hidden rounded-2xl">{children}</div>
+const Cartao = ({ children, className = "" }: { children: ReactNode; className?: string }) => (
+  <div className={`card glass-sheen overflow-hidden rounded-2xl ${className}`}>{children}</div>
 );
+
+/*
+ * O extrato de ponto é uma TABELA, e não uma lista de frases.
+ *
+ * Cada batida tem quatro dados — o que foi, a que horas, a que distância da
+ * loja e a prova — e eles estavam soltos numa fileira flex, sem rótulo em
+ * lugar nenhum: descobrir que "180 m" era distância exigia adivinhar. Em
+ * colunas fixas, o número da terceira coluna é sempre a mesma coisa, e a
+ * fileira de rótulos (a mesma peça das outras tabelas do sistema) escreve o
+ * que ela é uma vez só, no topo.
+ */
+const COLS_PONTO = "grid-cols-[minmax(0,1fr)_64px_74px_40px]";
+const ROTULOS_PONTO = ["Batida", "Hora", "Distância", "Foto"];
 
 /** As batidas de um dia, agrupadas — é assim que uma folha de ponto se lê. */
 type Dia = { data: string; registros: PontoRegistro[] };
@@ -194,44 +211,28 @@ const FuncionarioDetalhe = () => {
       icon={<UserCog className="h-5 w-5" />}
       title={funcionario.nome}
       subtitle={[funcionario.cargo, acesso ? acesso.email : "sem acesso ao sistema"].filter(Boolean).join(" · ")}
+      /* O voltar mora no cabeçalho da página, colado no nome — e não numa
+         barra própria dentro do corpo, que custava uma faixa inteira de altura
+         para um botão que se procura no canto superior esquerdo. */
+      onVoltar={() => navigate("/funcionarios")}
+      voltarPara="Equipe"
     >
-      {/* Barra de ações */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => navigate("/funcionarios")}
-          className="focus-ring inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-fg/[0.08] bg-fg/[0.04] px-3 py-2 text-[13px] text-mist transition-colors hover:text-ink"
-        >
-          <ChevronLeft className="h-4 w-4" /> Equipe
-        </button>
-
-        <div className="flex-1" />
-
-        {/*
-          Ação rápida do recibo.
-          Ela está aqui porque é o que se faz DEPOIS de olhar o ponto e o
-          salário — os dois blocos desta página. O modal já abre com o que
-          esta tela mostra: só falta o que variou no mês.
-        */}
-        <button
-          type="button"
-          onClick={() => setRecibo(true)}
-          className="focus-ring inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-fg/[0.08] bg-fg/[0.04] px-3 py-2 text-[13px] text-mist transition-colors hover:text-ink"
-        >
-          <Receipt className="h-4 w-4" /> Emitir recibo
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setEditando(true)}
-          className="focus-ring inline-flex cursor-pointer items-center gap-2 rounded-xl bg-gradient-to-br from-accent-soft to-accent px-4 py-2 text-[13px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98]"
-        >
-          <Pencil className="h-4 w-4" /> Editar
-        </button>
-      </div>
-
-      {/* Números */}
-      <section className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
+      {/*
+       * A tela em duas faixas, e a de baixo come o que sobrar.
+       *
+       *   1. NÚMEROS — largura inteira, quatro numa fileira. São a régua da
+       *      tela e não competem com nada por espaço.
+       *   2. FICHA + PONTO — a MESMA grade de quatro colunas: a ficha ocupa
+       *      uma, o histórico as outras três. Antes eram duas metades iguais
+       *      (`xl:grid-cols-2`), e a ficha — seis linhas curtas — ficava com
+       *      metade da tela e um deserto embaixo, enquanto o extrato, que é
+       *      onde se trabalha, rolava dentro de 420px.
+       *
+       * O `min-h-0` em cada nível não é decoração: sem ele o filho de um
+       * container flex adota a altura do CONTEÚDO como mínimo, o `overflow`
+       * interno nunca entra em ação e a página inteira volta a rolar.
+       */}
+      <section className="grid shrink-0 grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
           icon={<Wallet className="h-4 w-4" />}
           label="Salário"
@@ -265,23 +266,53 @@ const FuncionarioDetalhe = () => {
         />
       </section>
 
-      <section className="grid min-h-0 grid-cols-1 gap-3 xl:grid-cols-2">
+      <section className="grid min-h-0 grid-cols-1 gap-3 xl:flex-1 xl:grid-cols-4">
         {/* ---------- Ficha ---------- */}
-        <Cartao>
-          <div className="flex items-center gap-3 border-b border-fg/[0.07] px-5 py-3.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/20">
+        <Cartao className="flex flex-col xl:min-h-0">
+          <div className="flex items-center gap-2.5 border-b border-fg/[0.07] px-3.5 py-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/20">
               <IdCard className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-[13px] text-ink">Ficha</h2>
-              <p className="text-[11px] text-faint">
+              <h2 className="truncate text-[12.5px] text-ink">Ficha</h2>
+              <p className="truncate text-[10px] text-faint">
                 {funcionario.ativo ? "Trabalha aqui" : "Desligado"} · {funcionario.batePonto ? "bate ponto" : "sem controle de horário"}
               </p>
             </div>
             {!funcionario.ativo && <Selo tom="neutro">Desligado</Selo>}
           </div>
 
-          <div className="flex flex-col divide-y divide-fg/[0.04]">
+          {/*
+           * As duas ações da pessoa ficam NA FAIXA da ficha.
+           *
+           * Elas moravam numa barra de ações no topo do corpo — uma faixa
+           * inteira de altura acima dos números, com o voltar de um lado e
+           * dois botões do outro. As duas agem sobre o que este cartão mostra:
+           * "Editar" muda estas linhas, e o recibo é montado com o salário
+           * que está escrito nelas. Na faixa do cartão, a ação está do lado do
+           * dado que ela toca, e a tela começa pelos números.
+           */}
+          <div className="flex shrink-0 items-center gap-2 border-b border-fg/[0.06] px-3.5 py-2">
+            <button
+              type="button"
+              onClick={() => setRecibo(true)}
+              title="Emitir recibo de salário"
+              className="focus-ring inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-fg/[0.1] px-2 py-1 text-[11.5px] text-mist transition-colors hover:bg-fg/[0.05] hover:text-ink"
+            >
+              <Receipt size={12} /> Recibo
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setEditando(true)}
+              title="Editar os dados e o acesso"
+              className="focus-ring ml-auto inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-fg/[0.1] px-2 py-1 text-[11.5px] text-mist transition-colors hover:bg-fg/[0.05] hover:text-ink"
+            >
+              <Pencil size={12} /> Editar
+            </button>
+          </div>
+
+          <div className="flex min-h-0 flex-1 flex-col divide-y divide-fg/[0.04] xl:overflow-y-auto">
             <Dado icon={<IdCard size={13} />} label="CPF" valor={funcionario.cpf ? maskCpfCnpj(funcionario.cpf) : ""} />
             <Dado
               icon={<Cake size={13} />}
@@ -302,14 +333,16 @@ const FuncionarioDetalhe = () => {
         </Cartao>
 
         {/* ---------- Extrato de ponto ---------- */}
-        <Cartao>
-          <div className="flex items-center gap-3 border-b border-fg/[0.07] px-5 py-3.5">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/20">
+        {/* É esta coluna que recebe a sobra de altura: a ficha tem seis linhas
+            fixas, o extrato tem duzentas batidas. */}
+        <Cartao className="flex min-h-0 flex-col xl:col-span-3">
+          <div className="flex shrink-0 items-center gap-2.5 border-b border-fg/[0.07] px-4 py-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/20">
               <CalendarDays className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-[13px] text-ink">Histórico de ponto</h2>
-              <p className="text-[11px] text-faint">
+              <h2 className="truncate text-[12.5px] text-ink">Histórico de ponto</h2>
+              <p className="truncate text-[10px] text-faint">
                 {pontos.length === 0 ? "Nada registrado" : `${formatNumber(pontos.length)} batidas · mais recentes primeiro`}
               </p>
             </div>
@@ -324,10 +357,19 @@ const FuncionarioDetalhe = () => {
               Nenhuma batida ainda. Passe o link do ponto para ela — está em Funcionários, no botão “Ponto”.
             </p>
           ) : (
-            <div className="max-h-[420px] overflow-y-auto">
+            <>
+              {/* Os rótulos, uma vez só no topo — a mesma peça das tabelas de
+                  Estoque, Clientes e Vendas. */}
+              <ListaCabecalho cols={COLS_PONTO}>
+                {ROTULOS_PONTO.map((r, i) => (
+                  <p key={r} className={i >= 1 ? "text-right" : undefined}>{r}</p>
+                ))}
+              </ListaCabecalho>
+
+              <div className="min-h-0 flex-1 overflow-y-auto">
               {dias.map((dia) => (
                 <div key={dia.data} className="border-b border-fg/[0.04] last:border-0">
-                  <p className="sticky top-0 z-10 bg-surface/85 px-5 py-1.5 text-[10.5px] uppercase tracking-[0.1em] text-faint backdrop-blur">
+                  <p className="sticky top-0 z-10 bg-surface/85 px-4 py-1.5 text-[10.5px] uppercase tracking-[0.1em] text-faint backdrop-blur">
                     {dia.data}
                   </p>
 
@@ -336,25 +378,32 @@ const FuncionarioDetalhe = () => {
                     const tom = PONTO_LABEL[p.tipo].tom;
 
                     return (
-                      <div key={p.id} className="flex items-center gap-2.5 px-5 py-2">
-                        <span className={`w-[128px] shrink-0 text-[12px] ${tom === "entrada" ? "text-success" : tom === "saida" ? "text-warning" : "text-mist"}`}>
+                      /* Zebra igual à das outras tabelas: numa folha de ponto
+                         o olho atravessa a largura para casar a batida da
+                         esquerda com a foto da direita, e sem faixa ele
+                         escorrega uma linha no caminho. */
+                      <div key={p.id} className={`grid ${COLS_PONTO} items-center gap-2.5 px-4 py-2 odd:bg-fg/[0.025]`}>
+                        <span className={`min-w-0 truncate text-[12px] ${tom === "entrada" ? "text-success" : tom === "saida" ? "text-warning" : "text-mist"}`}>
                           {PONTO_LABEL[p.tipo].texto}
                         </span>
 
-                        <span className="shrink-0 text-[13px] tabular-nums text-ink">
+                        <span className="text-right text-[13px] tabular-nums text-ink">
                           {quando.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                         </span>
 
-                        <span className="flex min-w-0 flex-1 items-center justify-end gap-2">
-                          {/* A distância só aparece no ponto batido pelo link:
-                              o lançado pelo gestor não tem coordenada, e um
-                              "—" ali sugeriria dado faltando. */}
-                          {p.distanciaMetros != null && (
-                            <span className="flex shrink-0 items-center gap-1 text-[11px] tabular-nums text-faint">
+                        {/* A distância só existe no ponto batido pelo link: o
+                            lançado pelo gestor não tem coordenada. */}
+                        <span className="flex items-center justify-end gap-1 text-[11px] tabular-nums text-faint">
+                          {p.distanciaMetros != null ? (
+                            <>
                               <MapPin size={11} /> {formatNumber(p.distanciaMetros)} m
-                            </span>
+                            </>
+                          ) : (
+                            EMPTY
                           )}
+                        </span>
 
+                        <span className="flex justify-end">
                           {p.fotoUrl ? (
                             <button
                               type="button"
@@ -365,8 +414,8 @@ const FuncionarioDetalhe = () => {
                               <img src={p.fotoUrl} alt="" className="h-full w-full object-cover" />
                             </button>
                           ) : (
-                            <span className="shrink-0 text-[10.5px] text-faint">
-                              {p.origem === "PUBLICO" ? <Camera size={12} /> : "lançado"}
+                            <span title={p.origem === "PUBLICO" ? "Batido pelo link, sem foto" : "Lançado pelo gestor"} className="shrink-0 text-[10.5px] text-faint">
+                              {p.origem === "PUBLICO" ? <Camera size={12} /> : EMPTY}
                             </span>
                           )}
                         </span>
@@ -375,7 +424,8 @@ const FuncionarioDetalhe = () => {
                   })}
                 </div>
               ))}
-            </div>
+              </div>
+            </>
           )}
         </Cartao>
       </section>

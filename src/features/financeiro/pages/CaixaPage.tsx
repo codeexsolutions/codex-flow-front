@@ -1,25 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
-  Activity, AlertTriangle, ArrowLeftRight, Banknote, CreditCard, Plus, Receipt,
-  RotateCw, Trash2, TrendingDown, TrendingUp, Wallet,
+  AlertTriangle, ArrowLeftRight, ArrowUpCircle, CalendarDays, CreditCard,
+  Receipt, RotateCw, Trash2, TrendingDown, TrendingUp,
 } from "lucide-react";
-import { Area, AreaChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { TabelaCard, TabelaHead, TabelaRow, TabelaVazia, type Coluna } from "@/shared/ui/DataTable";
-import { ChartTip, Kpi, Legenda, Painel, PainelVazio } from "@/shared/ui/Painel";
-import { paletaFatias, usePainelCores } from "@/shared/ui/painelCores";
-import { GhostAction, PageToolbar, PrimaryAction } from "@/shared/ui/PageShell";
+import { AbasTabela } from "@/shared/ui/AbasTabela";
+import Select from "@/shared/ui/Select";
+
 import BotaoRecibo from "@/shared/ui/BotaoRecibo";
 import { Modal } from "@/shared/ui/Modal";
 import { Form, FormSection, FormGrid, FormActions, TextField } from "@/shared/ui/form/FormKit";
 import { useAlert } from "@/shared/ui/Alert";
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import useFinanceiroStore from "@/features/financeiro/store/financeiro.store";
-import type { MovimentacaoType, NotaFinanceiroType, NovaMovimentacaoType } from "@/shared/domain/financeiro";
+import type { NovaMovimentacaoType } from "@/shared/domain/financeiro";
 import { formatCurrency as brl, money } from "@/shared/utils/currency";
-import { brDate, MONTHS } from "@/shared/utils/date";
-import FiltroPeriodo, { dentroDoPeriodo, periodoPadrao, rotuloPeriodo, type Periodo } from "@/features/financeiro/components/FiltroPeriodo";
+import { brDate } from "@/shared/utils/date";
 import RecebimentosNota from "@/features/financeiro/components/RecebimentosNota";
+import ListaContas from "@/features/financeiro/components/ListaContas";
+import ContaForm from "@/features/financeiro/components/ContaForm";
+import useContasStore from "@/features/financeiro/store/contas.store";
+import ContaService, { type NovaConta, type TipoConta } from "@/features/financeiro/services/conta.service";
+import ContasMensais from "@/features/financeiro/components/ContasMensais";
 
 /**
  * Caixa — o dinheiro que entrou e saiu, num período.
@@ -33,39 +37,138 @@ import RecebimentosNota from "@/features/financeiro/components/RecebimentosNota"
  * onde o histórico do pedido está junto.
  */
 
-/** Célula vazia que ocupa o vão flexível do fim da linha. */
-const COLUNA_VAO = { id: "vao", header: "", cell: () => null };
+/**
+ * As quatro listas do dinheiro da empresa.
+ *
+ * Entradas e saídas são o CAIXA — dinheiro que já passou, datado pelo dia em
+ * que passou. A pagar e a receber são COMPROMISSO — dinheiro que ainda vai
+ * passar, datado pelo vencimento. Eram três telas separadas (Caixa, A pagar,
+ * A receber) e o livro-caixa ainda misturava entrada e saída na mesma lista,
+ * com um selo colorido na primeira coluna para desempatar.
+ *
+ * As quatro numa navegação só, dentro da mesma tabela: a pergunta "quanto
+ * saiu?" e a pergunta "quanto ainda tenho que pagar?" são vizinhas na cabeça
+ * de quem paga as contas, e agora são vizinhas na tela.
+ */
+export type AbaFinanceiro = "entradas" | "saidas" | "contas";
+
+/** Recortes de data do caixa — o filtro que substituiu a barra de período. */
+type Quando = "tudo" | "hoje" | "7" | "mes" | "ano" | "livre";
+
+const QUANDO: { valor: Quando; label: string }[] = [
+  { valor: "mes", label: "Este mês" },
+  { valor: "hoje", label: "Hoje" },
+  { valor: "7", label: "Últimos 7 dias" },
+  { valor: "ano", label: "Este ano" },
+  { valor: "tudo", label: "Tudo" },
+  /*
+   * O intervalo livre existe para o que não cabe em atalho — a semana do
+   * feriado, o trimestre do contador. Escolhida esta opção, aparecem os dois
+   * calendários ao lado; nas outras eles ficam fora do caminho, porque em
+   * nove de cada dez aberturas do caixa o atalho já responde.
+   */
+  { valor: "livre", label: "Escolher período…" },
+];
+
+/** ISO local — `toISOString()` cai no dia anterior em fuso negativo. */
+const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+const brDia = (isoStr: string) => isoStr.split("-").reverse().join("/");
+
+/**
+ * Uma linha do caixa, venha ela de onde vier.
+ *
+ * O recebimento de venda É uma entrada — o dinheiro entrou no caixa no dia em
+ * que a nota foi paga. Ele tinha aba própria, e isso obrigava quem confere o
+ * dia a somar duas listas de cabeça para saber quanto entrou. Aqui as duas
+ * viram uma: `origem` guarda de onde a linha veio, porque o que se pode FAZER
+ * com ela muda (a lançada à mão se apaga; a da nota se abre).
+ */
+type LinhaCaixa = {
+  id: string;
+  data: string;
+  descricao: string;
+  apoio: string;
+  forma: string;
+  formasExtras: number;
+  formasDetalhe?: string;
+  valor: number;
+  tipo: "ENTRADA" | "SAIDA";
+  origem: "caixa" | "venda";
+};
+
+const ABAS: { id: AbaFinanceiro; label: string; titulo: string; icone: ReactNode }[] = [
+  { id: "entradas", label: "Entradas", titulo: "Entradas no caixa", icone: <TrendingUp size={15} /> },
+  { id: "saidas", label: "Saídas", titulo: "Saídas do caixa", icone: <TrendingDown size={15} /> },
+  /*
+   * "Contas", e não "A pagar".
+   *
+   * O que a empresa TEM A RECEBER saiu daqui: é dinheiro de venda a prazo, e
+   * "quem ainda me deve" se responde olhando a nota — por isso virou a aba
+   * "A prazo" da tela de Vendas. O que fica aqui é o que a empresa DEVE, e
+   * num financeiro com um lado só de conta o rótulo "A pagar" ficou dizendo o
+   * óbvio contra um par que não existe mais.
+   */
+  { id: "contas", label: "Contas", titulo: "Contas a pagar", icone: <ArrowUpCircle size={15} /> },
+];
 
 /**
  * A coluna flexível é capada e sobra um vão no fim: com "1fr" solto, os
  * valores iam parar na borda direita do monitor, longe do nome a que
  * pertencem. Assim os dados ficam agrupados à esquerda.
  */
-const COLS_CAIXA = "grid-cols-[110px_minmax(180px,420px)_130px_120px_60px_minmax(0,1fr)]";
-const COLS_RECEBIDO = "grid-cols-[minmax(160px,360px)_120px_140px_130px_minmax(0,1fr)]";
+const COLS_CAIXA = "grid-cols-[minmax(180px,1fr)_150px_120px_110px_56px]";
 
-/** ISO local — `toISOString()` cai no dia anterior em fuso negativo. */
-const isoLocal = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-/** Meio-dia para atravessar horário de verão sem escorregar de dia. */
-const doIso = (iso: string) => new Date(`${iso}T12:00:00`);
-
-const dia10 = (v?: string | null) => (v ? String(v).slice(0, 10) : "");
-
-export default function CaixaPage() {
+/**
+ * `abaInicial` vem do ENDEREÇO: `/financeiro/a-pagar` abre na aba de pagar.
+ *
+ * É o que mantém favorito, link mandado para o contador e histórico do
+ * navegador funcionando depois que as três telas viraram quatro abas de uma.
+ */
+export default function CaixaPage({ abaInicial = "entradas" }: { abaInicial?: AbaFinanceiro } = {}) {
   const alert = useAlert();
-  const C = usePainelCores();
 
-  const resumo = useFinanceiroStore((s) => s.resumo);
   const notas = useFinanceiroStore((s) => s.notas);
   const movimentacoes = useFinanceiroStore((s) => s.movimentacoes);
-  const loading = useFinanceiroStore((s) => s.loading);
   const error = useFinanceiroStore((s) => s.error);
   const fetchFinanceiro = useFinanceiroStore((s) => s.fetchFinanceiro);
   const criarMovimentacaoStore = useFinanceiroStore((s) => s.criarMovimentacao);
+
+  /* Contas a pagar e a receber vêm do outro store: são o mesmo assunto
+     ("dinheiro da empresa") com outro recorte de tempo — vencimento, e não
+     pagamento — e por isso outra fonte. */
+  const contas = useContasStore((s) => s.contas);
+  const carregandoContas = useContasStore((s) => s.carregando);
+  const fetchContas = useContasStore((s) => s.fetchContas);
   const excluirMovimentacaoStore = useFinanceiroStore((s) => s.excluirMovimentacao);
 
-  const [periodo, setPeriodo] = useState<Periodo>(periodoPadrao);
+  /*
+   * Dois filtros, os dois em `Select`.
+   *
+   * A tela já teve uma barra de período com quatro botões (Dia · Mês · Ano ·
+   * Período) acima de tudo, e ela sumiu junto com os KPIs e os gráficos. O
+   * recorte de tempo, porém, é a primeira coisa que se pergunta de um caixa —
+   * "quanto entrou HOJE?" —, então ele volta como o que sempre deveria ter
+   * sido: um seletor do tamanho de um seletor, na barra de filtros da tabela,
+   * ao lado do filtro de forma de pagamento.
+   */
+  const [quando, setQuando] = useState<Quando>("mes");
+  const [forma, setForma] = useState("");
+
+  /* O intervalo livre começa no mês corrente: assim, escolher "Escolher
+     período…" não zera a lista enquanto a pessoa ainda não mexeu nas datas. */
+  const [de, setDe] = useState(() => {
+    const h = new Date();
+    return isoLocal(new Date(h.getFullYear(), h.getMonth(), 1));
+  });
+  const [ate, setAte] = useState(() => isoLocal(new Date()));
+
+  /* Qual das quatro listas a tabela mostra. As duas primeiras são o caixa
+     (dinheiro que já passou); as duas últimas são compromisso (dinheiro que
+     ainda vai passar) — ver a nota da tabela lá embaixo. */
+  const [aba, setAba] = useState<AbaFinanceiro>(abaInicial);
+  const [novaConta, setNovaConta] = useState<TipoConta | null>(null);
+  const [salvandoConta, setSalvandoConta] = useState(false);
   const [showNovaMovimentacao, setShowNovaMovimentacao] = useState(false);
   const [salvando, setSalvando] = useState(false);
   /*
@@ -89,155 +192,145 @@ export default function CaixaPage() {
 
   useEffect(() => {
     fetchFinanceiro();
-  }, [fetchFinanceiro]);
+    fetchContas();
+  }, [fetchFinanceiro, fetchContas]);
 
   const detalhe = useMemo(() => notas.find((n) => String(n.pedido_id) === detalheId) ?? null, [notas, detalheId]);
 
-  /* ---------------- Recorte do período ---------------- */
+  /* ---------------- O caixa, numa lista só ---------------- */
+
+  const ehCaixa = aba === "entradas" || aba === "saidas";
+  const ehConta = aba === "contas";
 
   /**
-   * Só o que foi PAGO conta como recebimento.
+   * O recorte, como um par de datas ISO — `null` quando não há corte.
    *
-   * A data que vale é a do pagamento, não a da venda: uma nota de janeiro
-   * quitada em março é dinheiro de março para quem fecha o caixa.
+   * Comparar string ISO basta e evita fuso: "2026-08-03" >= "2026-08-01" é
+   * verdade em qualquer máquina, e `new Date(iso)` no horário de verão já
+   * escorregou um dia mais de uma vez neste código.
    */
-  const recebimentos = useMemo(
-    () => notas.filter((n) => Number(n.valor_pago ?? 0) > 0 && dentroDoPeriodo(n.data_pagamento ?? n.data_pedido, periodo)),
-    [notas, periodo],
-  );
+  const recorte = useMemo<{ de: string; ate: string } | null>(() => {
+    if (quando === "tudo") return null;
+    if (quando === "livre") return { de, ate };
 
-  const movimentacoesDoPeriodo = useMemo(
-    () => movimentacoes.filter((m) => dentroDoPeriodo(m.data_movimentacao, periodo)),
-    [movimentacoes, periodo],
-  );
+    const h = new Date();
+    const fim = isoLocal(h);
 
-  /** Todas as datas que existem — alimentam as listas de mês e ano do filtro. */
-  const datasConhecidas = useMemo(
-    () => [
-      ...notas.map((n) => n.data_pagamento ?? n.data_pedido),
-      ...movimentacoes.map((m) => m.data_movimentacao),
-    ].filter(Boolean) as string[],
-    [notas, movimentacoes],
-  );
+    if (quando === "hoje") return { de: fim, ate: fim };
+    if (quando === "7") return { de: isoLocal(new Date(+h - 6 * 86_400_000)), ate: fim };
+    if (quando === "mes") return { de: isoLocal(new Date(h.getFullYear(), h.getMonth(), 1)), ate: fim };
 
-  const totais = useMemo(() => {
-    const recebidoVendas = recebimentos.reduce((acc, n) => acc + Number(n.valor_pago ?? 0), 0);
-    const entradas = movimentacoesDoPeriodo.filter((m) => m.tipo === "ENTRADA").reduce((acc, m) => acc + Number(m.valor), 0);
-    const saidas = movimentacoesDoPeriodo.filter((m) => m.tipo === "SAIDA").reduce((acc, m) => acc + Number(m.valor), 0);
-
-    return { recebidoVendas, entradas, saidas, saldo: recebidoVendas + entradas - saidas };
-  }, [recebimentos, movimentacoesDoPeriodo]);
+    return { de: `${h.getFullYear()}-01-01`, ate: fim };
+  }, [quando, de, ate]);
 
   /**
-   * A série do gráfico — entradas contra saídas ao longo do período.
+   * Todo o movimento do caixa, das duas fontes, no formato de linha.
    *
-   * O balde muda de tamanho conforme o recorte: até 45 dias o gráfico é diário,
-   * acima disso é mensal. Um ano inteiro em 365 colunas é uma mancha; um mês em
-   * 1 coluna não é um gráfico.
-   *
-   * Períodos curtos são esticados para sete dias terminando no fim do recorte:
-   * com o atalho "Dia" o gráfico teria um ponto só, que não desenha linha
-   * nenhuma. Os dias a mais são reais — vêm dos mesmos lançamentos — e o
-   * subtítulo do painel avisa que a janela é maior que o filtro.
+   * Recebimento de venda entra como ENTRADA: para o caixa, dinheiro pago é
+   * dinheiro que entrou, e a data que vale é a do pagamento — uma nota de
+   * janeiro quitada em março é dinheiro de março para quem fecha o mês.
    */
-  const grafico = useMemo(() => {
-    const inicio = doIso(periodo.de);
-    const fim = doIso(periodo.ate);
-    const dias = Math.round((+fim - +inicio) / 86_400_000) + 1;
-    const porDia = dias <= 45;
+  const linhas = useMemo<LinhaCaixa[]>(() => {
+    const todas: LinhaCaixa[] = [];
 
-    const baldes: { chave: string; name: string; entradas: number; saidas: number }[] = [];
-
-    if (porDia) {
-      const janela = Math.max(dias, 7);
-
-      for (let i = janela - 1; i >= 0; i--) {
-        const d = new Date(fim);
-        d.setDate(fim.getDate() - i);
-        const iso = isoLocal(d);
-        baldes.push({ chave: iso, name: `${iso.slice(8, 10)}/${iso.slice(5, 7)}`, entradas: 0, saidas: 0 });
-      }
-    } else {
-      let ano = inicio.getFullYear();
-      let mes = inicio.getMonth();
-
-      while (ano < fim.getFullYear() || (ano === fim.getFullYear() && mes <= fim.getMonth())) {
-        baldes.push({ chave: `${ano}-${String(mes + 1).padStart(2, "0")}`, name: MONTHS[mes], entradas: 0, saidas: 0 });
-        mes += 1;
-
-        if (mes > 11) {
-          mes = 0;
-          ano += 1;
-        }
-      }
+    for (const m of movimentacoes) {
+      todas.push({
+        id: m.id,
+        data: String(m.data_movimentacao),
+        descricao: m.descricao,
+        apoio: m.categoria?.trim() || "Lançado à mão",
+        forma: m.categoria?.trim() || "Caixa",
+        formasExtras: 0,
+        valor: Number(m.valor) || 0,
+        tipo: m.tipo === "SAIDA" ? "SAIDA" : "ENTRADA",
+        origem: "caixa",
+      });
     }
-
-    const porChave = new Map(baldes.map((b) => [b.chave, b]));
-    const corte = (iso: string) => (porDia ? iso.slice(0, 10) : iso.slice(0, 7));
 
     for (const n of notas) {
       const pago = Number(n.valor_pago ?? 0);
       if (!(pago > 0)) continue;
 
-      const b = porChave.get(corte(dia10(n.data_pagamento ?? n.data_pedido)));
-      if (b) b.entradas += pago;
+      /* Uma nota pode ter entrado por duas portas ("metade no Pix, metade em
+         dinheiro"). A coluna mostra a primeira e conta as outras; o `title`
+         abre a divisão inteira. */
+      const formas = n.formas ?? [];
+
+      todas.push({
+        id: `nota-${n.pedido_id}`,
+        data: String(n.data_pagamento ?? n.data_pedido),
+        descricao: n.cliente_nome || "Venda",
+        apoio: `Nota #${n.codigo_pedido}`,
+        forma: formas[0]?.forma || n.forma_pagamento?.trim() || "Não informado",
+        formasExtras: Math.max(formas.length - 1, 0),
+        formasDetalhe: formas.length > 1 ? formas.map((f) => `${f.forma}: ${money(f.valor)}`).join(" · ") : undefined,
+        valor: pago,
+        tipo: "ENTRADA",
+        origem: "venda",
+      });
     }
 
-    for (const m of movimentacoes) {
-      const b = porChave.get(corte(dia10(m.data_movimentacao)));
-      if (!b) continue;
+    return todas.sort((a, b) => +new Date(b.data) - +new Date(a.data));
+  }, [movimentacoes, notas]);
 
-      if (m.tipo === "ENTRADA") b.entradas += Number(m.valor);
-      else b.saidas += Number(m.valor);
-    }
+  /** As formas que EXISTEM no movimento — o seletor não oferece opção vazia. */
+  const formasConhecidas = useMemo(
+    () => [...new Set(linhas.map((l) => l.forma).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [linhas],
+  );
 
-    return { dados: baldes, porDia, esticado: porDia && dias < 7, temMovimento: baldes.some((b) => b.entradas > 0 || b.saidas > 0) };
-  }, [notas, movimentacoes, periodo]);
+  const noRecorte = useMemo(
+    () =>
+      linhas.filter((l) => {
+        const dia = String(l.data).slice(0, 10);
 
-  /**
-   * Formas de pagamento no período.
-   *
-   * Junta o que veio de venda com o que foi lançado como entrada no caixa —
-   * é a resposta a "como o dinheiro entrou", e o caixa também é dinheiro que
-   * entrou. Lançamento sem forma vira "Não informado" em vez de sumir da
-   * conta e fazer a soma não bater com o total.
-   */
-  const formas = useMemo(() => {
-    const mapa = new Map<string, number>();
+        return (!recorte || (dia >= recorte.de && dia <= recorte.ate)) && (forma ? l.forma === forma : true);
+      }),
+    [linhas, recorte, forma],
+  );
 
-    for (const n of recebimentos) {
-      /* Uma nota pode ter entrado por duas portas. O extrato diz quanto por
-         cada uma; a coluna `forma_pagamento` só saberia dizer a última, e era
-         por isso que a fatia do dinheiro crescia com venda paga no Pix. Nota
-         sem extrato (dado antigo) cai no comportamento de antes, para o total
-         do gráfico continuar batendo com o recebido do período. */
-      const detalhado = n.formas ?? [];
+  const linhasDoCaixa = useMemo(
+    () => noRecorte.filter((l) => (aba === "saidas" ? l.tipo === "SAIDA" : l.tipo === "ENTRADA")),
+    [noRecorte, aba],
+  );
 
-      if (detalhado.length === 0) {
-        const f = n.forma_pagamento?.trim() || "Não informado";
-        mapa.set(f, (mapa.get(f) ?? 0) + Number(n.valor_pago ?? 0));
-        continue;
-      }
+  /** O total da aba aberta — vai no lugar da contagem, no cabeçalho. */
+  const totalDaAba = useMemo(() => linhasDoCaixa.reduce((acc, l) => acc + l.valor, 0), [linhasDoCaixa]);
 
-      for (const { forma, valor } of detalhado) {
-        mapa.set(forma, (mapa.get(forma) ?? 0) + Number(valor ?? 0));
-      }
-    }
+  const contagem: Record<AbaFinanceiro, number> = useMemo(() => ({
+    "entradas": noRecorte.filter((l) => l.tipo === "ENTRADA").length,
+    "saidas": noRecorte.filter((l) => l.tipo === "SAIDA").length,
+    /* Na conta a contagem é de PARCELAS em aberto — é a parcela que vence.
+       "Aluguel — 12x" com uma vencida conta 1, não 12. */
+    "contas": contas
+      .filter((c) => c.tipo === "PAGAR" && c.status !== "CANCELADA")
+      .reduce((acc, c) => acc + c.parcelas.filter((x) => x.situacao !== "PAGA").length, 0),
+  }), [noRecorte, contas]);
 
-    for (const m of movimentacoesDoPeriodo) {
-      if (m.tipo !== "ENTRADA") continue;
-      const f = m.categoria?.trim() || "Caixa";
-      mapa.set(f, (mapa.get(f) ?? 0) + Number(m.valor));
-    }
-
-    return [...mapa.entries()].map(([nome, valor]) => ({ nome, valor })).sort((a, b) => b.valor - a.valor);
-  }, [recebimentos, movimentacoesDoPeriodo]);
-
-  const totalFormas = useMemo(() => formas.reduce((acc, f) => acc + f.valor, 0), [formas]);
-  const paleta = paletaFatias(C);
-  const rotulo = rotuloPeriodo(periodo);
+  const rotulo = quando === "livre" ? `${brDia(de)} a ${brDia(ate)}` : QUANDO.find((q) => q.valor === quando)!.label.toLowerCase();
 
   /* ---------------- Ações ---------------- */
+
+  /** O botão da aba já sabe o tipo: quem está em "Saídas" quer lançar saída. */
+  const abrirLancamento = (tipo: "ENTRADA" | "SAIDA") => {
+    setNovaMovimentacao({ tipo, categoria: "", descricao: "", valor: 0, dataMovimentacao: "" });
+    setShowNovaMovimentacao(true);
+  };
+
+  const criarConta = async (dados: NovaConta) => {
+    setSalvandoConta(true);
+
+    try {
+      await ContaService.criar(dados);
+      setNovaConta(null);
+      await fetchContas(true);
+      alert.success("Conta criada!", dados.parcelas && dados.parcelas > 1 ? `${dados.parcelas} parcelas geradas com os vencimentos.` : "O vencimento já está na lista.");
+    } catch (err) {
+      alert.error(getErrorTitle(err), extractErrorMessage(err, "Não foi possível criar a conta."));
+    } finally {
+      setSalvandoConta(false);
+    }
+  };
 
   const handleCriarMovimentacao = async () => {
     if (!novaMovimentacao.descricao || !novaMovimentacao.dataMovimentacao || novaMovimentacao.valor <= 0) {
@@ -270,84 +363,80 @@ export default function CaixaPage() {
 
   /* ---------------- Colunas ---------------- */
 
-  const colRecebido: Coluna<NotaFinanceiroType>[] = [
+  /*
+   * Quatro colunas e um botão — as mesmas para entrada e saída.
+   *
+   * A coluna "Tipo", com o selo verde/vermelho, saiu: agora é a ABA que diz
+   * se a lista é de entrada ou de saída, e um selo repetindo isso em todas as
+   * linhas era ruído. No lugar dela entrou "Forma", que era a informação que
+   * só existia na tabela de recebimentos e é o que a rosca de formas de
+   * pagamento respondia antes de sair.
+   */
+  const colCaixa: Coluna<LinhaCaixa>[] = [
     {
-      id: "cliente",
-      header: "Cliente",
-      cell: (n) => (
+      id: "desc",
+      header: "Descrição",
+      cell: (l) => (
         <span className="block min-w-0">
-          <span className="block truncate text-ink">{n.cliente_nome}</span>
-          <span className="block truncate text-[11px] text-faint">Nota #{n.codigo_pedido}</span>
+          <span className="block truncate text-ink">{l.descricao}</span>
+          <span className="block truncate text-[11px] text-faint">{l.apoio}</span>
         </span>
       ),
     },
     {
       id: "forma",
       header: "Forma",
-      /* Nota recebida em duas formas mostra a primeira e conta as outras
-         ("Pix +1"): escrever as duas estoura a largura da coluna, e mostrar só
-         a última — que é o que a nota guarda — dizia que a venda inteira tinha
-         sido em dinheiro quando metade entrou no Pix. */
-      cell: (n) => {
-        const formas = n.formas ?? [];
-        const extras = Math.max(formas.length - 1, 0);
-
-        return (
-          <span
-            className="inline-flex w-fit items-center gap-1.5 rounded-full border border-fg/[0.1] px-2.5 py-0.5 text-[11px] text-mist"
-            title={formas.length > 1 ? formas.map((f) => `${f.forma}: ${money(f.valor)}`).join(" · ") : undefined}
-          >
-            <CreditCard size={11} className="text-muted" />
-            {formas[0]?.forma || n.forma_pagamento?.trim() || "Não informado"}
-            {extras > 0 && <span className="text-faint">+{extras}</span>}
-          </span>
-        );
-      },
-    },
-    { id: "valor", header: "Recebido", align: "right", cell: (n) => <span className="nums text-success">{money(Number(n.valor_pago ?? 0))}</span> },
-    { id: "data", header: "Pago em", align: "right", cell: (n) => <span className="nums text-mist">{brDate(n.data_pagamento ?? n.data_pedido)}</span> },
-    COLUNA_VAO,
-  ];
-
-  const colCaixa: Coluna<MovimentacaoType>[] = [
-    {
-      id: "tipo",
-      header: "Tipo",
-      cell: (m) => (
-        <span className={`inline-flex w-fit items-center rounded-full border px-2.5 py-0.5 text-[11px] ${m.tipo === "ENTRADA" ? "border-success/40 bg-success/15 text-success" : "border-danger/40 bg-danger/15 text-danger"}`}>
-          {m.tipo === "ENTRADA" ? "Entrada" : "Saída"}
+      cell: (l) => (
+        <span
+          className="inline-flex w-fit items-center gap-1.5 rounded-full border border-fg/[0.1] px-2.5 py-0.5 text-[11px] text-mist"
+          title={l.formasDetalhe}
+        >
+          <CreditCard size={11} className="text-muted" />
+          {l.forma}
+          {l.formasExtras > 0 && <span className="text-faint">+{l.formasExtras}</span>}
         </span>
       ),
     },
     {
-      id: "desc",
-      header: "Descrição",
-      cell: (m) => (
-        <span className="block min-w-0">
-          <span className="block truncate text-ink">{m.descricao}</span>
-          {m.categoria && <span className="block truncate text-[11px] text-faint">{m.categoria}</span>}
-        </span>
-      ),
+      id: "valor",
+      header: "Valor",
+      align: "right",
+      cell: (l) => <span className={`nums ${l.tipo === "ENTRADA" ? "text-success" : "text-danger"}`}>{brl(l.valor)}</span>,
     },
-    { id: "valor", header: "Valor", align: "right", cell: (m) => <span className={`nums ${m.tipo === "ENTRADA" ? "text-success" : "text-danger"}`}>{brl(m.valor)}</span> },
-    { id: "data", header: "Data", align: "right", cell: (m) => <span className="nums text-mist">{brDate(m.data_movimentacao)}</span> },
+    { id: "data", header: "Data", align: "right", cell: (l) => <span className="nums text-mist">{brDate(l.data)}</span> },
     {
       id: "acoes",
       header: "",
       align: "right",
-      cell: (m) => (
-        <button onClick={() => handleExcluirMovimentacao(m.id)} className="focus-ring rounded-lg bg-fg/[0.05] p-1.5 text-faint transition-colors hover:bg-danger/20 hover:text-danger" title="Excluir">
-          <Trash2 size={14} />
-        </button>
-      ),
+      /* O que se pode fazer depende da ORIGEM: o lançamento feito à mão se
+         apaga; o recebimento veio de uma nota e se abre nela — apagar por
+         aqui desfaria um pagamento pelas costas do pedido. */
+      cell: (l) =>
+        l.origem === "caixa" ? (
+          <button onClick={() => handleExcluirMovimentacao(l.id)} className="focus-ring rounded-lg bg-fg/[0.05] p-1.5 text-faint transition-colors hover:bg-danger/20 hover:text-danger" title="Excluir lançamento">
+            <Trash2 size={14} />
+          </button>
+        ) : (
+          <span title="Recebimento de venda — abra a nota para ver o extrato" className="inline-flex p-1.5 text-faint">
+            <Receipt size={14} />
+          </span>
+        ),
     },
-    COLUNA_VAO,
   ];
-
-  /* ---------------- Modais ---------------- */
 
   const modais = (
     <>
+      {/* Criar conta a pagar / a receber — o mesmo formulário das duas abas,
+          com o tipo vindo de qual delas estava aberta. */}
+      {novaConta && (
+        <ContaForm
+          tipo={novaConta}
+          salvando={salvandoConta}
+          onFechar={() => setNovaConta(null)}
+          onSalvar={criarConta}
+        />
+      )}
+
       <Modal open={showNovaMovimentacao} onClose={() => setShowNovaMovimentacao(false)} title="Nova movimentação" subtitle="Registre uma entrada ou saída no caixa">
         <Form
           onSubmit={(e) => {
@@ -467,151 +556,130 @@ export default function CaixaPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <PageToolbar left={<FiltroPeriodo valor={periodo} onChange={setPeriodo} datas={datasConhecidas} />}>
-        <GhostAction icon={<RotateCw size={14} className={loading ? "animate-spin" : ""} />} onClick={() => fetchFinanceiro(true)} disabled={loading} title="Atualizar" />
+      {/*
+       * ---------------------------------------------------------------------
+       * A tela é UMA tabela. Nada mais.
+       * ---------------------------------------------------------------------
+       * Ela já foi seis coisas empilhadas: uma barra de ações com filtro de
+       * período, recarregar e "+ Movimentação"; quatro KPIs; um gráfico de
+       * área de 300px; uma rosca de formas de pagamento; a tabela do
+       * livro-caixa; e uma segunda tabela com os recebimentos de venda. Duas
+       * telas de rolagem antes da primeira linha do movimento — e, na prática,
+       * os painéis nem cabiam: como filhos de um flex column sem `shrink-0`
+       * eles eram cortados no meio e a tabela subia por cima.
+       *
+       * O que cada peça dizia já está dito em outro lugar:
+       *
+       *   • os KPIs "Entradas" e "Saídas" viraram ABAS, com a contagem no
+       *     rótulo e a lista inteira a um clique;
+       *   • o gráfico de área desenhava a mesma série que a tabela lista linha
+       *     a linha — e num caixa de loja pequena ele é dois picos e uma reta
+       *     no chão;
+       *   • a rosca de formas de pagamento respondia "como entrou", que é
+       *     coluna da tabela de recebimentos;
+       *   • a segunda tabela virou a quinta aba.
+       *
+       * Sobraram duas coisas: o aviso das contas que se repetem todo mês —
+       * a única com PRAZO, e por isso no topo — e o movimento em si, ocupando
+       * toda a altura que a janela tiver.
+       */}
+      <ContasMensais contas={contas} />
 
-        <PrimaryAction icon={<Plus size={14} />} onClick={() => setShowNovaMovimentacao(true)}>
-          Movimentação
-        </PrimaryAction>
-      </PageToolbar>
-
-      <div className="stagger grid shrink-0 grid-cols-2 gap-3 xl:grid-cols-4">
-        <Kpi tone="success" icon={<Receipt size={17} />} label="Recebido em vendas" value={money(totais.recebidoVendas)} hint={`${recebimentos.length} ${recebimentos.length === 1 ? "recebimento" : "recebimentos"}`} />
-        <Kpi tone="accent" icon={<TrendingUp size={17} />} label="Entradas no caixa" value={money(totais.entradas)} hint="Lançamentos manuais" />
-        <Kpi tone="danger" icon={<TrendingDown size={17} />} label="Saídas" value={money(totais.saidas)} hint="Despesas do período" />
-        <Kpi tone={totais.saldo >= 0 ? "success" : "danger"} icon={<Wallet size={17} />} label="Saldo do período" value={money(totais.saldo)} hint={resumo ? `Caixa acumulado ${money(resumo.saldoCaixa)}` : undefined} />
-      </div>
-
-      <div className="grid min-h-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
-        <Painel
-          icon={<Activity size={15} />}
-          tone="accent"
-          title="Entradas e saídas"
-          sub={grafico.esticado ? `Últimos 7 dias · o filtro mostra ${rotulo.toLowerCase()}` : `${grafico.porDia ? "Por dia" : "Por mês"} · ${rotulo}`}
-          className="min-h-[300px]"
-          footer={<Legenda itens={[{ color: C.accent, label: "Entradas" }, { color: C.danger, label: "Saídas" }]} />}
-        >
-          {grafico.temMovimento ? (
-            /* Altura mínima, não fixa: no lado esquerdo da grade o painel
-               estica até a altura da coluna vizinha, e o gráfico acompanha em
-               vez de deixar uma faixa vazia embaixo. */
-            <div className="h-full min-h-[240px] w-full py-3 pr-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={grafico.dados} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
-                  <defs>
-                    <linearGradient id="caixaEntradas" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={C.accent} stopOpacity={0.28} />
-                      <stop offset="95%" stopColor={C.accent} stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="caixaSaidas" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={C.danger} stopOpacity={0.22} />
-                      <stop offset="95%" stopColor={C.danger} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.grid} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: C.tick }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={18} />
-                  <YAxis tick={{ fontSize: 11, fill: C.tick }} axisLine={false} tickLine={false} width={44} tickFormatter={(v: number) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v))} />
-                  <Tooltip content={<ChartTip />} />
-
-                  <Area type="monotone" dataKey="entradas" name="Entradas" stroke={C.accent} strokeWidth={2} fill="url(#caixaEntradas)" />
-                  <Area type="monotone" dataKey="saidas" name="Saídas" stroke={C.danger} strokeWidth={2} fill="url(#caixaSaidas)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <PainelVazio icon={<Activity size={19} />} title="Nada movimentou neste período" description="Recebimentos de venda e lançamentos do caixa desenham as duas curvas aqui." />
-          )}
-        </Painel>
-
-        <Painel
-          icon={<Banknote size={15} />}
-          tone="success"
-          title="Formas de pagamento"
-          sub={formas.length > 0 ? `${formas.length} ${formas.length === 1 ? "forma" : "formas"} · ${money(totalFormas)}` : rotulo}
-          bodyClassName="overflow-y-auto"
-        >
-          {formas.length === 0 ? (
-            <PainelVazio icon={<Banknote size={19} />} title="Nenhuma entrada neste período" />
-          ) : (
-            <div className="flex flex-col gap-3 p-3.5">
-              <div className="h-[132px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={formas} cx="50%" cy="50%" innerRadius="56%" outerRadius="88%" paddingAngle={3} dataKey="valor" nameKey="nome">
-                      {formas.map((f, i) => (
-                        <Cell key={f.nome} fill={paleta[i % paleta.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<ChartTip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              <ul className="flex flex-col gap-1">
-                {formas.map((f, i) => {
-                  const pct = totalFormas > 0 ? Math.round((f.valor / totalFormas) * 100) : 0;
-
-                  return (
-                    <li key={f.nome} className="flex items-center justify-between gap-3 rounded-lg bg-fg/[0.03] px-2.5 py-1.5">
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: paleta[i % paleta.length] }} />
-                        <span className="truncate text-[12px] text-mist">{f.nome}</span>
-                      </span>
-                      <span className="flex shrink-0 items-center gap-2">
-                        <span className="nums text-[12px] text-ink">{money(f.valor)}</span>
-                        <span className="w-8 shrink-0 text-right text-[11px] tabular-nums text-faint">{pct}%</span>
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-        </Painel>
-      </div>
-
-      {/* O livro-caixa é o assunto da tela e vem primeiro; os recebimentos de
-          venda vêm logo abaixo porque também são dinheiro que entrou — só que
-          lançado pela nota, e não à mão. */}
       <TabelaCard
-        title="Livro-caixa"
-        icon={<ArrowLeftRight size={15} />}
-        count={movimentacoesDoPeriodo.length}
-        countLabel={rotulo}
-        onAdd={() => setShowNovaMovimentacao(true)}
-        addLabel="Lançar"
+        title={ABAS.find((a) => a.id === aba)!.titulo}
+        icon={ABAS.find((a) => a.id === aba)!.icone}
+        count={contagem[aba]}
+        /* No caixa o rodapé do título diz o RECORTE e o TOTAL — "este mês ·
+           R$ 12.586,10" —, que é a soma que a pessoa faria de cabeça olhando a
+           coluna de valores. */
+        countLabel={ehCaixa ? `${rotulo} · ${money(totalDaAba)}` : "parcelas em aberto"}
+        onAdd={ehCaixa ? () => abrirLancamento(aba === "saidas" ? "SAIDA" : "ENTRADA") : () => setNovaConta("PAGAR")}
+        addLabel={ehCaixa ? (aba === "saidas" ? "Lançar saída" : "Lançar entrada") : "Nova conta"}
+        /* Os dois filtros só valem para o caixa: a conta a pagar é ordenada
+           por vencimento e não tem forma de pagamento até ser paga. */
+        controles={ehCaixa ? (
+          <>
+            <Select
+              valor={quando}
+              onChange={(v) => setQuando(v as Quando)}
+              opcoes={QUANDO.map((q) => ({ valor: q.valor, label: q.label }))}
+              icone={<CalendarDays size={14} />}
+              aria-label="Filtrar por data"
+              className="w-[168px] shrink-0"
+            />
+
+            {/* Os dois calendários só aparecem no intervalo livre. São
+                `input type="date"`: o calendário é o do próprio sistema
+                operacional, que a pessoa já sabe usar e que funciona no
+                teclado e no celular sem nada a mais. */}
+            {quando === "livre" && (
+              <span className="flex shrink-0 items-center gap-1.5">
+                <input
+                  type="date"
+                  value={de}
+                  max={ate}
+                  onChange={(e) => setDe(e.target.value)}
+                  aria-label="Data inicial"
+                  className="focus-ring h-[38px] shrink-0 cursor-pointer rounded-xl border border-fg/[0.09] bg-fg/[0.03] px-2.5 text-[12.5px] text-ink outline-none focus:border-accent/60"
+                />
+                <span className="text-[11.5px] text-faint">até</span>
+                <input
+                  type="date"
+                  value={ate}
+                  min={de}
+                  onChange={(e) => setAte(e.target.value)}
+                  aria-label="Data final"
+                  className="focus-ring h-[38px] shrink-0 cursor-pointer rounded-xl border border-fg/[0.09] bg-fg/[0.03] px-2.5 text-[12.5px] text-ink outline-none focus:border-accent/60"
+                />
+              </span>
+            )}
+
+            {/* O seletor de forma só existe se houver mais de uma: com uma só,
+                ele não filtra nada e vira ruído. */}
+            {formasConhecidas.length > 1 && (
+              <Select
+                valor={forma}
+                onChange={setForma}
+                opcoes={[{ valor: "", label: "Todas as formas" }, ...formasConhecidas.map((f) => ({ valor: f, label: f }))]}
+                icone={<CreditCard size={14} />}
+                aria-label="Filtrar por forma de pagamento"
+                className="w-[178px] shrink-0"
+              />
+            )}
+          </>
+        ) : undefined}
+        navegacao={
+          <AbasTabela
+            grupo="abas-financeiro"
+            valor={aba}
+            onValor={setAba}
+            abas={ABAS.map(({ id, label, icone }) => ({ id, label, icone, contagem: contagem[id] }))}
+          />
+        }
       >
-        {movimentacoesDoPeriodo.length === 0 ? (
+        {/* A lista de contas traz a própria peça: a parcela tem botão de
+            pagar, de recibo e de cancelar, e essa lógica já mora na
+            `ListaContas`. Aqui ela entra sem moldura — quem dá a moldura é
+            este cartão. */}
+        {ehConta ? (
+          <ListaContas
+            embutida
+            tipo="PAGAR"
+            contas={contas.filter((c) => c.tipo === "PAGAR")}
+            carregando={carregandoContas}
+            onRecarregar={() => void fetchContas(true)}
+          />
+        ) : linhasDoCaixa.length === 0 ? (
           <TabelaVazia
             icon={<ArrowLeftRight size={20} />}
-            title="Nenhum lançamento neste período"
-            description="Entradas e saídas que você registrar aparecem aqui."
+            title={aba === "saidas" ? "Nenhuma saída neste período" : "Nenhuma entrada neste período"}
+            description="O que você registrar aparece aqui."
           />
         ) : (
           <>
             <TabelaHead cols={COLS_CAIXA} colunas={colCaixa} />
-            {movimentacoesDoPeriodo.map((m) => (
+            {linhasDoCaixa.map((m) => (
               <TabelaRow key={m.id} cols={COLS_CAIXA} colunas={colCaixa} row={m} />
-            ))}
-          </>
-        )}
-      </TabelaCard>
-
-      <TabelaCard title="Recebimentos de vendas" icon={<Receipt size={15} />} count={recebimentos.length} countLabel={money(totais.recebidoVendas)}>
-        {loading && recebimentos.length === 0 ? (
-          <TabelaVazia title="Carregando…" />
-        ) : recebimentos.length === 0 ? (
-          <TabelaVazia
-            icon={<Receipt size={20} />}
-            title="Nenhum recebimento neste período"
-            description={`Nada foi pago em ${rotulo.toLowerCase()}. Troque o período acima para ver outro intervalo.`}
-          />
-        ) : (
-          <>
-            <TabelaHead cols={COLS_RECEBIDO} colunas={colRecebido} />
-            {recebimentos.map((n) => (
-              <TabelaRow key={String(n.pedido_id)} cols={COLS_RECEBIDO} colunas={colRecebido} row={n} onClick={() => setDetalheId(String(n.pedido_id))} />
             ))}
           </>
         )}

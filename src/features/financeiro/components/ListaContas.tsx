@@ -40,9 +40,18 @@ type Props = {
    * ações, repeti-lo aqui daria dois "criar" na mesma altura da página.
    */
   onNova?: () => void;
+  /**
+   * A lista mora DENTRO de outro cartão — o da tabela do financeiro.
+   *
+   * Sem isso ela desenha a própria moldura e a contagem de parcelas em cima,
+   * e o resultado é cartão dentro de cartão com dois títulos dizendo a mesma
+   * coisa. Embutida, ela é só as linhas: quem dá a moldura, o título e o botão
+   * de criar é a `TabelaCard` que a contém.
+   */
+  embutida?: boolean;
 };
 
-const ListaContas = ({ tipo, contas, carregando = false, onRecarregar, onNova }: Props) => {
+const ListaContas = ({ tipo, contas, carregando = false, onRecarregar, onNova, embutida = false }: Props) => {
   const alert = useAlert();
 
   const [pagando, setPagando] = useState<{ conta: Conta; parcela: Parcela } | null>(null);
@@ -118,7 +127,8 @@ const ListaContas = ({ tipo, contas, carregando = false, onRecarregar, onNova }:
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className={embutida ? "flex min-h-0 flex-1 flex-col" : "flex min-h-0 flex-1 flex-col gap-3"}>
+      {!embutida && (
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <p className="text-[12px] text-faint">
           {pendentes.length} {pendentes.length === 1 ? "parcela em aberto" : "parcelas em aberto"}
@@ -135,8 +145,9 @@ const ListaContas = ({ tipo, contas, carregando = false, onRecarregar, onNova }:
           </button>
         )}
       </div>
+      )}
 
-      <div className="card glass-sheen min-h-0 flex-1 overflow-y-auto">
+      <div className={embutida ? "min-h-0 flex-1 overflow-y-auto" : "card glass-sheen min-h-0 flex-1 overflow-y-auto"}>
         {carregando ? (
           <div className="flex items-center justify-center gap-2 py-16 text-[13px] text-mist">
             <Loader2 size={15} className="animate-spin text-accent" /> Carregando…

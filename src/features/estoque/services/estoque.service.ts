@@ -37,7 +37,7 @@ const EstoqueService = {
 
   /** Cria quando não tem `id`, renomeia quando tem. */
   salvarCategoria: async (categoria: Partial<Categoria> & { nome: string }) =>
-    primeiro<string>(await sysgrafix.post("/estoque/categorias", categoria)),
+    primeiro<string>(await sysgrafix.post("/estoque/categorias", categoria, { carregamento: "Salvando a categoria…" })),
 
   /**
    * Apaga a categoria. Os produtos dela ficam SEM CATEGORIA — não somem.
@@ -47,7 +47,7 @@ const EstoqueService = {
    * "excluída" que deixa a dúvida no ar.
    */
   excluirCategoria: async (categoriaId: string): Promise<string> => {
-    const { data } = await sysgrafix.delete(`/estoque/categorias/${categoriaId}`);
+    const { data } = await sysgrafix.delete(`/estoque/categorias/${categoriaId}`, { carregamento: "Excluindo a categoria…" });
 
     return data?.message ?? "Categoria excluída.";
   },
@@ -57,14 +57,14 @@ const EstoqueService = {
   atributos: async (): Promise<Atributo[]> => lista<Atributo>(await sysgrafix.get("/estoque/atributos")),
 
   salvarAtributo: async (atributo: Partial<Atributo> & { nome: string }) =>
-    primeiro<string>(await sysgrafix.post("/estoque/atributos", atributo)),
+    primeiro<string>(await sysgrafix.post("/estoque/atributos", atributo, { carregamento: "Salvando o atributo…" })),
 
-  excluirAtributo: async (id: string) => { await sysgrafix.delete(`/estoque/atributos/${id}`); },
+  excluirAtributo: async (id: string) => { await sysgrafix.delete(`/estoque/atributos/${id}`, { carregamento: "Excluindo o atributo…" }); },
 
   salvarValor: async (atributoId: string, valor: Partial<AtributoValor> & { valor: string }) =>
-    primeiro<string>(await sysgrafix.post(`/estoque/atributos/${atributoId}/valores`, valor)),
+    primeiro<string>(await sysgrafix.post(`/estoque/atributos/${atributoId}/valores`, valor, { carregamento: "Salvando o valor…" })),
 
-  excluirValor: async (valorId: string) => { await sysgrafix.delete(`/estoque/valores/${valorId}`); },
+  excluirValor: async (valorId: string) => { await sysgrafix.delete(`/estoque/valores/${valorId}`, { carregamento: "Excluindo o valor…" }); },
 
   /* ── Variações ────────────────────────────────────────────────────────── */
 
@@ -72,7 +72,7 @@ const EstoqueService = {
     lista<Variacao>(await sysgrafix.get(`/estoque/produtos/${produtoId}/variacoes`)),
 
   salvarVariacao: async (produtoId: string, variacao: VariacaoInput) =>
-    primeiro<string>(await sysgrafix.post(`/estoque/produtos/${produtoId}/variacoes`, variacao)),
+    primeiro<string>(await sysgrafix.post(`/estoque/produtos/${produtoId}/variacoes`, variacao, { carregamento: "Salvando a variação…" })),
 
   /**
    * Devolve a frase do servidor.
@@ -83,7 +83,7 @@ const EstoqueService = {
    * também. Mesmo raciocínio de `ProductService.remove`.
    */
   excluirVariacao: async (variacaoId: string): Promise<string> => {
-    const { data } = await sysgrafix.delete(`/estoque/variacoes/${variacaoId}`);
+    const { data } = await sysgrafix.delete(`/estoque/variacoes/${variacaoId}`, { carregamento: "Removendo a variação…" });
 
     return data?.message ?? "Variação excluída.";
   },
@@ -94,9 +94,9 @@ const EstoqueService = {
     lista<Insumo>(await sysgrafix.get(`/estoque/produtos/${produtoId}/insumos`)),
 
   salvarInsumo: async (produtoId: string, insumo: { id?: string; insumoId: string; quantidade: number; variacaoId?: string | null }) =>
-    primeiro<string>(await sysgrafix.post(`/estoque/produtos/${produtoId}/insumos`, insumo)),
+    primeiro<string>(await sysgrafix.post(`/estoque/produtos/${produtoId}/insumos`, insumo, { carregamento: "Salvando o insumo…" })),
 
-  excluirInsumo: async (insumoId: string) => { await sysgrafix.delete(`/estoque/insumos/${insumoId}`); },
+  excluirInsumo: async (insumoId: string) => { await sysgrafix.delete(`/estoque/insumos/${insumoId}`, { carregamento: "Removendo o insumo…" }); },
 
   /* ── Extrato ──────────────────────────────────────────────────────────── */
 
@@ -119,7 +119,7 @@ const EstoqueService = {
     quantidade: number;
     motivo?: string;
     custoUnitario?: number | null;
-  }) => primeiro<Movimento>(await sysgrafix.post("/estoque/movimentar", dados)),
+  }) => primeiro<Movimento>(await sysgrafix.post("/estoque/movimentar", dados, { carregamento: "Lançando no estoque…" })),
 
   /* ── Disponibilidade ──────────────────────────────────────────────────── */
 

@@ -36,7 +36,7 @@ const TourInicial = () => {
         { icon: <ShoppingCart size={22} />, titulo: "Comece pelo PDV", texto: "É onde a venda acontece: escolhe o cliente, lança os produtos e recebe — inclusive em partes.", rota: "/pdv" },
         { icon: <Package size={22} />, titulo: "Cadastre seu estoque", texto: "Produtos, preço de compra e de venda. O que estiver acabando aparece em destaque no início.", rota: "/estoque" },
         { icon: <Users size={22} />, titulo: "Seus clientes", texto: "Cadastro com contato e histórico. Na hora da venda, é só buscar pelo nome.", rota: "/clientes" },
-        { icon: <Wallet size={22} />, titulo: "Acompanhe o dinheiro", texto: "Notas a receber e fluxo de caixa no mesmo lugar — entradas, saídas e o saldo do dia.", rota: "/vendas/caixa" },
+        { icon: <Wallet size={22} />, titulo: "Acompanhe o dinheiro", texto: "Notas a receber e fluxo de caixa no mesmo lugar — entradas, saídas e o saldo do dia.", rota: "/financeiro" },
         { icon: <Bell size={22} />, titulo: "Sua equipe avisa", texto: "Cadastrou produto, fechou venda, deu baixa no caixa: chega no sino, na hora.", rota: undefined },
         { icon: <Palette size={22} />, titulo: "Deixe com a sua cara", texto: "Seis temas e nove cores de destaque em Configurações → Aparência.", rota: "/configuracoes/aparencia" },
       ]
@@ -44,7 +44,7 @@ const TourInicial = () => {
         { icon: <ShoppingCart size={22} />, titulo: "Comece pelo PDV", texto: "É onde você vende: escolhe o cliente, lança os produtos e recebe.", rota: "/pdv" },
         { icon: <Package size={22} />, titulo: "Cuide do estoque", texto: "Cadastre produtos e preços. O que estiver acabando aparece em destaque.", rota: "/estoque" },
         { icon: <Users size={22} />, titulo: "Cadastre o cliente", texto: "Se quem está comprando ainda não tem cadastro, você cria na hora.", rota: "/clientes" },
-        { icon: <Wallet size={22} />, titulo: "Acompanhe o dinheiro", texto: "Notas a receber e o caixa do dia — entradas, saídas e o saldo.", rota: "/vendas/caixa" },
+        { icon: <Wallet size={22} />, titulo: "Acompanhe o dinheiro", texto: "Notas a receber e o caixa do dia — entradas, saídas e o saldo.", rota: "/financeiro" },
         { icon: <Palette size={22} />, titulo: "Deixe com a sua cara", texto: "Seis temas e nove cores de destaque em Configurações → Aparência.", rota: "/configuracoes/aparencia" },
       ];
 

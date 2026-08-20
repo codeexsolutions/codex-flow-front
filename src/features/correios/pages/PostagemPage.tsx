@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Package, ClipboardList, Clock, CheckCircle2, MapPin, FileText, XCircle, Printer, Truck } from "lucide-react";
+import { Package, ClipboardList, CheckCircle2, Clock, MapPin, FileText, XCircle, Printer, Truck } from "lucide-react";
 
 import CorreiosService from "@/features/correios/services/correios.service";
 import type { PostagemType, PrePostagemDto, ServicoCorreio } from "@/features/correios/types/correios.types";
 
-import { TabelaCard, TabelaHead, TabelaRow, TabelaVazia, type Coluna } from "@/shared/ui/DataTable";
+import { TabelaCard, TabelaVazia, ListaCabecalho, ListaLinha, ListaFantasmas } from "@/shared/ui/DataTable";
+import { Kpi } from "@/shared/ui/Painel";
 import { Modal } from "@/shared/ui/Modal";
+import { useAutoPageSize } from "@/shared/hooks/useAutoPageSize";
+import { TabelaPaginacao } from "@/shared/ui/DataTable";
 import { Form, FormSection, FormGrid, FormActions, TextField, SelectBox } from "@/shared/ui/form/FormKit";
 import { useAlert } from "@/shared/ui/Alert";
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
@@ -58,6 +61,9 @@ const PostagemPage = () => {
   const [filtro, setFiltro] = useState<"TODAS" | "PENDENTE" | "POSTADO">("TODAS");
   const [showNova, setShowNova] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [detalheAberto, setDetalheAberto] = useState<PostagemType | null>(null);
+
+  const abrirDetalhe = (p: PostagemType) => setDetalheAberto(p);
 
   const [form, setForm] = useState<NovaPostagemForm>({
     servico: "SEDEX",
@@ -70,6 +76,8 @@ const PostagemPage = () => {
     uf: "",
     peso: "0.5",
   });
+
+  const [page, setPage] = useState(1);
 
   const carregar = async () => {
     setLoading(true);
@@ -98,6 +106,17 @@ const PostagemPage = () => {
     pendentes: postagens.filter((p) => p.status === "PENDENTE").length,
     postadas: postagens.filter((p) => p.status === "POSTADO" || p.status === "EM_TRANSITO" || p.status === "ENTREGUE").length,
   }), [postagens]);
+
+  /* Paginação — mesmo padrão de Clientes e Estoque. */
+  const ROTULOS = ["Objeto", "Serviço", "Valor", "Data", "Status", undefined];
+  const COLS = "grid-cols-[minmax(160px,1.2fr)_120px_110px_110px_120px_100px]";
+  const ALTURA_LINHA = 56;
+  const { bodyRef, perPage } = useAutoPageSize<HTMLDivElement>({ rowHeight: ALTURA_LINHA + 1, offset: 40 });
+  const totalPages = Math.max(1, Math.ceil(postagensFiltradas.length / perPage));
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const handleCriarPostagem = async () => {
     if (!enterprise) return;
@@ -182,109 +201,17 @@ const PostagemPage = () => {
     }
   };
 
-  /* Colunas da tabela — com definição que permite scroll horizontal em mobile */
-  const colunas: Coluna<PostagemType>[] = [
-    {
-      id: "objeto",
-      header: (
-        <span className="flex items-center gap-1.5">
-          <Package size={12} /> Objeto
-        </span>
-      ),
-      cell: (p) => (
-        <span className="block min-w-0">
-          <span className="block font-mono text-[11px] text-accent-soft">{p.codigoObjeto || "—"}</span>
-          <span className="block truncate text-[11px] text-faint">{p.cliente}</span>
-        </span>
-      ),
-    },
-    {
-      id: "servico",
-      header: "Serviço",
-      cell: (p) => <ServicoBadge servico={p.servico} />,
-    },
-    {
-      id: "valor",
-      header: "Valor",
-      align: "right",
-      cell: (p) => <span className="nums text-ink">{money(p.valorFrete)}</span>,
-    },
-    {
-      id: "data",
-      header: "Data",
-      align: "right",
-      cell: (p) => <span className="nums text-mist text-[12px]">{brDate(p.dataPostagem)}</span>,
-    },
-    {
-      id: "status",
-      header: "Status",
-      align: "right",
-      cell: (p) => <StatusBadge status={p.status} />,
-    },
-    {
-      id: "acoes",
-      header: "",
-      align: "right",
-      cell: (p) => (
-        <span className="flex items-center justify-end gap-1">
-          {p.status === "PENDENTE" && (
-            <>
-              <button onClick={() => handleEmitirDAE(p.id)} title="Emitir DAE" className="focus-ring rounded-lg bg-fg/[0.05] p-1.5 text-faint transition-colors hover:bg-success/20 hover:text-success">
-                <FileText size={14} />
-              </button>
-              <button onClick={() => handleCancelar(p.id)} title="Cancelar" className="focus-ring rounded-lg bg-fg/[0.05] p-1.5 text-faint transition-colors hover:bg-danger/20 hover:text-danger">
-                <XCircle size={14} />
-              </button>
-            </>
-          )}
-          {p.etiqueta && (
-            <button
-              onClick={() => window.open(`/api/correios/postagens/${p.id}/etiqueta`, "_blank")}
-              title="Imprimir etiqueta"
-              className="focus-ring rounded-lg bg-fg/[0.05] p-1.5 text-faint transition-colors hover:bg-accent/20 hover:text-accent-soft"
-            >
-              <Printer size={14} />
-            </button>
-          )}
-        </span>
-      ),
-    },
-  ];
-
-  /* Grid responsivo: em mobile vira overflow-x-auto, em desktop mostra tudo */
-  const COLS = "grid-cols-[1fr_100px_110px_110px_120px_110px]";
+  /* A tabela desta tela usa `ListaCabecalho`/`ListaLinha` (altura fixa,
+     paginação sem rolagem). O array `Coluna[]` do outro formato ficou aqui
+     órfão de um refactor anterior e foi removido. */
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Resumo em cards */}
+      {/* KPIs no topo — o mesmo padrão do Stock e Funcionarios. */}
       <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="card-interactive glass-sheen flex items-center gap-3 p-3.5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset bg-accent/[0.15] text-accent-soft ring-accent/20">
-            <Package size={17} />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-[11px] text-faint">Total de postagens</p>
-            <p className="nums truncate text-[15px] text-ink">{resumo.total}</p>
-          </div>
-        </div>
-        <div className="card-interactive glass-sheen flex items-center gap-3 p-3.5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset bg-warning/15 text-warning ring-warning/20">
-            <Clock size={17} />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-[11px] text-faint">Pendentes</p>
-            <p className="nums truncate text-[15px] text-ink">{resumo.pendentes}</p>
-          </div>
-        </div>
-        <div className="card-interactive glass-sheen flex items-center gap-3 p-3.5">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset bg-success/15 text-success ring-success/20">
-            <CheckCircle2 size={17} />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-[11px] text-faint">Postadas</p>
-            <p className="nums truncate text-[15px] text-ink">{resumo.postadas}</p>
-          </div>
-        </div>
+        <Kpi icon={<Package size={17} />} tone="accent" label="Total de postagens" value={String(resumo.total)} />
+        <Kpi icon={<Clock size={17} />} tone="warning" label="Pendentes" value={String(resumo.pendentes)} />
+        <Kpi icon={<CheckCircle2 size={17} />} tone="success" label="Postadas" value={String(resumo.postadas)} />
       </div>
 
       {/* Tabela */}
@@ -295,6 +222,18 @@ const PostagemPage = () => {
         countLabel={postagensFiltradas.length === 1 ? "postagem" : "postagens"}
         onAdd={() => setShowNova(true)}
         addLabel="Nova postagem"
+        bodyRef={bodyRef}
+        footer={
+          totalPages > 1 && (
+            <TabelaPaginacao
+              pagina={page}
+              totalPaginas={totalPages}
+              onPagina={setPage}
+              resumo={`${postagensFiltradas.length} ${postagensFiltradas.length === 1 ? "postagem" : "postagens"}`}
+            />
+          )
+        }
+        pagina={{ label: "Postagens", icon: <ClipboardList size={13} /> }}
         filters={
           <div className="flex items-center gap-1 rounded-lg border border-fg/[0.07] bg-fg/[0.03] p-1">
             {([["TODAS", "Todas"], ["PENDENTE", "Pendentes"], ["POSTADO", "Postadas"]] as const).map(([id, label]) => (
@@ -310,14 +249,75 @@ const PostagemPage = () => {
         ) : postagensFiltradas.length === 0 ? (
           <TabelaVazia icon={<Package size={20} />} title="Nenhuma postagem encontrada" description="Solicite uma pré-postagem para gerar etiqueta e DAE." />
         ) : (
-          <div className="overflow-x-auto">
-            <div className="min-w-[700px]">
-              <TabelaHead colunas={colunas} cols={COLS} />
-              {postagensFiltradas.map((p) => (
-                <TabelaRow key={p.id} colunas={colunas} cols={COLS} row={p} />
+          <>
+            {/* Cabeçalho — desktop */}
+            <ListaCabecalho cols={COLS}>
+              {ROTULOS.map((r, i) => (
+                <p key={r ?? `vazio-${i}`} className={i >= 2 ? "text-right" : undefined}>{r}</p>
               ))}
-            </div>
-          </div>
+            </ListaCabecalho>
+
+            {/* Linhas clicáveis — navegam para o detalhe da postagem. */}
+            {postagensFiltradas.slice((page - 1) * perPage, page * perPage).map((p) => (
+              <ListaLinha
+                key={p.id}
+                cols={COLS}
+                altura={ALTURA_LINHA}
+                rotulos={ROTULOS}
+                ariaLabel={`Abrir postagem ${p.codigoObjeto || p.id}`}
+                onClick={() => abrirDetalhe(p)}
+                destaque={p.status === "PENDENTE" ? "warning" : undefined}
+                acoes={
+                  <span className="flex items-center gap-1">
+                    {p.status === "PENDENTE" && (
+                      <>
+                        <button onClick={() => handleEmitirDAE(p.id)} title="Emitir DAE" className="focus-ring rounded-lg bg-fg/[0.05] p-1.5 text-faint transition-colors hover:bg-success/20 hover:text-success">
+                          <FileText size={14} />
+                        </button>
+                        <button onClick={() => handleCancelar(p.id)} title="Cancelar" className="focus-ring rounded-lg bg-fg/[0.05] p-1.5 text-faint transition-colors hover:bg-danger/20 hover:text-danger">
+                          <XCircle size={14} />
+                        </button>
+                      </>
+                    )}
+                    {p.etiqueta && (
+                      <button
+                        onClick={() => window.open(`/api/correios/postagens/${p.id}/etiqueta`, "_blank")}
+                        title="Imprimir etiqueta"
+                        className="focus-ring rounded-lg bg-fg/[0.05] p-1.5 text-faint transition-colors hover:bg-accent/20 hover:text-accent-soft"
+                      >
+                        <Printer size={14} />
+                      </button>
+                    )}
+                  </span>
+                }
+              >
+                {/* Objeto */}
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/[0.12] text-accent-soft ring-1 ring-inset">
+                    <Package size={13} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block font-mono text-[11px] text-accent-soft">{p.codigoObjeto || "—"}</span>
+                    <span className="block truncate text-[11px] text-faint">{p.cliente}</span>
+                  </span>
+                </span>
+
+                {/* Serviço */}
+                <span><ServicoBadge servico={p.servico} /></span>
+
+                {/* Valor */}
+                <span className="nums text-right text-[12px] text-ink">{money(p.valorFrete)}</span>
+
+                {/* Data */}
+                <span className="nums text-right text-[12px] text-mist">{brDate(p.dataPostagem)}</span>
+
+                {/* Status */}
+                <span className="flex justify-end"><StatusBadge status={p.status} /></span>
+              </ListaLinha>
+            ))}
+
+            <ListaFantasmas quantidade={Math.max(0, perPage - postagensFiltradas.length)} altura={ALTURA_LINHA} />
+          </>
         )}
       </TabelaCard>
 
@@ -385,6 +385,78 @@ const PostagemPage = () => {
 
           <FormActions onCancel={() => setShowNova(false)} saving={salvando} submitText="Solicitar postagem" />
         </Form>
+      </Modal>
+
+      {/* Detalhe da postagem — abre ao clicar na linha. */}
+      <Modal
+        open={!!detalheAberto}
+        onClose={() => setDetalheAberto(null)}
+        title="Detalhes da postagem"
+        subtitle={detalheAberto?.codigoObjeto || detalheAberto?.id}
+        size="md"
+      >
+        {detalheAberto && (
+          <div className="flex flex-col gap-4 text-[13px]">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
+              <dt className="text-[10px] uppercase tracking-wider text-faint">Código do objeto</dt>
+              <dd className="font-mono text-ink">{detalheAberto.codigoObjeto || "—"}</dd>
+
+              <dt className="text-[10px] uppercase tracking-wider text-faint">Cliente</dt>
+              <dd className="text-ink">{detalheAberto.cliente || "—"}</dd>
+
+              <dt className="text-[10px] uppercase tracking-wider text-faint">Serviço</dt>
+              <dd><ServicoBadge servico={detalheAberto.servico} /></dd>
+
+              <dt className="text-[10px] uppercase tracking-wider text-faint">Valor</dt>
+              <dd className="nums text-ink">{money(detalheAberto.valorFrete)}</dd>
+
+              <dt className="text-[10px] uppercase tracking-wider text-faint">Data de postagem</dt>
+              <dd className="nums text-mist">{brDate(detalheAberto.dataPostagem)}</dd>
+
+              <dt className="text-[10px] uppercase tracking-wider text-faint">Situação</dt>
+              <dd><StatusBadge status={detalheAberto.status} /></dd>
+
+              {detalheAberto.etiqueta && (
+                <>
+                  <dt className="text-[10px] uppercase tracking-wider text-faint">Etiqueta</dt>
+                  <dd className="truncate"><a href={`/api/correios/postagens/${detalheAberto.id}/etiqueta`} target="_blank" rel="noopener noreferrer" className="text-accent-soft hover:underline">Ver etiqueta</a></dd>
+                </>
+              )}
+            </dl>
+
+            <div className="flex justify-end gap-2 border-t border-fg/[0.06] pt-4">
+              {detalheAberto.status === "PENDENTE" && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleEmitirDAE(detalheAberto.id);
+                    }}
+                    className="focus-ring flex items-center gap-1.5 rounded-lg border border-success/30 bg-success/[0.12] px-3 py-2 text-[12px] text-success transition-colors hover:bg-success/20"
+                  >
+                    <FileText size={13} /> Emitir DAE
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => void handleCancelar(detalheAberto.id)}
+                    className="focus-ring flex items-center gap-1.5 rounded-lg border border-danger/30 bg-danger/[0.12] px-3 py-2 text-[12px] text-danger transition-colors hover:bg-danger/20"
+                  >
+                    <XCircle size={13} /> Cancelar postagem
+                  </button>
+                </>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setDetalheAberto(null)}
+                className="focus-ring rounded-lg border border-fg/[0.1] px-3 py-2 text-[12px] text-mist transition-colors hover:text-ink"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

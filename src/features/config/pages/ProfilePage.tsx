@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { User, Mail, Phone, Briefcase, Camera, Trash2, Lock, Shield, CalendarDays, Loader2 } from "lucide-react";
+import { User, Mail, Phone, Briefcase, Camera, Trash2, Lock, Shield, CalendarDays, Loader2, RefreshCw } from "lucide-react";
 import useAuth from "@/features/auth/store/auth.store";
 import { useAlert } from "@/shared/ui/Alert";
 import Field from "@/shared/ui/inputs/Field";
@@ -11,6 +11,7 @@ import sysgrafix from "@/shared/api/sysgrafix";
 import { SettingsCard, SaveRow, PasswordField, useSaver } from "@/features/config/components/ConfigUI";
 import { profileSchema, type ProfileData, type ProfileInput, passwordSchema, type PasswordData } from "@/features/config/schema/profile.schema";
 import ProfileService from "@/features/config/services/profile.service";
+import { BUILD_ID, forcarAtualizacao } from "@/shared/pwa/versao";
 
 /*
  * A foto vai para o STORAGE, não para dentro do JSON.
@@ -29,6 +30,14 @@ import ProfileService from "@/features/config/services/profile.service";
 const MAX_PHOTO = 10 * 1024 * 1024;
 
 const ProfilePage = () => {
+  /* Busca a versão mais recente na marra — ver `forcarAtualizacao`. */
+  const [atualizando, setAtualizando] = useState(false);
+
+  const atualizarAgora = () => {
+    setAtualizando(true);
+    void forcarAtualizacao();
+  };
+
   const { user } = useAuth();
   const atualizarPerfil = useAuth((s) => s.atualizarPerfil);
   const alert = useAlert();
@@ -261,13 +270,48 @@ const ProfilePage = () => {
           </SettingsCard>
 
           <SettingsCard icon={<CalendarDays className="h-4 w-4" />} title="Conta" desc="Informações da sua conta no CodeEx Flow">
-            <div className="flex items-center gap-3 rounded-xl border border-success/20 bg-success/[0.08] px-4 py-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-success/25">
-                <Shield size={15} className="text-success" />
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3 rounded-xl border border-success/20 bg-success/[0.08] px-4 py-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-success/25">
+                  <Shield size={15} className="text-success" />
+                </div>
+                <div>
+                  <p className="text-sm text-ink">Conta ativa</p>
+                  <p className="text-[11px] text-faint">Membro desde {new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-ink">Conta ativa</p>
-                <p className="text-[11px] text-faint">Membro desde {new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</p>
+
+              {/*
+               * A versão do sistema, e o botão que força a atualização.
+               *
+               * Morava no rodapé da sidebar, onde era a única linha do menu que
+               * não levava a lugar nenhum — e o menu é sobre para onde ir, não
+               * sobre qual build está instalada. Aqui ela fica junto do resto
+               * do que é sobre a INSTALAÇÃO e não sobre o trabalho.
+               *
+               * O botão continua existindo porque é a única saída para o caso
+               * real: o service worker que travou numa versão antiga e serve
+               * telas velhas sem avisar. Ele limpa o cache e recarrega — ver
+               * `forcarAtualizacao`.
+               */}
+              <div className="flex items-center gap-3 rounded-xl border border-fg/[0.08] bg-fg/[0.02] px-4 py-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-fg/[0.05] text-faint">
+                  <RefreshCw size={15} className={atualizando ? "animate-spin" : ""} />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-ink">Versão do sistema</p>
+                  <p className="truncate text-[11px] text-faint">{BUILD_ID}</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={atualizarAgora}
+                  disabled={atualizando}
+                  className="focus-ring shrink-0 cursor-pointer rounded-lg border border-fg/[0.1] px-3 py-1.5 text-[12px] text-mist transition-colors hover:text-ink disabled:opacity-60"
+                >
+                  {atualizando ? "Buscando…" : "Buscar atualização"}
+                </button>
               </div>
             </div>
           </SettingsCard>

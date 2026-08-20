@@ -20,8 +20,26 @@ import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { PageScreen } from "@/shared/ui/PageShell";
 import Select from "@/shared/ui/Select";
 import BuscaSugestoes from "@/shared/ui/BuscaSugestoes";
-import { ListaAcao, ListaCabecalho, ListaFantasmas, ListaLinha, TabelaPaginacao } from "@/shared/ui/DataTable";
+import { BarraFiltros, ListaAcao, ListaCabecalho, ListaFantasmas, ListaLinha, TabelaPaginacao } from "@/shared/ui/DataTable";
 import { aniversarioBr, diaAniversario, ehAniversarianteDoMes, ehAniversarioHoje } from "@/features/clientes/utils/aniversario";
+
+/** Cartão de número do topo — o mesmo visual do StockPage. */
+const Kpi = ({ icon, label, value, hint, tom }: { icon: React.ReactNode; label: string; value: string; hint?: string; tom?: "danger" | "warning" }) => (
+  <div className="card glass-sheen flex items-center gap-3 rounded-lg px-4 py-3.5">
+    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset ${
+      tom === "danger" ? "bg-danger/[0.14] text-danger ring-danger/20"
+        : tom === "warning" ? "bg-warning/[0.14] text-warning ring-warning/20"
+        : "bg-accent/[0.15] text-accent-soft ring-accent/20"
+    }`}>
+      {icon}
+    </span>
+    <div className="min-w-0">
+      <p className="truncate text-[10.5px] uppercase tracking-[0.1em] text-faint">{label}</p>
+      <p className="truncate text-[17px] leading-[19px] tabular-nums tracking-tight text-ink">{value}</p>
+      {hint && <p className="truncate text-[10px] leading-[13px] text-faint">{hint}</p>}
+    </div>
+  </div>
+);
 
 type Filtro = "todos" | "ativo" | "inativo" | "incompletos";
 
@@ -391,6 +409,40 @@ const Clientes = () => {
         </div>
       )}
 
+      {/* KPIs do topo — o que a base responde de cara. */}
+      {/*
+       * O percentual de ativos mostra a saúde da base; o de incompletos mostra
+       * o que falta melhorar. Ambos saem do filtro aplicado, então refletem o
+       * recorte que a pessoa está olhando — não o catálogo inteiro.
+       */}
+      <section className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
+        <Kpi
+          icon={<Users size={16} />}
+          label="Clientes"
+          value={formatNumber(filtered.length)}
+          hint={filtered.length === 1 ? "cliente" : "clientes"}
+        />
+        <Kpi
+          icon={<Users size={16} />}
+          label="Ativos"
+          value={formatNumber(filtered.filter((c) => c.status === eStatus.ATIVO).length)}
+          hint={pctAtivos > 0 ? `${pctAtivos}% da base` : undefined}
+        />
+        <Kpi
+          icon={<Cake size={16} />}
+          label="Aniversários"
+          value={formatNumber(aniversariantes.length)}
+          hint="Este mês"
+        />
+        <Kpi
+          icon={<ClipboardList size={16} />}
+          label="Fichas incompletas"
+          value={formatNumber(ficha.media > 0 ? customers.filter((c) => completudeCliente(c) < 100).length : 0)}
+          hint={ficha.media > 0 ? `${ficha.media}% em média` : undefined}
+          tom={customers.filter((c) => completudeCliente(c) < 100).length > 0 ? "warning" : undefined}
+        />
+      </section>
+
       {/*
        * Duas colunas: a lista à esquerda, os painéis à direita.
        *
@@ -413,91 +465,89 @@ const Clientes = () => {
               </div>
             </div>
 
-            {/*
-             * Busca e filtros num grupo só, na ponta oposta ao título.
-             *
-             * As quatro coisas fazem o mesmo trabalho — restringir a lista — e
-             * separá-las pelas duas pontas obrigava o olho a atravessar a barra
-             * para montar um filtro só. É o mesmo arranjo do estoque e da
-             * equipe.
-             *
-             * A fileira de botões de situação virou um seletor: com quatro
-             * opções ela já ocupava metade da barra, e não sobrava largura para
-             * os filtros de cidade e aniversário. Fechado, um seletor ocupa o
-             * espaço de uma opção e mostra a contagem de todas.
-             */}
-            {/* No celular a fileira ROLA na horizontal em vez de quebrar em
-                quatro linhas — ver a mesma decisão no Estoque. */}
-            <div className="-mx-4 flex max-w-full items-center gap-2 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:justify-end sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
-              {/*
-               * A sugestão ABRE a ficha; ela não filtra a tabela.
-               *
-               * Filtrar já é o que o próprio texto faz enquanto se digita — a
-               * tabela reage sozinha. O que a lista acrescenta é o atalho para
-               * quem já sabe de quem está atrás e não quer procurar a linha na
-               * página certa depois.
-               */}
-              <BuscaSugestoes
-                valor={search}
-                onValor={setSearch}
-                sugestoes={sugestoes}
-                onEscolher={(s) => s.id && navigate(`/clientes/${s.id}`)}
-                placeholder="Buscar cliente…"
-                aria-label="Buscar cliente por nome, telefone, documento, e-mail ou cidade"
-                className="w-[212px] shrink-0"
-              />
-
-              <Select
-                valor={filtro}
-                onChange={(v) => setFiltro(v as Filtro)}
-                opcoes={opcoesFiltro}
-                icone={<ListFilter size={14} />}
-                aria-label="Filtrar por situação do cliente"
-                className="w-[150px] shrink-0"
-              />
-
-              {/* Cidade só existe quando há o que escolher: um seletor com uma
-                  opção só ocupa espaço para não decidir nada. */}
-              {locais.length > 0 && (
-                <Select
-                  valor={local}
-                  onChange={setLocal}
-                  opcoes={opcoesLocal}
-                  icone={<MapPin size={14} />}
-                  aria-label="Filtrar por cidade"
-                  className="w-[168px] shrink-0"
-                />
-              )}
-
-              <Select
-                valor={aniversario}
-                onChange={(v) => setAniversario(v as Aniversario)}
-                opcoes={opcoesAniversario}
-                icone={<Cake size={14} />}
-                aria-label="Filtrar por aniversário"
-                className="w-[178px] shrink-0"
-              />
-
-              {hasFilters && (
-                <button
-                  type="button"
-                  onClick={limpar}
-                  className="focus-ring h-[38px] shrink-0 cursor-pointer whitespace-nowrap rounded-xl px-2.5 text-[12px] text-faint transition-colors hover:text-ink"
-                >
-                  Limpar
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setShowCreate(true)}
-                className="focus-ring inline-flex h-[38px] shrink-0 cursor-pointer items-center gap-1.5 rounded-xl bg-gradient-to-br from-accent-soft to-accent px-3 text-[12.5px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98]"
-              >
-                <UserPlus className="h-3.5 w-3.5" />
-                Novo cliente
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowCreate(true)}
+              className="focus-ring inline-flex h-[38px] shrink-0 cursor-pointer items-center gap-1.5 rounded-xl bg-gradient-to-br from-accent-soft to-accent px-3 text-[12.5px] text-white shadow-glow transition-all hover:brightness-110 active:scale-[0.98]"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              Novo cliente
+            </button>
           </div>
+
+          {/*
+           * Busca e filtros descem para a barra colada na tabela.
+           *
+           * As quatro coisas fazem o mesmo trabalho — restringir a lista — e
+           * ficam na ponta direita, alinhadas com o botão de criar do
+           * cabeçalho. É o mesmo arranjo do estoque, da equipe e do PDV; a
+           * barra é a mesma peça (ver `BarraFiltros`).
+           *
+           * A fileira de botões de situação virou um seletor: com quatro
+           * opções ela já ocupava metade da barra, e não sobrava largura para
+           * os filtros de cidade e aniversário. Fechado, um seletor ocupa o
+           * espaço de uma opção e mostra a contagem de todas.
+           */}
+          <BarraFiltros pagina={{ label: "Clientes", icon: <Users className="h-3.5 w-3.5" /> }}>
+          {/*
+           * A sugestão ABRE a ficha; ela não filtra a tabela.
+           *
+           * Filtrar já é o que o próprio texto faz enquanto se digita — a
+           * tabela reage sozinha. O que a lista acrescenta é o atalho para
+           * quem já sabe de quem está atrás e não quer procurar a linha na
+           * página certa depois.
+           */}
+          <BuscaSugestoes
+            valor={search}
+            onValor={setSearch}
+            sugestoes={sugestoes}
+            onEscolher={(s) => s.id && navigate(`/clientes/${s.id}`)}
+            placeholder="Buscar cliente…"
+            aria-label="Buscar cliente por nome, telefone, documento, e-mail ou cidade"
+            className="w-[212px] shrink-0"
+          />
+
+          <Select
+            valor={filtro}
+            onChange={(v) => setFiltro(v as Filtro)}
+            opcoes={opcoesFiltro}
+            icone={<ListFilter size={14} />}
+            aria-label="Filtrar por situação do cliente"
+            className="w-[150px] shrink-0"
+          />
+
+          {/* Cidade só existe quando há o que escolher: um seletor com uma
+              opção só ocupa espaço para não decidir nada. */}
+          {locais.length > 0 && (
+            <Select
+              valor={local}
+              onChange={setLocal}
+              opcoes={opcoesLocal}
+              icone={<MapPin size={14} />}
+              aria-label="Filtrar por cidade"
+              className="w-[168px] shrink-0"
+            />
+          )}
+
+          <Select
+            valor={aniversario}
+            onChange={(v) => setAniversario(v as Aniversario)}
+            opcoes={opcoesAniversario}
+            icone={<Cake size={14} />}
+            aria-label="Filtrar por aniversário"
+            className="w-[178px] shrink-0"
+          />
+
+          {hasFilters && (
+            <button
+              type="button"
+              onClick={limpar}
+              className="focus-ring h-[38px] shrink-0 cursor-pointer whitespace-nowrap rounded-xl px-2.5 text-[12px] text-faint transition-colors hover:text-ink"
+            >
+              Limpar
+            </button>
+          )}
+          </BarraFiltros>
 
           {/* Colunas + linhas rolam juntas na horizontal quando a tela é estreita. */}
           {/* Largura mínima e rolagem horizontal são do DESKTOP: no celular a

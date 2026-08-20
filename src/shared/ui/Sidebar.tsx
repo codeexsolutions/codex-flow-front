@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
-import { Package, Users, DollarSign, Settings, LogOut, ShoppingCart, BarChart3, LayoutDashboard, Truck, UserCog, Wallet, LifeBuoy, Lock, MessageCircle, Table2, Building2, Headset, RefreshCw } from "lucide-react";
+import { Package, Users, DollarSign, Settings, LogOut, ShoppingCart, BarChart3, LayoutDashboard, Truck, UserCog, Wallet, LifeBuoy, Lock, MessageCircle, Table2 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import useAuth from "@/features/auth/store/auth.store";
@@ -12,77 +12,69 @@ import { getInitials } from "@/shared/utils/format";
 import { tocarNavegacao } from "@/shared/session/somSessao";
 import useEquipeStore, { planoTemEquipe } from "@/features/funcionarios/store/equipe.store";
 import usePlano from "@/shared/plano/plano.store";
-import { BUILD_ID, forcarAtualizacao } from "@/shared/pwa/versao";
 import BotaoInstalar from "@/shared/pwa/BotaoInstalar";
 
-type AbaId = "gerenciamento" | "atendimento" | "logistica";
+/**
+ * O menu do sistema — uma lista só, sem painel que troca.
+ *
+ * ---------------------------------------------------------------------------
+ * O que saiu daqui: as abas
+ * ---------------------------------------------------------------------------
+ * A sidebar tinha três abas (Gerenciamento, Logística, Atendimento) e um
+ * painel que trocava de conteúdo conforme a escolhida. Custava caro e resolvia
+ * pouco:
+ *
+ *   • METADE DO MENU FICAVA ESCONDIDA. Ir do estoque para o financeiro eram
+ *     dois cliques — um para trocar de aba, outro no item —, e o primeiro
+ *     exigia lembrar em qual aba o destino morava. Quem não lembrava
+ *     procurava nas três.
+ *   • O SELETOR CUSTAVA O ESPAÇO DE SEIS ITENS. Três colunas com ícone em
+ *     cima do rótulo, mais a borda e o respiro, ocupavam ~86 px para exibir
+ *     zero destinos.
+ *   • DUAS DELAS TINHAM UM ITEM ÚTIL CADA. Logística era Estoque + Correios
+ *     ("em breve"); Atendimento era Clientes (repetido de Gerenciamento) +
+ *     WhatsApp (sem tela). Uma aba para um item é uma gaveta com uma folha
+ *     dentro.
+ *
+ * O sistema inteiro são dez destinos. Dez cabem numa lista, e uma lista
+ * responde "onde está X?" sem obrigar a abrir gaveta.
+ *
+ * ---------------------------------------------------------------------------
+ * A faixa do topo continua — e agora ela NAVEGA
+ * ---------------------------------------------------------------------------
+ * O lugar de destaque no alto do menu era bom demais para um interruptor. Ele
+ * continua ali, com o mesmo peso visual, mas os três botões agora são
+ * DESTINOS: Início, PDV e Planilhas — o que se abre dez vezes por dia. Antes
+ * eles eram três linhas na lista, do mesmo tamanho de "Relatórios", que se
+ * abre uma vez por mês.
+ *
+ * ---------------------------------------------------------------------------
+ * Os grupos: ERP, CRM e TMS
+ * ---------------------------------------------------------------------------
+ * O resto da lista é separado pelos três domínios do produto. A versão
+ * anterior usava nomes de área ("Cadastros", "Dinheiro", "Loja"), e são seis
+ * grupos de um ou dois itens: mais cabeçalho do que conteúdo. Três domínios
+ * agrupam os mesmos dez destinos em três cabeçalhos.
+ */
+
+/* -------------------------------------------------------------------------- */
 
 /**
- * Atendimento está desligado.
+ * Os três atalhos do alto.
  *
- * A aba fica visível e apagada, não sumida: quem já a conhece precisa ver que
- * ela continua existindo e está fora do ar — uma aba que desaparece parece
- * defeito do menu, e a pessoa procura o que não vai achar. Com a Planilhas
- * promovida para "Meu dia", o que sobra atrás dela é Clientes (que também está
- * em Gerenciamento) e o WhatsApp, que ainda não tem tela.
- *
- * Para religar: `true` aqui, e devolver `["/planilhas", "atendimento"]` ao
- * `ABA_DA_ROTA` se a planilha voltar para dentro da aba.
+ * `rota` é o que `navigate` recebe — `""` é a raiz, e é assim que o `isActive`
+ * distingue "/" de "qualquer coisa que começa com /".
  */
-const ATENDIMENTO_ATIVO = false;
-
-/**
- * As três áreas do sistema.
- *
- * "Logística" é o caminho da mercadoria: o que entra na loja (estoque) e o
- * que sai dela (entregas). Os dois viviam em Gerenciamento, misturados com
- * cadastro de gente e com dinheiro — três assuntos numa aba só, e quem ia
- * postar um pacote passava por "Relatórios" no caminho.
- *
- * Os nomes são todos de área, não de tela: é o que faz as três serem lidas
- * como o mesmo tipo de coisa e não como três atalhos soltos.
- */
-const ABAS: { id: AbaId; titulo: string; icone: typeof Users; ativa: boolean }[] = [
-  { id: "gerenciamento", titulo: "Gerenciamento", icone: Building2, ativa: true },
-  { id: "logistica", titulo: "Logística", icone: Truck, ativa: true },
-  { id: "atendimento", titulo: "Atendimento", icone: Headset, ativa: ATENDIMENTO_ATIVO },
+const ATALHOS: { rota: string; label: string; icone: typeof LayoutDashboard; recurso?: string }[] = [
+  { rota: "", label: "Início", icone: LayoutDashboard },
+  /* "PDV" fica: não é jargão de software, é o nome que o lojista já usa, e é
+     como a tela se chama no tour e na barra do celular. */
+  { rota: "pdv", label: "PDV", icone: ShoppingCart },
+  /* Planilha é ferramenta do dia, não de administração: quem acompanha
+     produção a abre na mesma frequência com que abre o PDV. O cadeado vem do
+     plano — entra a partir do Standard, com teto de quantidade. */
+  { rota: "planilhas", label: "Planilhas", icone: Table2, recurso: "planilhas" },
 ];
-
-const EH_ABA = (v: string): v is AbaId => ABAS.some((a) => a.id === v);
-
-/**
- * De que aba cada rota é.
- *
- * Existe para a aba acompanhar a navegação: abrir `/estoque` por link salvo,
- * pelo celular ou pelo botão "voltar" tem de acender "Gerenciamento" sozinho.
- * Sem isto, a pessoa veria a tela do estoque com a aba de Atendimento marcada —
- * e concluiria, com razão, que o menu está quebrado.
- *
- * Rota que não está aqui não troca a aba: é o caso de `/`, `/pdv` e
- * `/configuracoes`, que são de todo mundo, e o de `/clientes`, que aparece de
- * propósito nas duas listas. Trocar a aba ao abrir Clientes moveria o menu
- * sob os olhos de quem clicou — e pelo caminho que a pessoa NÃO usou.
- */
-const ABA_DA_ROTA: [string, AbaId][] = [
-  ["/funcionarios", "gerenciamento"],
-  ["/vendas", "gerenciamento"],
-  ["/relatorios", "gerenciamento"],
-  ["/estoque", "logistica"],
-  ["/correios", "logistica"],
-  /* Planilhas saiu daqui junto com a mudança para "Meu dia": o grupo fica fora
-     das abas, então abrir a planilha não deve mexer em qual delas está aberta. */
-  ["/whatsapp", "atendimento"],
-  ["/pdv/orcamentos", "atendimento"],
-];
-
-/** `/pdv/orcamentos` é de Atendimento e `/pdv` não é de ninguém: o mais
-    específico tem de casar primeiro, por isso a lista é varrida por tamanho. */
-const abaDaRota = (pathname: string): AbaId | null =>
-  [...ABA_DA_ROTA]
-    .sort((a, b) => b[0].length - a[0].length)
-    .find(([rota]) => pathname === rota || pathname.startsWith(`${rota}/`))?.[1] ?? null;
-
-const CHAVE_ABA = "cf:sidebar-aba";
 
 const Sidebar = () => {
   const { pathname } = useLocation();
@@ -99,67 +91,6 @@ const Sidebar = () => {
 
   /** Módulo que o plano não cobre continua no menu, com cadeado. */
   const temRecurso = usePlano((s) => s.recurso);
-
-  /*
-   * A aba aberta.
-   *
-   * Começa pela rota atual (recarregar em `/estoque` tem de abrir na loja) e,
-   * quando a rota não é de nenhuma das duas, pela última escolha guardada.
-   * `localStorage` pode falhar em navegação privada — daí o `try`, porque
-   * ficar sem sidebar por causa de uma preferência cosmética não se paga.
-   */
-  const [aba, setAba] = useState<AbaId>(() => {
-    /* Aba desligada não pode ser aberta nem pela rota nem pela preferência
-       guardada — quem estava em Atendimento na sessão passada voltaria para um
-       painel que o clique não alcança mais. */
-    const permitida = (id: AbaId | null): AbaId | null =>
-      id && (id !== "atendimento" || ATENDIMENTO_ATIVO) ? id : null;
-
-    const daRota = permitida(abaDaRota(pathname));
-    if (daRota) return daRota;
-
-    try {
-      const salva = localStorage.getItem(CHAVE_ABA);
-      if (salva && EH_ABA(salva)) return permitida(salva) ?? "gerenciamento";
-    } catch {
-      /* sem preferência salva: cai no padrão */
-    }
-
-    return "gerenciamento";
-  });
-
-  /*
-   * A aba acompanha a NAVEGAÇÃO — e só ela.
-   *
-   * A primeira versão deste efeito dependia de `[pathname, aba]` e prendia a
-   * pessoa: estando em `/estoque` e clicando na outra aba, o `setAba` do
-   * clique disparava o próprio efeito, que via `/estoque` pertencer a
-   * Gerenciamento e devolvia a aba na hora. O menu era introcável em
-   * qualquer tela — só obedecia no PDV, que não pertence a aba nenhuma, e
-   * por isso o defeito passava por manha do PDV.
-   *
-   * Guardar a última rota separa as duas causas: trocar de tela move a aba,
-   * trocar de aba não move nada. Olhar a outra aba sem sair da tela em que se
-   * está é justamente o que se faz para achar o próximo destino.
-   */
-  const ultimaRota = useRef(pathname);
-
-  useEffect(() => {
-    if (ultimaRota.current === pathname) return;
-
-    ultimaRota.current = pathname;
-
-    const daRota = abaDaRota(pathname);
-    if (daRota && (daRota !== "atendimento" || ATENDIMENTO_ATIVO)) setAba(daRota);
-  }, [pathname]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(CHAVE_ABA, aba);
-    } catch {
-      /* preferência não guardada — a aba continua funcionando na sessão */
-    }
-  }, [aba]);
 
   /* Só o gestor pergunta: a API recusa para vendedor, e uma chamada que sempre
      falha em toda navegação é ruído no log e na rede. */
@@ -202,14 +133,6 @@ const Sidebar = () => {
     Promise.resolve(logout()).catch(() => {});
   };
 
-  /* Busca a versão mais recente na marra — ver `forcarAtualizacao`. */
-  const [atualizando, setAtualizando] = useState(false);
-
-  const atualizarAgora = () => {
-    setAtualizando(true);
-    void forcarAtualizacao();
-  };
-
   /**
    * `bloqueado` é diferente de `disabled`, mas os dois são inertes.
    *
@@ -231,36 +154,38 @@ const Sidebar = () => {
     if (bloqueado && !disabled) {
       return (
         <div
-          className="mb-1 flex cursor-not-allowed items-center gap-3 rounded-xl px-2.5 py-2 opacity-55"
+          className="flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2 opacity-55"
           title={`${label} não está incluído no seu plano. Veja as opções em Configurações › Faturas.`}
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-fg/[0.04] text-faint">{icon}</span>
-          <span className="flex-1 text-[13.5px] text-mist">{label}</span>
-          <span className="flex items-center gap-1 rounded-full border border-accent/20 bg-accent/[0.08] px-2 py-0.5 text-[9px] uppercase tracking-wider text-accent-soft">
-            <Lock size={9} />
-            Plano
-          </span>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-fg/[0.04] text-faint">{icon}</span>
+          <span className="min-w-0 flex-1 truncate text-[13px] text-mist">{label}</span>
+          <Lock size={10} className="shrink-0 text-accent-soft" />
         </div>
       );
     }
 
     if (disabled) {
       return (
-        <div className="mb-1 flex cursor-not-allowed items-center gap-3 rounded-xl px-2.5 py-2 opacity-45">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-fg/[0.04] text-faint">{icon}</span>
-          <span className="flex-1 text-[13.5px] text-mist">{label}</span>
-          <span className="rounded-full border border-fg/[0.08] bg-fg/[0.03] px-2 py-0.5 text-[9px] uppercase tracking-wider text-faint">Em breve</span>
+        <div className="flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2 opacity-45" title={`${label} está em breve`}>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-fg/[0.04] text-faint">{icon}</span>
+          <span className="min-w-0 flex-1 truncate text-[13px] text-mist">{label}</span>
+          <span className="shrink-0 rounded-full border border-fg/[0.08] bg-fg/[0.03] px-1.5 py-0.5 text-[8.5px] uppercase tracking-wider text-faint">Breve</span>
         </div>
       );
     }
 
     const active = isActive(route);
+
     return (
       <button
         type="button"
         onClick={() => goto(route)}
         aria-current={active ? "page" : undefined}
-        className={`group focus-ring relative mb-1 flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-[13.5px] transition-colors duration-200 ${active ? " text-ink" : "text-mist hover:bg-fg/[0.05] hover:text-ink"}`}
+        className={`group focus-ring relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-[13px] transition-all duration-200 ${
+          active
+            ? "bg-accent/[0.10] text-ink"
+            : "text-mist hover:bg-fg/[0.05] hover:text-ink"
+        }`}
       >
         {/*
          * Sem `layoutId` aqui, de propósito.
@@ -272,12 +197,12 @@ const Sidebar = () => {
          *
          * A troca aqui é rápida e curta — quem clica no menu já está olhando
          * para o item que clicou. Um surgimento firme com o traço lateral
-         * crescendo comunica a mesma coisa, e nunca quebra.
+         * comunica a mesma coisa, e nunca quebra.
          */}
         {active && (
           <motion.span
             aria-hidden
-            className="absolute inset-0 rounded-xl border border-accent/25 bg-gradient-to-r from-accent/[0.22] via-accent/[0.10] to-transparent"
+            className="absolute inset-0 rounded-xl border border-accent/20 bg-gradient-to-r from-accent/[0.18] via-accent/[0.06] to-transparent"
             style={{ boxShadow: "inset 0 1px 0 rgb(var(--glass-highlight) / 0.14)" }}
             initial={reduzir ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -285,60 +210,110 @@ const Sidebar = () => {
           />
         )}
 
-        {active && (
-          <motion.span
-            aria-hidden
-            className="absolute left-0 top-1/2 w-[3px] -translate-y-1/2 rounded-r-full bg-gradient-to-b from-accent-soft to-accent"
-            style={{ boxShadow: "0 0 12px rgb(var(--accent) / calc(0.8 * var(--fx-glow, 1)))" }}
-            /* Só a altura anima: é uma propriedade que não depende de medir o
-               elemento contra a viewport, então a escala do pai não a afeta. */
-            initial={reduzir ? { height: 28 } : { height: 0 }}
-            animate={{ height: 28 }}
-            transition={{ type: "spring", stiffness: 480, damping: 30 }}
-          />
-        )}
-
-        {/* O ícone dá um pulinho ao virar ativo: confirma o clique sem precisar
-            de outro elemento na tela. `scale` num filho é seguro — o que não
-            funciona é medir posição dentro de um pai escalado. */}
-        <motion.span
-          className={`relative flex h-8 w-8 items-center justify-center rounded-lg transition-colors duration-200 ${active ? "bg-accent/25 text-accent-soft" : "bg-fg/[0.04] text-faint group-hover:bg-fg/[0.08] group-hover:text-accent-soft"}`}
-          animate={reduzir ? {} : { scale: active ? 1.06 : 1 }}
-          transition={{ type: "spring", stiffness: 460, damping: 22 }}
+        <span
+          className={`relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all duration-200 ${
+            active
+              ? "bg-accent/25 text-accent-soft ring-1 ring-inset ring-accent/30"
+              : "bg-fg/[0.04] text-faint group-hover:bg-fg/[0.08] group-hover:text-accent-soft"
+          }`}
         >
           {icon}
-        </motion.span>
+        </span>
 
-        <span className="relative flex-1">{label}</span>
+        <span className="relative min-w-0 flex-1 truncate">{label}</span>
       </button>
     );
   };
 
-  const cat = (label: string) => <p className="px-2.5 pb-2 pt-5 text-[10px] uppercase tracking-[0.18em] text-muted first:pt-1">{label}</p>;
+  /**
+   * Cabeçalho de grupo: o nome que se entende, e a sigla ao lado.
+   *
+   * ---------------------------------------------------------------------------
+   * Por que os dois, e não só a sigla
+   * ---------------------------------------------------------------------------
+   * A primeira versão deste menu usava "ERP", "CRM" e "TMS" sozinhos. Elas são
+   * as siglas do nosso mercado, não as palavras de quem vende: ninguém no
+   * balcão pensa "vou abrir o CRM", pensa "vou ver o cliente". Três siglas de
+   * três letras separando dez itens não dizem a ninguém o que há embaixo de
+   * cada uma — e um menu em que os títulos não ajudam é um menu lido item a
+   * item, todas as vezes.
+   *
+   * Só as palavras simples também não bastavam: quem contrata o sistema
+   * conhece as siglas, e a mesma tela é o que ele compara com o concorrente.
+   *
+   * Então são os dois, com pesos diferentes: a PALAVRA lidera (é ela que
+   * responde "o que tem aqui?") e a SIGLA vem numa etiqueta ao lado, pequena,
+   * para quem a procura. A frase inteira fica no `title`, para o hover de quem
+   * quer saber mais sem ocupar linha nenhuma da sidebar.
+   *
+   * O traço à direita fecha a linha até a borda: sem ele o título flutua no
+   * meio da lista e o menu volta a parecer uma pilha só.
+   */
+
+  /**
+   * Cabeçalho de grupo: o nome que se entende, e a sigla ao lado.
+   *
+   * ---------------------------------------------------------------------------
+   * Por que os dois, e não só a sigla
+   * ---------------------------------------------------------------------------
+   * A primeira versão deste menu usava "ERP", "CRM" e "TMS" sozinhos. Elas são
+   * as siglas do nosso mercado, não as palavras de quem vende: ninguém no
+   * balcão pensa "vou abrir o CRM", pensa "vou ver o cliente". Três siglas de
+   * três letras separando dez itens não dizem a ninguém o que há embaixo de
+   * cada uma — e um menu em que os títulos não ajudam é um menu lido item a
+   * item, todas as vezes.
+   *
+   * Só as palavras simples também não bastavam: quem contrata o sistema
+   * conhece as siglas, e a mesma tela é o que ele compara com o concorrente.
+   *
+   * Então são os dois, com pesos diferentes: a PALAVRA lidera (é ela que
+   * responde "o que tem aqui?") e a SIGLA vem numa etiqueta ao lado, pequena,
+   * para quem a procura. A frase inteira fica no `title`, para o hover de quem
+   * quer saber mais sem ocupar linha nenhuma da sidebar.
+   *
+   * O traço à direita fecha a linha até a borda: sem ele o título flutua no
+   * meio da lista e o menu volta a parecer uma pilha só.
+   */
+  const grupo = (nome: string, sigla: string, explicacao: string) => (
+    <div className="flex items-center gap-2 px-2 pb-1.5 pt-4 first:pt-1" title={explicacao}>
+      <span className="shrink-0 rounded-md border border-accent/20 bg-accent/[0.10] px-1.5 py-[3px] text-[8px] uppercase tracking-[0.14em] text-accent-soft">
+        {sigla}
+      </span>
+      <p className="min-w-0 truncate text-[10px] uppercase tracking-[0.16em] text-muted">{nome}</p>
+      <span aria-hidden className="h-px flex-1 bg-fg/[0.07]" />
+    </div>
+  );
 
   return (
     <>
       {/* `relative` é obrigatório: o brilho do topo é `absolute` e, sem um
           ancestral posicionado, ele se prende à viewport e cobre a tela toda. */}
       <aside
-        className="glass-strong relative hidden w-80 flex-shrink-0 flex-col overflow-hidden border-y-0 border-l-0 border-r md:flex"
+        className="glass-strong relative hidden w-64 flex-shrink-0 flex-col overflow-hidden border-y-0 border-l-0 border-r md:flex"
         style={{ borderColor: "rgb(var(--glass-border) / calc(var(--glass-border-alpha) + 0.03))" }}
       >
         {/* Brilho ambiente no topo */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-52"
+          className="pointer-events-none absolute inset-x-0 top-0 h-44"
           style={{
             opacity: "var(--fx-aurora, 1)",
             background: "radial-gradient(ellipse 70% 100% at 50% 0%, rgb(var(--accent) / 0.18), transparent 70%)",
           }}
         />
 
-        {/* Marca da empresa */}
-        <div className="relative flex items-center gap-3.5 border-b border-fg/[0.07] px-5 py-4">
-          <div className="relative h-11 w-11 shrink-0">
-            <div aria-hidden className="absolute -inset-1 rounded-2xl bg-accent/30 blur-md" style={{ opacity: "calc(0.6 * var(--fx-glow, 1))" }} />
-            <div className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-surface-raised to-surface ring-1 ring-fg/10">
+        {/*
+         * Marca da empresa, numa linha.
+         *
+         * Tinha um logo de 44 px e a legenda "Painel de gestão" embaixo do
+         * nome — 76 px de cabeçalho para dizer o nome da empresa, sendo que a
+         * legenda não informava nada que a tela ao lado não dissesse. Em 36 px
+         * e uma linha, o mesmo dado ocupa metade.
+         */}
+        <div className="relative flex items-center gap-2.5 border-b border-fg/[0.07] px-4 py-3">
+          <div className="relative h-9 w-9 shrink-0">
+            <div aria-hidden className="absolute -inset-1 rounded-xl bg-accent/30 blur-md" style={{ opacity: "calc(0.6 * var(--fx-glow, 1))" }} />
+            <div className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-surface-raised to-surface ring-1 ring-fg/10">
               {companyImage ? (
                 <img
                   src={companyImage}
@@ -349,227 +324,178 @@ const Sidebar = () => {
                   }}
                 />
               ) : (
-                <span className="text-base text-accent-soft">{companyInitial}</span>
+                <span className="text-[14px] text-accent-soft">{companyInitial}</span>
               )}
             </div>
           </div>
 
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[15px] tracking-tight text-ink">{enterprise?.nomeFantasia || "Sua Empresa"}</p>
-            <p className="truncate text-[11.5px] text-faint">Painel de gestão</p>
-          </div>
-
+          <p className="min-w-0 flex-1 truncate text-[14px] tracking-tight text-ink">{enterprise?.nomeFantasia || "Sua Empresa"}</p>
         </div>
 
         {/*
-         * Duas abas: o ERP de um lado, o CRM do outro.
+         * A faixa de atalhos — o lugar mais visível do menu, com destinos.
          *
-         * O sistema virou duas coisas com lógicas diferentes — administrar a
-         * empresa e tocar o trabalho do dia — e uma lista corrida misturava as
-         * duas. Empilhar dez itens fazia "Relatórios" e "Acompanhamento"
-         * parecerem o mesmo tipo de coisa, quando nem acontecem no mesmo
-         * momento do dia.
+         * Herdou a forma do seletor de abas que morava aqui (três colunas,
+         * ícone em cima do rótulo) porque a forma estava certa: é a única
+         * coisa do menu que se lê como um bloco, e não como item de lista. O
+         * que mudou é que agora ela LEVA a algum lugar em vez de trocar o
+         * conteúdo de baixo.
          *
-         * As abas NÃO se chamam CRM e ERP: essa é a sigla do fornecedor, não a
-         * palavra do lojista. Ele não pensa "vou abrir o CRM", pensa "vou ver
-         * como está o pedido". Daí "Gerenciamento" e "Atendimento".
-         *
-         * Clientes aparece nas duas — é o único item repetido, e é o mais
-         * visitado do sistema. Nos dois contextos ele é a resposta certa: no
-         * Gerenciamento é cadastro, no Atendimento é quem está sendo atendido.
-         *
-         * O seletor fica ACIMA de tudo, colado na marca da empresa: ele não é
-         * um item de menu, é o interruptor que decide qual menu você está
-         * vendo. Embaixo dos atalhos ele se lia como mais uma linha da lista —
-         * e um controle que muda o conteúdo inteiro não pode parecer parte do
-         * conteúdo que ele muda.
-         *
-         * Início e PDV ficam FORA das abas: são o que se abre dez vezes por
-         * dia, e esconder metade deles atrás de uma troca de aba cobraria um
-         * clique a mais na tarefa mais frequente do sistema.
+         * Ativo é preenchido de acento, e não um contorno como nos itens da
+         * lista: aqui são três alvos grandes lado a lado, e o preenchimento é
+         * o que se enxerga de relance, sem ler.
          */}
-        <div className="relative border-b border-fg/[0.07] px-3 py-3">
-          {/* Três colunas, ícone em cima do rótulo.
-              Lado a lado numa linha, "Gerenciamento" e "Abastecimento" não
-              cabiam nos 264px úteis da sidebar — as três encolhiam até o texto
-              cortar. Empilhado, cada aba tem a largura toda da sua coluna para
-              o nome. */}
-          <div
-            role="tablist"
-            aria-label="Áreas do sistema"
-            className="grid grid-cols-3 gap-1 rounded-xl border border-fg/[0.07] bg-fg/[0.03] p-1"
-          >
-            {ABAS.map((a) => {
-              const on = aba === a.id;
+        <div className="relative border-b border-fg/[0.07] p-2.5">
+          <div className="grid grid-cols-3 gap-1">
+            {ATALHOS.map(({ rota, label, icone: Icone, recurso }) => {
+              const on = isActive(rota);
+              const travado = Boolean(recurso && !temRecurso(recurso));
+
+              if (travado) {
+                return (
+                  <div
+                    key={label}
+                    title={`${label} não está incluído no seu plano. Veja as opções em Configurações › Faturas.`}
+                    className="flex cursor-not-allowed flex-col items-center justify-center gap-1 rounded-lg border border-fg/[0.06] py-2 text-[10.5px] text-faint opacity-55"
+                  >
+                    <span className="relative">
+                      <Icone size={17} />
+                      <Lock size={9} className="absolute -right-1.5 -top-1 text-accent-soft" />
+                    </span>
+                    <span className="w-full truncate px-1 text-center leading-none">{label}</span>
+                  </div>
+                );
+              }
 
               return (
                 <button
-                  key={a.id}
+                  key={label}
                   type="button"
-                  role="tab"
-                  aria-selected={on}
-                  disabled={!a.ativa}
-                  title={a.ativa ? undefined : `${a.titulo} está em breve`}
-                  onClick={() => a.ativa && setAba(a.id)}
-                  className={`focus-ring relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-[11px] transition-colors duration-200 ${
-                    !a.ativa ? "cursor-not-allowed text-faint opacity-50" : on ? "text-ink" : "text-mist hover:text-ink"
+                  onClick={() => goto(rota)}
+                  aria-current={on ? "page" : undefined}
+                  className={`focus-ring relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg py-2 text-[10.5px] transition-colors duration-200 ${
+                    on ? "text-white" : "text-mist hover:bg-fg/[0.05] hover:text-ink"
                   }`}
                 >
-                  {/*
-                   * Sem `layoutId` aqui, pelo mesmo motivo documentado nos
-                   * itens do menu: a sidebar vive dentro de um contêiner que o
-                   * MainLayout anima com `scale`, e animação de layout mede em
-                   * pixels reais — na escala errada, a pílula sai deformada e
-                   * atravessa a aba vizinha. Opacidade não depende de medição.
-                   */}
+                  {/* Sem `layoutId`, pelo mesmo motivo dos itens da lista: o pai
+                      é animado com `scale` e medição de layout sai errada. */}
                   {on && (
                     <motion.span
                       aria-hidden
-                      className="absolute inset-0 rounded-lg border border-accent/25 bg-accent/[0.14]"
-                      style={{ boxShadow: "inset 0 1px 0 rgb(var(--glass-highlight) / 0.12)" }}
+                      className="absolute inset-0 rounded-lg bg-gradient-to-br from-accent-soft to-accent"
+                      style={{ boxShadow: "0 6px 18px -8px rgb(var(--accent) / calc(0.9 * var(--fx-glow, 1)))" }}
                       initial={reduzir ? false : { opacity: 0 }}
                       animate={{ opacity: 1 }}
                       transition={{ duration: 0.16, ease: "easeOut" }}
                     />
                   )}
 
-                  <span className={`relative ${on ? "text-accent-soft" : "text-faint"}`}>
-                    <a.icone size={14} />
+                  <span className={`relative ${on ? "" : "text-faint"}`}>
+                    <Icone size={17} />
                   </span>
-                  <span className="relative w-full truncate leading-none">{a.titulo}</span>
+                  <span className="relative w-full truncate px-1 text-center leading-none">{label}</span>
                 </button>
               );
             })}
           </div>
         </div>
 
-        <div className="relative px-3 pt-3">
-          {cat("Meu dia")}
-          {item("", <LayoutDashboard size={17} />, "Início")}
-          {/* "PDV" fica: não é jargão de software, é o nome que o lojista já
-              usa, e é como a tela se chama no tour e na barra do celular. */}
-          {/* Orçamento NÃO tem item próprio: ele já é uma aba dentro do PDV,
-              que é de onde a proposta nasce. Duplicar no menu daria dois
-              caminhos para a mesma tela e a dúvida de qual é o certo. */}
-          {item("pdv", <ShoppingCart size={17} />, "PDV")}
+        {/*
+         * A lista inteira, sem gaveta.
+         *
+         * `overflow-y-auto` continua aqui e não deve incomodar: dez itens em
+         * três grupos cabem sem rolagem em qualquer tela de 700 px para cima.
+         * Ele existe para a tela baixa e para o dia em que aparecer o
+         * décimo primeiro.
+         */}
+        <nav className="relative flex-1 overflow-y-auto px-3 py-2.5 space-y-1">
+          {grupo(
+            "Gestão da empresa",
+            "ERP",
+            "ERP — a empresa por dentro: o que você tem em estoque, quanto entra e sai de dinheiro, quem trabalha com você e o que os números dizem.",
+          )}
+          {/* "e serviços" no rótulo: é a mesma tela de sempre, mas quem presta
+              serviço cadastra serviço nela, e sem isso metade dos clientes
+              procurava um menu que não existe. */}
+          {item("estoque", <Package size={16} />, "Estoque/Serviços")}
           {/*
-           * Planilhas subiu para cá, junto de Início e PDV.
+           * Dois itens, dois assuntos.
            *
-           * É ferramenta de trabalho do dia, não de administração: quem
-           * acompanha produção abre a planilha na mesma frequência com que abre
-           * o PDV, e ela estava atrás de uma troca de aba. Aqui fica fora das
-           * abas, alcançável dos dois lados.
+           * Eram um só ("Financeiro"), porque vendas e dinheiro eram a mesma
+           * tela em cinco abas — e o menu mandava para uma tela cujo título
+           * era outro. Agora a divisão é a que o lojista já faz de cabeça: o
+           * que EU VENDI (panorama e notas, juntos) e o DINHEIRO DA EMPRESA
+           * (caixa, a pagar, a receber, juntos).
            *
-           * O cadeado continua vindo do plano — entra a partir do Standard, com
-           * teto de quantidade.
+           * O vendedor fica só com o primeiro, e ele se chama "Minhas vendas":
+           * a lista dele já traz só as próprias notas.
            */}
-          {item("planilhas", <Table2 size={17} />, "Planilhas", false, !temRecurso("planilhas"))}
-        </div>
+          {item("vendas", <DollarSign size={16} />, gestor ? "Vendas" : "Minhas vendas")}
+          {gestor && item("financeiro", <Wallet size={16} />, "Financeiro", false, !temRecurso("financeiro"))}
+          {item("relatorios", <BarChart3 size={16} />, "Relatórios", false, !temRecurso("relatorios"))}
+          {/* Equipe só existe em plano que comporta mais de um usuário: mostrar
+              para quem tem uma vaga só seria oferecer porta que não abre. */}
+          {gestor && planoTemEquipe(equipe) && item("funcionarios", <UserCog size={16} />, "Funcionários")}
 
-        <nav className="relative flex-1 overflow-y-auto px-3 pb-3 pt-2" role="tabpanel">
-          {/* A troca é só um fade curto. Deslizar lateralmente seria a leitura
-              certa para abas, mas é de novo animação de layout dentro do pai
-              escalado — o mesmo problema da pílula. */}
-          <motion.div
-            key={aba}
-            initial={reduzir ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.16, ease: "easeOut" }}
-          >
-            {aba === "gerenciamento" ? (
-              <>
-                {/* Clientes está NAS DUAS abas, de propósito.
-                    A mesma tela por dois caminhos: aqui é o cadastro que se
-                    administra, no Atendimento é a pessoa que se atende. Obrigar a
-                    trocar de aba para chegar no lugar mais visitado do sistema
-                    seria economizar uma linha e cobrar um clique. */}
-                {cat("Cadastros")}
-                {item("clientes", <Users size={17} />, "Clientes")}
-                {/* Equipe só existe em plano que comporta mais de um usuário:
-                    mostrar para quem tem uma vaga só seria oferecer porta que
-                    não abre. */}
-                {gestor && planoTemEquipe(equipe) && item("funcionarios", <UserCog size={17} />, "Funcionários")}
-                {/* Estoque saiu daqui: virou o primeiro item de Logística,
-                    junto das entregas — o que entra e o que sai da loja. */}
+          {/* Clientes aparecia duas vezes no menu antigo, uma em cada aba, para
+              não cobrar troca de gaveta no destino mais visitado do sistema.
+              Sem gavetas, uma vez basta. */}
+          {grupo(
+            "Atendimento",
+            "CRM",
+            "CRM — as pessoas do outro lado do balcão: quem compra de você, o histórico de cada uma e os canais para falar com elas.",
+          )}
+          {item("clientes", <Users size={16} />, "Clientes")}
+          {/* Sem tela ainda. Fica visível e cinza em vez de escondido: quem não
+              sabe que existe não pergunta, e o item apagado é o que faz o dono
+              querer saber quando chegar. */}
+          {item("whatsapp", <MessageCircle size={16} />, "WhatsApp", true)}
 
-                {cat("Dinheiro")}
-                {/*
-                 * Um item só para o assunto "dinheiro". Ter "Vendas" e
-                 * "Financeiro" lado a lado era redundante — são a mesma tela, e
-                 * a lista de vendas fica a uma aba de distância. O vendedor não
-                 * entra aqui: para ele o menu leva direto às vendas dele, que é
-                 * tudo o que pode ver.
-                 */}
-                {gestor
-                  ? item("vendas/caixa", <Wallet size={17} />, "Financeiro", false, !temRecurso("financeiro"))
-                  : item("vendas/lista", <DollarSign size={17} />, "Minhas vendas")}
-                {item("relatorios", <BarChart3 size={17} />, "Relatórios", false, !temRecurso("relatorios"))}
-              </>
-            ) : aba === "logistica" ? (
-              <>
-                {cat("Loja")}
-                {/* "e serviços" no rótulo: é a mesma tela de sempre, mas quem
-                    presta serviço cadastra serviço nela, e sem isso metade dos
-                    clientes procurava um menu que não existe. */}
-                {item("estoque", <Package size={17} />, "Estoque/Serviços")}
-
-                {cat("Entregas")}
-                {/* Correios volta para "Em breve" enquanto o módulo é
-                    finalizado. Não é "Plano": o cadeado promete uma tela que
-                    o upgrade destrava hoje, e essa ainda não está de pé. */}
-                {item("correios", <Truck size={17} />, "Correios", true)}
-              </>
-            ) : (
-              <>
-                {/* Produção saiu daqui: a planilha subiu para "Meu dia", acima
-                    das abas, e era o único item do grupo. */}
-                {cat("Relacionamento")}
-                {item("clientes", <Users size={17} />, "Clientes")}
-
-                {cat("Comunicação")}
-                {/* Sem tela ainda. Fica visível e cinza em vez de escondido:
-                    quem não sabe que existe não pergunta, e o item apagado é o
-                    que faz o dono querer saber quando chegar. */}
-                {item("whatsapp", <MessageCircle size={17} />, "WhatsApp", true)}
-              </>
-            )}
-          </motion.div>
+          {grupo(
+            "Entregas",
+            "TMS",
+            "TMS — o que sai da loja e vira encomenda: postagem, frete e rastreio até a mão do cliente.",
+          )}
+          {/* Correios está "Em breve" enquanto o módulo é finalizado. Não é
+              "Plano": o cadeado promete uma tela que o upgrade destrava hoje, e
+              essa ainda não está de pé. */}
+          {item("correios", <Truck size={16} />, "Correios", true)}
         </nav>
 
-        {/* Ajuda — fica fora da navegação, junto do rodapé: não é lugar que se
-            visita no fluxo de trabalho, é a saída para quando algo trava. */}
-        <div className="relative px-3 pb-1 pt-2">
-          <button
-            type="button"
-            onClick={() => goto("ajuda")}
-            aria-current={isActive("ajuda") ? "page" : undefined}
-            className={`group focus-ring relative flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-[13.5px] transition-colors duration-200 ${
-              isActive("ajuda") ? "text-ink" : "text-mist hover:bg-fg/[0.05] hover:text-ink"
-            }`}
-          >
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-fg/[0.04] text-faint transition-colors group-hover:bg-fg/[0.08] group-hover:text-accent-soft">
-              <LifeBuoy size={17} />
-            </span>
-            <span className="flex-1">Ajuda e suporte</span>
-          </button>
+        {/* Ajuda — fica fora da navegação: não é lugar que se visita no fluxo de
+            trabalho, é a saída para quando algo trava. */}
+        <div className="relative border-t border-fg/[0.07] px-2.5 pb-1 pt-2">
+          {item("ajuda", <LifeBuoy size={16} />, "Ajuda e suporte")}
 
           {/* Instalar o app: some sozinho quando já está instalado ou quando o
               navegador não instala PWA — ver `BotaoInstalar`. */}
           <BotaoInstalar variante="menu" />
         </div>
 
-        {/* Usuário */}
-        <div className="relative p-3">
-          <div className="glass-subtle flex items-center gap-3 rounded-2xl p-2.5">
+        {/*
+         * Rodapé: quem está usando, e as duas coisas que se faz com isso.
+         *
+         * Eram dois blocos empilhados — um cartão de usuário e uma faixa com
+         * logo, versão e "Sair" — somando ~130 px no pé da sidebar, e o "Sair"
+         * ficava a dois blocos de distância do avatar de quem sai. Numa linha
+         * só, com configurações e sair como ícones ao lado do nome, custa ~50.
+         *
+         * A versão do sistema saiu daqui: era a única linha do menu que não
+         * levava a lugar nenhum. Ela e o "buscar atualização" foram para
+         * Configurações › Meu perfil › Conta, que é onde se procura o que é
+         * sobre a instalação e não sobre o trabalho.
+         */}
+        <div className="relative border-t border-fg/[0.07] p-2.5">
+          <div className="flex items-center gap-2.5">
             {user?.image ? (
-              <img src={user.image} alt="" className="h-9 w-9 flex-shrink-0 rounded-full object-cover ring-1 ring-fg/10" />
+              <img src={user.image} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-fg/10" />
             ) : (
-              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-soft to-accent text-xs text-white ring-1 ring-fg/10">{userInitials}</div>
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-soft to-accent text-[11px] text-white ring-1 ring-fg/10">{userInitials}</div>
             )}
 
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] text-ink">{user?.nome || "Usuário"}</p>
-              <p className="truncate text-[11px] text-faint">{user?.cargo || "Conectado"}</p>
+              <p className="truncate text-[12.5px] leading-tight text-ink">{user?.nome || "Usuário"}</p>
+              <p className="truncate text-[10.5px] leading-tight text-faint">{user?.cargo || "Conectado"}</p>
             </div>
 
             {/* Mural da equipe — só gestor recebe (a API responde 403 ao vendedor). */}
@@ -579,41 +505,22 @@ const Sidebar = () => {
               type="button"
               onClick={() => goto("/configuracoes")}
               aria-label="Configurações"
-              className={`focus-ring flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg transition-all duration-200 hover:rotate-45 hover:bg-fg/[0.08] ${isActive("configuracoes") ? "text-accent-soft" : "text-faint hover:text-accent-soft"}`}
+              title="Configurações"
+              className={`focus-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-all duration-200 hover:rotate-45 hover:bg-fg/[0.08] ${isActive("configuracoes") ? "text-accent-soft" : "text-faint hover:text-accent-soft"}`}
             >
-              <Settings size={16} />
+              <Settings size={15} />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              aria-label="Sair"
+              title="Sair"
+              className="focus-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-faint transition-colors hover:bg-danger/10 hover:text-danger"
+            >
+              <LogOut size={15} />
             </button>
           </div>
-        </div>
-
-        {/* Rodapé */}
-        <div className="relative flex items-center justify-between gap-2 border-t border-fg/[0.07] px-4 py-3">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <img src="/logo.png" width={22} height={22} alt="" className="rounded" />
-
-            <div className="min-w-0">
-              <p className="truncate text-[13px] leading-tight text-mist">CodeEx Flow</p>
-
-              {/* A versão fica visível de propósito: "meu app está atualizado?"
-                  precisa ter resposta olhando a tela, não sensação. Clicar
-                  limpa o cache e recarrega — a saída para o worker que travou
-                  numa versão antiga. */}
-              <button
-                type="button"
-                onClick={atualizarAgora}
-                disabled={atualizando}
-                title="Clique para buscar a versão mais recente"
-                className="focus-ring flex max-w-full items-center gap-1 rounded text-[10px] leading-tight text-faint transition-colors hover:text-accent-soft disabled:opacity-60"
-              >
-                <RefreshCw size={9} className={atualizando ? "animate-spin" : ""} />
-                <span className="truncate">{BUILD_ID}</span>
-              </button>
-            </div>
-          </div>
-
-          <button type="button" onClick={handleLogout} className="focus-ring flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] text-mist transition-colors hover:bg-danger/10 hover:text-danger">
-            <LogOut size={14} /> Sair
-          </button>
         </div>
       </aside>
     </>

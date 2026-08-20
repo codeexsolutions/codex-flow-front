@@ -160,7 +160,7 @@ const SalesOverviewPage = () => {
 
   const compromissos = [
     {
-      destino: "/vendas/a-pagar",
+      destino: "/financeiro/contas",
       tom: "danger" as Tom,
       icone: <ArrowUpCircle size={15} />,
       label: "A pagar",
@@ -169,7 +169,7 @@ const SalesOverviewPage = () => {
       semana: resumoContas?.pagarSemana ?? 0,
     },
     {
-      destino: "/vendas/a-receber",
+      destino: "/vendas",
       tom: "success" as Tom,
       icone: <ArrowDownCircle size={15} />,
       label: "A receber",
@@ -180,24 +180,34 @@ const SalesOverviewPage = () => {
   ];
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    /*
+     * `shrink-0` do topo até cada faixa.
+     *
+     * O panorama era `flex-1` dentro de um corpo que rola e, desde que a
+     * lista de vendas passou a morar na mesma tela, os dois disputavam a
+     * mesma altura: o flex encolhia as faixas abaixo do próprio mínimo e os
+     * quatro painéis apareciam CORTADOS a uns 55px, sobrepostos, com os
+     * gráficos invisíveis. Quem manda na altura aqui é o conteúdo; quem rola
+     * é a página.
+     */
+    <div className="flex shrink-0 flex-col gap-3">
       {/* ---------- Os quatro números do mês ---------- */}
       <div className="stagger grid shrink-0 grid-cols-2 gap-3 xl:grid-cols-4">
         <Kpi tone="accent" icon={<DollarSign size={17} />} label="Faturado este mês" value={formatCurrency(dados.faturadoMes)} hint={`${dados.vendasNoMes} ${dados.vendasNoMes === 1 ? "venda" : "vendas"}`} />
         <Kpi tone="success" icon={<CheckCircle size={17} />} label="Recebido este mês" value={formatCurrency(dados.recebidoMes)} hint={`${dados.percentualRecebido.toFixed(0)}% do faturado`} />
-        <Kpi tone="danger" icon={<AlertCircle size={17} />} label="A receber de clientes" value={formatCurrency(dados.aReceberTotal)} hint={`${dados.pendentes} ${dados.pendentes === 1 ? "nota aberta" : "notas abertas"}`} onClick={() => navigate("/vendas/lista")} />
+        <Kpi tone="danger" icon={<AlertCircle size={17} />} label="A receber de clientes" value={formatCurrency(dados.aReceberTotal)} hint={`${dados.pendentes} ${dados.pendentes === 1 ? "nota aberta" : "notas abertas"}`} onClick={() => navigate("/vendas")} />
 
         {/* O quarto cartão muda com o plano: com o módulo, o número que o dono
             procura é o saldo em caixa; sem ele, o volume de vendas. */}
         {temFinanceiro ? (
-          <Kpi tone="warning" icon={<Wallet size={17} />} label="Saldo em caixa" value={formatCurrency(resumoCaixa?.saldoCaixa ?? 0)} hint="Acumulado · abrir o caixa" onClick={() => navigate("/vendas/caixa")} />
+          <Kpi tone="warning" icon={<Wallet size={17} />} label="Saldo em caixa" value={formatCurrency(resumoCaixa?.saldoCaixa ?? 0)} hint="Acumulado · abrir o caixa" onClick={() => navigate("/financeiro")} />
         ) : (
           <Kpi tone="warning" icon={<ShoppingCart size={17} />} label="Total de vendas" value={String(dados.totalVendas)} hint={`${dados.vendasNoMes} neste mês`} />
         )}
       </div>
 
       {/* ---------- Faturamento anual + status ---------- */}
-      <div className="grid min-h-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
+      <div className="grid shrink-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
         <Painel
           icon={<TrendingUp size={15} />}
           tone="accent"
@@ -271,7 +281,7 @@ const SalesOverviewPage = () => {
       </div>
 
       {/* ---------- Top clientes + compromissos ---------- */}
-      <div className={`grid min-h-0 gap-3 ${temFinanceiro ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1"}`}>
+      <div className={`grid shrink-0 gap-3 ${temFinanceiro ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1"}`}>
         <Painel icon={<Star size={15} />} tone="warning" title="Top clientes" sub={dados.topClientes.length > 0 ? `Os ${dados.topClientes.length} que mais compraram` : undefined} className="min-h-[220px]" bodyClassName="overflow-y-auto">
           {dados.topClientes.length === 0 ? (
             <PainelVazio icon={<Star size={19} />} title="Sem dados para exibir" description="Assim que houver venda, os melhores clientes aparecem aqui." />

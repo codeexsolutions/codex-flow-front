@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type LegacyRef } from "react";
-import { ShoppingCart, UserRound, Download, Loader2, AlertTriangle, ListFilter } from "lucide-react";
+import { ShoppingCart, UserRound, Download, Loader2, AlertTriangle, ListFilter, FileText, CalendarClock } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import { Modal } from "@/shared/ui/Modal";
 import Invoice from "@/features/vendas/components/Invoice";
 import NotaResumo from "@/features/vendas/components/NotaResumo";
 import { ControlesPagina, ListaAcao, ListaCabecalho, ListaFantasmas, ListaLinha, TabelaCard, TabelaVazia } from "@/shared/ui/DataTable";
+import { AbasTabela } from "@/shared/ui/AbasTabela";
+import ListaContas from "@/features/financeiro/components/ListaContas";
+import ContaForm from "@/features/financeiro/components/ContaForm";
+import useContasStore from "@/features/financeiro/store/contas.store";
 import Select from "@/shared/ui/Select";
 import BuscaSugestoes from "@/shared/ui/BuscaSugestoes";
 import { useAutoPageSize } from "@/shared/hooks/useAutoPageSize";
@@ -19,7 +24,7 @@ import useVendaStore from "@/features/vendas/store/venda.store";
 import { gerarBlobNota } from "@/shared/ui/DownloadButton";
 import { baixarNotaPdf } from "@/shared/ui/downloadNota";
 import useEnterprise from "@/features/empresa/store/enterprise.store";
-import ContaService, { type PrazoVenda } from "@/features/financeiro/services/conta.service";
+import ContaService, { type NovaConta, type PrazoVenda } from "@/features/financeiro/services/conta.service";
 import { dataBr, prazo } from "@/shared/utils/parcelas";
 
 /**
@@ -72,7 +77,29 @@ const ALTURA_LINHA = 60;
 const ALTURA_CABECALHO = 40;
 
 /* ======================= Sales / Outlet Page ======================= */
+/**
+ * As três listas da seção.
+ *
+ * "A prazo" veio do Financeiro, onde se chamava "A receber". Ela nunca foi
+ * assunto de caixa: é o pedaço não pago das notas que estão logo acima, e a
+ * pergunta que ela responde — "quem ainda me deve?" — se termina abrindo a
+ * venda, não o livro-caixa. No financeiro ela obrigava a atravessar a tela
+ * para conferir a nota; aqui, a nota está na aba ao lado.
+ *
+ * Orçamento troca de rota (a lista inteira mora em `/pdv/orcamentos`), por
+ * isso não entra na barra animada: a pílula não desliza entre telas.
+ */
+type AbaVenda = "vendas" | "a-prazo";
+
 const SalesList = () => {
+  const navigate = useNavigate();
+  const [aba, setAba] = useState<AbaVenda>("vendas");
+  const [novaConta, setNovaConta] = useState(false);
+  const [salvandoConta, setSalvandoConta] = useState(false);
+
+  const contas = useContasStore((s) => s.contas);
+  const carregandoContas = useContasStore((s) => s.carregando);
+  const fetchContas = useContasStore((s) => s.fetchContas);
   const vendas = useVendaStore((s) => s.vendas);
   const fetchVendas = useVendaStore((s) => s.fetchVendas);
   const enterprise = useEnterprise((s) => s.enterprise);
@@ -268,6 +295,32 @@ const SalesList = () => {
     setPagina((p) => Math.min(p, totalPaginas));
   }, [totalPaginas]);
 
+  /* As contas a receber só são buscadas por quem pode vê-las. */
+  useEffect(() => {
+    if (gestor) fetchContas();
+  }, [gestor, fetchContas]);
+
+  /** A contagem da aba é de PARCELAS em aberto — é a parcela que vence. */
+  const parcelasEmAberto = useMemo(
+    () =>
+      contas
+        .filter((c) => c.tipo === "RECEBER" && c.status !== "CANCELADA")
+        .reduce((acc, c) => acc + c.parcelas.filter((x) => x.situacao !== "PAGA").length, 0),
+    [contas],
+  );
+
+  const criarConta = async (dados: NovaConta) => {
+    setSalvandoConta(true);
+
+    try {
+      await ContaService.criar(dados);
+      setNovaConta(false);
+      await fetchContas(true);
+    } finally {
+      setSalvandoConta(false);
+    }
+  };
+
   const primeiraDaPagina = (pagina - 1) * perPage + 1;
   const daPagina = vendasFiltradas.slice((pagina - 1) * perPage, pagina * perPage);
   const ultimaDaPagina = primeiraDaPagina + daPagina.length - 1;
@@ -301,13 +354,57 @@ const SalesList = () => {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <TabelaCard
-        title="Todas as vendas"
-        icon={<ShoppingCart size={15} />}
-        count={vendasFiltradas.length}
-        countLabel={`${vendasFiltradas.length === 1 ? "nota" : "notas"}${vendasFiltradas.length !== vendas.length ? ` de ${vendas.length}` : ""}`}
-        minWidth={980}
+        title={aba === "vendas" ? "Todas as vendas" : "Vendas a prazo"}
+        icon={aba === "vendas" ? <ShoppingCart size={15} /> : <CalendarClock size={15} />}
+        count={aba === "vendas" ? vendasFiltradas.length : parcelasEmAberto}
+        countLabel={
+          aba === "vendas"
+            ? `${vendasFiltradas.length === 1 ? "nota" : "notas"}${vendasFiltradas.length !== vendas.length ? ` de ${vendas.length}` : ""}`
+            : "parcelas em aberto"
+        }
+        minWidth={aba === "vendas" ? 980 : 0}
         bodyRef={bodyRef}
-        controles={
+        onAdd={aba === "vendas" ? () => navigate("/pdv", { state: { abrir: "venda" } }) : () => setNovaConta(true)}
+        addLabel={aba === "vendas" ? "Nova venda" : "Novo acordo"}
+        /*
+         * Duas abas com a pílula que desliza (a mesma peça do estoque e do
+         * PDV) e uma terceira porta que TROCA DE ROTA — a lista completa de
+         * orçamentos mora em `/pdv/orcamentos`, e pílula não desliza entre
+         * telas. Por isso ela é um botão à parte, ao lado da barra.
+         */
+        navegacao={
+          <>
+            <AbasTabela
+              grupo="abas-vendas"
+              valor={aba}
+              onValor={setAba}
+              abas={[
+                { id: "vendas", label: "Vendas", icone: <ShoppingCart size={13} />, contagem: vendasFiltradas.length },
+                { id: "a-prazo", label: "A prazo", icone: <CalendarClock size={13} />, contagem: parcelasEmAberto },
+              ]}
+            />
+
+            <button
+              type="button"
+              onClick={() => navigate("/pdv/orcamentos")}
+              className="focus-ring relative flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-[12.5px] text-faint transition-colors hover:text-ink"
+            >
+              <FileText size={13} />
+              Orçamentos
+            </button>
+          </>
+        }
+        acoes={
+          <button
+            type="button"
+            onClick={() => navigate("/pdv", { state: { abrir: "orcamento" } })}
+            className="focus-ring flex h-[38px] cursor-pointer items-center gap-1.5 rounded-xl border border-warning/40 bg-warning/[0.12] px-3.5 text-[12.5px] text-warning transition-colors hover:bg-warning/20"
+          >
+            <FileText className="h-4 w-4" />
+            Novo orçamento
+          </button>
+        }
+        controles={aba === "a-prazo" ? undefined : (
           <>
             {/* Busca e filtros no mesmo grupo: as três coisas restringem a
                 mesma lista, e separá-las pelas duas pontas da barra fazia o
@@ -347,7 +444,7 @@ const SalesList = () => {
               opcoes={opcoesStatus}
             />
           </>
-        }
+        )}
         footer={
           <>
             <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -380,7 +477,17 @@ const SalesList = () => {
           </>
         }
       >
-        {vendasFiltradas.length === 0 ? (
+        {aba === "a-prazo" ? (
+          /* A parcela tem botão de receber, de recibo e de cancelar, e essa
+             lógica já mora na `ListaContas`. Aqui ela entra sem moldura. */
+          <ListaContas
+            embutida
+            tipo="RECEBER"
+            contas={contas.filter((c) => c.tipo === "RECEBER")}
+            carregando={carregandoContas}
+            onRecarregar={() => void fetchContas(true)}
+          />
+        ) : vendasFiltradas.length === 0 ? (
           <TabelaVazia
             icon={<ShoppingCart size={20} />}
             title="Nenhuma venda encontrada"
@@ -473,6 +580,10 @@ const SalesList = () => {
           </>
         )}
       </TabelaCard>
+
+      {novaConta && (
+        <ContaForm tipo="RECEBER" salvando={salvandoConta} onFechar={() => setNovaConta(false)} onSalvar={criarConta} />
+      )}
 
       <Modal open={!!notaAberta} onClose={fecharNota} title={notaAberta?.id ? "Venda" : "Nova venda"} subtitle={notaAberta?.nome} size="full">
         {/* `onSaved` também aqui: sem ele, salvar a alteração ou cancelar a nota

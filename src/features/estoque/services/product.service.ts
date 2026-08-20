@@ -4,7 +4,7 @@ import type { NovoProdutoDto, ProdutoUpdateDto } from "@/shared/domain/produto";
 const ProductService = {
   getAll: async (params?: { name?: string; category?: string }) => await sysgrafix.get("/produtos", { params }),
 
-  create: async (data: NovoProdutoDto) => await sysgrafix.post("/produtos/cadastrar", data),
+  create: async (data: NovoProdutoDto) => await sysgrafix.post("/produtos/cadastrar", data, { carregamento: "Cadastrando o item…" }),
 
   /**
    * ATENÇÃO: diferente de clientes e pedidos, este endpoint não recebe o `id`
@@ -12,7 +12,7 @@ const ProductService = {
    * não ser possível validar o contrato do backend daqui. Se a API na verdade
    * espera `/produtos/alterar/{id}`, esta é a linha a ajustar.
    */
-  update: async (data: ProdutoUpdateDto) => await sysgrafix.patch(`/produtos/alterar/`, data),
+  update: async (data: ProdutoUpdateDto) => await sysgrafix.patch(`/produtos/alterar/`, data, { carregamento: "Salvando o item…" }),
 
   /**
    * Devolve a frase do servidor, e não só a resposta crua.
@@ -23,7 +23,7 @@ const ProductService = {
    * procurar o produto no histórico achando que sumiu de lá também.
    */
   remove: async (id: string): Promise<string> => {
-    const { data } = await sysgrafix.delete(`/produtos/${id}`);
+    const { data } = await sysgrafix.delete(`/produtos/${id}`, { carregamento: "Excluindo o item…" });
 
     return data?.message ?? "Produto excluído.";
   },

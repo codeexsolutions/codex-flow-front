@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  ChevronLeft, ChevronRight, Pencil, MessageCircle, Mail, CalendarDays, Loader2, AlertTriangle,
+  ChevronRight, Pencil, MessageCircle, Mail, CalendarDays, Loader2, AlertTriangle,
   PhoneCall, Receipt, Wallet, ShoppingBag, TrendingUp, Users, Cake, MapPin, IdCard, UserRound,
   ClipboardList, ExternalLink,
 } from "lucide-react";
 
-import { PageScreen, PageToolbar } from "@/shared/ui/PageShell";
+import { PageScreen } from "@/shared/ui/PageShell";
 import { Modal } from "@/shared/ui/Modal";
+import { ControlesPagina, ListaCabecalho, ListaFantasmas, ListaLinha } from "@/shared/ui/DataTable";
 import Invoice from "@/features/vendas/components/Invoice";
 
 import CustomerService from "@/features/clientes/services/client.service";
@@ -31,24 +32,39 @@ import { aniversarioBr, diasAteAniversario, idadeEmAnos } from "@/features/clien
 
 const ITEMS_PER_PAGE = 6;
 
+/*
+ * Os pedidos são uma TABELA, com as mesmas peças de Estoque, Vendas e Ponto.
+ *
+ * Eram botões de 68px com dois textos empilhados à esquerda e três coisas
+ * soltas à direita — a mesma informação das outras listas do sistema, num
+ * formato que só existia aqui. Em colunas, cada dado tem sempre o mesmo lugar,
+ * a fileira de rótulos diz o que é cada um, e a linha ganha a zebra e o cartão
+ * de celular que a `ListaLinha` já sabe fazer.
+ */
+const COLS_PEDIDOS = "grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_84px_minmax(0,110px)]";
+const ROTULOS_PEDIDOS = ["Pedido", "Quando", "Situação", "Total"];
+const ALTURA_PEDIDO = 56;
+
 /* -------------------------------------------------------------------------- */
 /* Peças da ficha */
 /* -------------------------------------------------------------------------- */
 
+/* Mesma escala dos KPIs da ficha do produto e da do funcionário: eles são a
+   régua da tela, não o assunto dela. */
 const StatCard = ({ icon, label, value }: { icon: ReactNode; label: string; value: string }) => (
-  <div className="card glass-sheen rounded-2xl p-4 transition-colors hover:border-fg/[0.12]">
-    <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/20">{icon}</div>
-    <p className="text-[11px] uppercase tracking-[0.1em] text-faint">{label}</p>
-    <p className="mt-1 truncate text-xl tabular-nums tracking-tight text-ink">{value}</p>
+  <div className="card glass-sheen rounded-xl p-2.5 transition-colors hover:border-fg/[0.12]">
+    <div className="mb-1.5 flex h-7 w-7 items-center justify-center rounded-lg bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/20">{icon}</div>
+    <p className="truncate text-[9.5px] uppercase tracking-[0.08em] text-faint">{label}</p>
+    <p className="mt-0.5 truncate text-[14px] tabular-nums tracking-tight text-ink sm:text-[15px]">{value}</p>
   </div>
 );
 
 const SectionHead = ({ icon, title, meta, acao }: { icon: ReactNode; title: string; meta?: string; acao?: ReactNode }) => (
-  <div className="flex items-center gap-3 border-b border-fg/[0.07] px-5 py-3.5">
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/20">{icon}</div>
+  <div className="flex shrink-0 items-center gap-2.5 border-b border-fg/[0.07] px-4 py-2.5">
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/20">{icon}</div>
     <div className="min-w-0 flex-1">
-      <h2 className="text-[13px] text-ink">{title}</h2>
-      {meta && <p className="text-[11px] text-faint">{meta}</p>}
+      <h2 className="truncate text-[12.5px] text-ink">{title}</h2>
+      {meta && <p className="truncate text-[10px] text-faint">{meta}</p>}
     </div>
     {acao}
   </div>
@@ -62,10 +78,12 @@ const SectionHead = ({ icon, title, meta, acao }: { icon: ReactNode; title: stri
  * preencher, que é a informação mais acionável desta tela.
  */
 const Dado = ({ icon, label, valor, acao }: { icon: ReactNode; label: string; valor?: string | null; acao?: ReactNode }) => (
-  <div className="flex items-center gap-3 px-5 py-2.5">
-    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-fg/[0.04] text-muted">{icon}</span>
-    <span className="w-[92px] shrink-0 text-[11px] uppercase tracking-[0.08em] text-faint">{label}</span>
-    <span className={`min-w-0 flex-1 truncate text-[12.5px] ${valor ? "text-ink" : "text-faint"}`}>{valor || "—"}</span>
+  <div className="flex items-center gap-2.5 px-3.5 py-2">
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-fg/[0.04] text-muted">{icon}</span>
+    <span className="w-[74px] shrink-0 text-[9.5px] uppercase tracking-[0.06em] text-faint">{label}</span>
+    {/* O valor alinha à DIREITA e leva `title`: na coluna estreita ele é a
+       metade que trunca, e um telefone cortado no meio não serve para nada. */}
+    <span title={valor || undefined} className={`min-w-0 flex-1 truncate text-right text-[12px] ${valor ? "text-ink" : "text-faint"}`}>{valor || "—"}</span>
     {acao}
   </div>
 );
@@ -103,28 +121,51 @@ const AnelFicha = ({ pct, tamanho = 64 }: { pct: number; tamanho?: number }) => 
   );
 };
 
-/** Ação de contato da barra de ferramentas — desabilitada quando falta o dado. */
-const AcaoContato = ({ icon, label, href, externo = false, tone = "neutral" }: { icon: ReactNode; label: string; href?: string; externo?: boolean; tone?: "neutral" | "success" }) => {
+/**
+ * O botão que USA o dado da linha: liga, abre a conversa, escreve o e-mail.
+ *
+ * ---------------------------------------------------------------------------
+ * Por que ele desceu da barra de ferramentas para a linha
+ * ---------------------------------------------------------------------------
+ * "WhatsApp", "Ligar" e "E-mail" eram três botões de texto no topo da tela, e
+ * o número que cada um usa estava três cartões abaixo, no bloco de contato.
+ * Quem queria conferir o telefone antes de ligar lia embaixo e clicava em
+ * cima; quem clicava em cima não sabia para qual número estava ligando — e o
+ * botão apagado (sem o dado cadastrado) não dizia onde cadastrá-lo.
+ *
+ * Na linha, o dado e a ação são a mesma coisa: o número está escrito ao lado
+ * do botão que disca. E a linha sem valor mostra o botão apagado exatamente
+ * onde o campo vazio está, que é a resposta para "onde eu ponho isso?".
+ *
+ * Fica em `title` o que o texto do botão dizia: numa linha de ficha não cabe
+ * "WhatsApp" duas vezes — o rótulo da linha já diz qual canal é.
+ */
+const AcaoLinha = ({ icon, label, href, externo = false, tone = "neutral" }: { icon: ReactNode; label: string; href?: string; externo?: boolean; tone?: "neutral" | "success" }) => {
+  if (!href) {
+    return (
+      <span
+        title={`${label} não cadastrado`}
+        className="flex h-7 w-7 shrink-0 cursor-not-allowed items-center justify-center rounded-lg border border-fg/[0.06] text-faint opacity-50"
+      >
+        {icon}
+      </span>
+    );
+  }
+
   const cls =
     tone === "success"
       ? "border-success/30 bg-success/[0.1] text-success hover:bg-success/20"
       : "border-fg/[0.08] bg-fg/[0.04] text-mist hover:bg-fg/[0.08] hover:text-ink";
 
-  if (!href) {
-    return (
-      <span className="flex h-9 cursor-not-allowed items-center gap-1.5 rounded-xl border border-fg/[0.06] px-3 text-[13px] text-faint opacity-60" title={`${label} não cadastrado`}>
-        {icon} {label}
-      </span>
-    );
-  }
-
   return (
     <a
       href={href}
+      title={label}
+      aria-label={label}
       {...(externo ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-      className={`focus-ring flex h-9 items-center gap-1.5 rounded-xl border px-3 text-[13px] transition-colors ${cls}`}
+      className={`focus-ring flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors ${cls}`}
     >
-      {icon} {label}
+      {icon}
     </a>
   );
 };
@@ -303,30 +344,22 @@ const ClienteDetalhe = () => {
 
   /* ------------------------------- Cabeçalho ------------------------------- */
 
-  const headerActions = (
-    <div className="flex flex-wrap items-center gap-2">
-      <button onClick={() => navigate("/clientes")} className="focus-ring flex h-9 cursor-pointer items-center gap-1.5 rounded-xl border border-fg/[0.08] bg-fg/[0.04] px-3 text-[13px] text-mist transition-colors hover:bg-fg/[0.08] hover:text-ink">
-        <ChevronLeft className="h-4 w-4" /> Voltar
-      </button>
-
-      {client && (
-        <>
-          {/* As ações de contato saíram do cartão no fim da lateral para a barra
-              de ferramentas: falar com o cliente é o que se vem fazer aqui, e
-              estava a uma rolagem de distância. */}
-          <span className="mx-1 hidden h-5 w-px bg-fg/[0.08] sm:block" />
-
-          <AcaoContato icon={<MessageCircle className="h-4 w-4" />} label="WhatsApp" href={waDigits ? `https://wa.me/55${waDigits}` : undefined} externo tone="success" />
-          <AcaoContato icon={<PhoneCall className="h-4 w-4" />} label="Ligar" href={telDigits ? `tel:${telDigits}` : undefined} />
-          <AcaoContato icon={<Mail className="h-4 w-4" />} label="E-mail" href={email ? `mailto:${email}` : undefined} />
-
-          <button onClick={() => setShowEdit(true)} className="focus-ring flex h-9 cursor-pointer items-center gap-1.5 rounded-xl border border-accent/40 bg-accent/[0.14] px-3 text-[13px] text-accent-soft transition-all hover:bg-accent/25 active:scale-95">
-            <Pencil className="h-4 w-4" /> Editar
-          </button>
-        </>
-      )}
-    </div>
-  );
+  /*
+   * A barra de ferramentas que ficava aqui foi desfeita.
+   *
+   * Eram cinco controles numa faixa própria acima de tudo — voltar, três
+   * canais de contato e editar —, e nenhum deles pertencia ao topo da tela:
+   *
+   *   • o VOLTAR é identidade ("você está aqui, veio de lá") e subiu para o
+   *     cabeçalho da página, que é onde todo navegador o põe;
+   *   • WHATSAPP, LIGAR e E-MAIL desceram para as linhas do cartão de
+   *     contato, ao lado do número que cada um usa (ver `AcaoLinha`);
+   *   • EDITAR foi para o cartão que identifica o cliente, junto do nome e
+   *     dos dados que ele edita.
+   *
+   * O que sobrou foi uma faixa de 52 px a menos entre o nome do cliente e o
+   * primeiro número da tela.
+   */
 
   const headerIcon = client ? <div className="flex h-full w-full items-center justify-center rounded-xl bg-gradient-to-br from-accent/30 to-accent-soft/10 text-[13px] text-accent-soft ring-1 ring-accent/25">{getInitials(client.nome)}</div> : <Users size={22} />;
 
@@ -337,9 +370,13 @@ const ClienteDetalhe = () => {
   /* -------------------------------- Render -------------------------------- */
 
   return (
-    <PageScreen title={client?.nome ?? "Cliente"} subtitle={subtitulo} icon={headerIcon}>
-      <PageToolbar>{headerActions}</PageToolbar>
-
+    <PageScreen
+      title={client?.nome ?? "Cliente"}
+      subtitle={subtitulo}
+      icon={headerIcon}
+      onVoltar={() => navigate("/clientes")}
+      voltarPara="Clientes"
+    >
       {loading ? (
         <div className="flex h-full items-center justify-center">
           <Loader2 className="h-6 w-6 animate-spin text-faint" />
@@ -353,114 +390,30 @@ const ClienteDetalhe = () => {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-          {/* ---------------- Coluna principal: o que ele comprou ---------------- */}
-          <div className="flex flex-col gap-4 xl:col-span-2">
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatCard icon={<Wallet size={16} />} label="Total em pedidos" value={formatCurrency(stats.total)} />
-              <StatCard icon={<ShoppingBag size={16} />} label="Pedidos" value={formatNumber(stats.count)} />
-              <StatCard icon={<TrendingUp size={16} />} label="Ticket médio" value={formatCurrency(stats.ticket)} />
-              <StatCard icon={<CalendarDays size={16} />} label="Último pedido" value={stats.ultimo ? formatDate(stats.ultimo) : "—"} />
-            </div>
+        /*
+         * A tela em duas faixas, na mesma grade de quatro colunas.
+         *
+         *   1. NÚMEROS — largura inteira, quatro numa fileira. Eles estavam
+         *      espremidos dentro da coluna de 2/3, e "Total em pedidos" ficava
+         *      com metade da largura de "Documento" ao lado. São a régua da
+         *      tela: pertencem à tela inteira.
+         *   2. QUEM ELE É + O QUE COMPROU — a ficha ocupa uma coluna, o resto
+         *      ocupa três. A ficha vai para a ESQUERDA como nas fichas do
+         *      produto e do funcionário: as três telas passam a ter a
+         *      identidade no mesmo lugar, e a divisa das faixas é a mesma
+         *      linha vertical de cima a baixo.
+         */
+        <div className="flex flex-col gap-3">
+          <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <StatCard icon={<Wallet size={16} />} label="Total em pedidos" value={formatCurrency(stats.total)} />
+            <StatCard icon={<ShoppingBag size={16} />} label="Pedidos" value={formatNumber(stats.count)} />
+            <StatCard icon={<TrendingUp size={16} />} label="Ticket médio" value={formatCurrency(stats.ticket)} />
+            <StatCard icon={<CalendarDays size={16} />} label="Último pedido" value={stats.ultimo ? formatDate(stats.ultimo) : "—"} />
+          </section>
 
-            <div className="card glass-sheen overflow-hidden rounded-2xl">
-              <SectionHead icon={<TrendingUp className="h-4 w-4" />} title="Vendas" meta="Últimos 6 meses" />
-              <div className="h-[280px] p-4">
-                <ClienteSalesChart monthlyData={monthly} />
-              </div>
-            </div>
-
-            <div className="card glass-sheen flex flex-col overflow-hidden rounded-2xl">
-              <SectionHead icon={<Receipt className="h-4 w-4" />} title="Pedidos" meta={`${pedidos.length} ${pedidos.length === 1 ? "pedido" : "pedidos"} no total`} />
-
-              <div>
-                {pedidosOrdenados.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-fg/[0.06] bg-fg/[0.03]">
-                      <Receipt className="h-6 w-6 text-faint" />
-                    </div>
-                    <p className="text-[13px] text-mist">Nenhum pedido encontrado</p>
-                  </div>
-                ) : (
-                  <>
-                    {currentPedidos.map((p) => {
-                      const total = p.pedido?.totalPedido ?? 0;
-                      const nItens = p.pedido?.itensPedido?.length ?? 0;
-                      const status = p.pedido?.pedidoStatus;
-
-                      return (
-                        <button
-                          key={p.pedido?.pedidoId}
-                          onClick={() => abrirPedido(p)}
-                          className="group relative flex h-[68px] w-full cursor-pointer items-center gap-3 border-b border-fg/[0.04] px-5 text-left transition-colors before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] before:rounded-r before:bg-accent before:opacity-0 before:transition-opacity last:border-b-0 hover:bg-fg/[0.03] hover:before:opacity-100"
-                        >
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/[0.12] text-accent-soft ring-1 ring-inset ring-accent/15">
-                            <Receipt size={16} />
-                          </span>
-
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-[13px] text-ink">
-                              <span className="text-faint">#</span>
-                              {p.pedido?.pedidoId?.slice(0, 8)}
-                            </p>
-                            <p className="text-[11px] text-faint">
-                              {formatDate(p.pedido?.dataPedido)} · {horaPedido(p.pedido?.dataPedido)} · {nItens} {nItens === 1 ? "item" : "itens"}
-                            </p>
-                          </div>
-
-                          <span className="hidden sm:block">
-                            <PedidoStatusBadge status={status} />
-                          </span>
-
-                          <p className="text-right text-[13px] tabular-nums text-ink">{formatCurrency(total)}</p>
-                          <ChevronRight size={16} className="text-muted" />
-                        </button>
-                      );
-                    })}
-
-                    {/* Linhas fantasma pra manter altura constante */}
-                    {Array.from({ length: emptyRows }).map((_, i) => (
-                      <div key={`empty-${i}`} className="h-[68px] border-b border-fg/[0.04] last:border-b-0" />
-                    ))}
-                  </>
-                )}
-              </div>
-
-              {pedidosOrdenados.length > 0 && (
-                <div className="flex shrink-0 items-center justify-between gap-3 border-t border-fg/[0.06] bg-fg/[0.02] px-5 py-3">
-                  <p className="flex items-center gap-2 text-[12px] text-faint">
-                    <TrendingUp size={14} className="text-accent-soft" />
-                    Ticket médio: <span className="tabular-nums text-ink">{formatCurrency(stats.ticket)}</span>
-                  </p>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      aria-label="Página anterior"
-                      className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-fg/[0.08] bg-fg/[0.04] text-mist transition-colors hover:bg-fg/[0.08] hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      <ChevronLeft size={14} />
-                    </button>
-                    <span className="text-[12px] text-faint">
-                      Página <span className="text-mist">{currentPage}</span>/<span className="text-mist">{totalPages}</span>
-                    </span>
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      aria-label="Próxima página"
-                      className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-fg/[0.08] bg-fg/[0.04] text-mist transition-colors hover:bg-fg/[0.08] hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      <ChevronRight size={14} />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
+          <section className="grid grid-cols-1 gap-3 xl:grid-cols-4">
           {/* ---------------- Lateral: quem ele é ---------------- */}
-          <aside className="flex flex-col gap-4">
+          <aside className="flex flex-col gap-3">
             {/* ---- Ficha: identidade + o que falta preencher ---- */}
             {/*
               O cartão de perfil era um retrato: avatar grande, nome, documento.
@@ -468,38 +421,47 @@ const ClienteDetalhe = () => {
               mudou — "o que eu ainda não sei sobre este cliente?". O anel mede
               isso e as lacunas viram atalho para a edição.
             */}
+            {/*
+              Identidade, dados e o botão que os edita: um cartão só.
+              -----------------------------------------------------------------
+              Eram dois cartões colados — "quem é" e "Dados" —, e a separação
+              não correspondia a nada: nome, status, documento, nascimento e
+              sexo são a MESMA pergunta ("quem é este cliente?"), respondida em
+              duas caixas com uma borda no meio.
+
+              "Editar" veio junto porque é exatamente este conteúdo que ele
+              abre. No topo da tela ele era um botão genérico longe de tudo o
+              que muda; aqui ele fica na moldura do que muda, e o anel de
+              completude ao lado dele dá o motivo de clicar.
+            */}
             <div className="card glass-sheen overflow-hidden rounded-2xl">
-              <div className="flex items-center gap-3.5 px-5 py-4">
-                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-accent/25 bg-gradient-to-br from-accent/30 to-accent-soft/10 text-[16px] text-accent-soft">
+              <div className="flex items-center gap-2.5 px-3.5 py-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-accent/25 bg-gradient-to-br from-accent/30 to-accent-soft/10 text-[14px] text-accent-soft">
                   {client ? getInitials(client.nome) : "?"}
                 </span>
 
                 <div className="min-w-0 flex-1">
-                  <h2 className="truncate text-[15px] text-ink">{client?.nome}</h2>
-                  <div className="mt-1.5">{client && <StatusBadge status={client.status} />}</div>
+                  <h2 className="truncate text-[13.5px] text-ink">{client?.nome}</h2>
+                  <div className="mt-1">{client && <StatusBadge status={client.status} />}</div>
                 </div>
 
-                <AnelFicha pct={completude} />
+                <AnelFicha pct={completude} tamanho={52} />
               </div>
 
-              {faltando.length > 0 ? (
+              <div className="flex items-center gap-2.5 border-t border-fg/[0.06] px-3.5 py-2">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-fg/[0.04] text-muted">
+                  <UserRound size={13} />
+                </span>
+                <p className="min-w-0 flex-1 text-[9.5px] uppercase tracking-[0.06em] text-faint">Dados</p>
+
                 <button
                   type="button"
                   onClick={() => setShowEdit(true)}
-                  className="flex w-full cursor-pointer items-center gap-2 border-t border-fg/[0.06] bg-fg/[0.02] px-5 py-2.5 text-left text-[11.5px] text-mist transition-colors hover:bg-fg/[0.05] hover:text-ink"
+                  className="focus-ring inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-fg/[0.1] px-2 py-1 text-[11.5px] text-mist transition-colors hover:bg-fg/[0.05] hover:text-ink"
                 >
-                  <ClipboardList className="h-3.5 w-3.5 shrink-0 text-muted" />
-                  <span className="min-w-0 flex-1 truncate">Falta {faltando.map((f) => f.label.toLowerCase()).join(", ")}</span>
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted" />
+                  <Pencil size={12} /> Editar
                 </button>
-              ) : (
-                <p className="border-t border-fg/[0.06] bg-success/[0.05] px-5 py-2.5 text-[11.5px] text-success">Ficha completa</p>
-              )}
-            </div>
-
-            {/* ---- Dados do cliente ---- */}
-            <div className="card glass-sheen overflow-hidden rounded-2xl">
-              <SectionHead icon={<UserRound className="h-4 w-4" />} title="Dados" />
+              </div>
 
               <div className="divide-y divide-fg/[0.04] py-1">
                 <Dado icon={<IdCard size={14} />} label="Documento" valor={client?.cpfCnpj ? formatDocument(client.cpfCnpj) : ""} />
@@ -511,16 +473,46 @@ const ClienteDetalhe = () => {
                 />
                 <Dado icon={<UserRound size={14} />} label="Sexo" valor={client?.sexo ? SEXO_LABEL[client.sexo] : ""} />
               </div>
+
+              {faltando.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowEdit(true)}
+                  className="flex w-full cursor-pointer items-center gap-2 border-t border-fg/[0.06] bg-fg/[0.02] px-3.5 py-2 text-left text-[11px] text-mist transition-colors hover:bg-fg/[0.05] hover:text-ink"
+                >
+                  <ClipboardList className="h-3.5 w-3.5 shrink-0 text-muted" />
+                  <span className="min-w-0 flex-1 truncate">Falta {faltando.map((f) => f.label.toLowerCase()).join(", ")}</span>
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted" />
+                </button>
+              ) : (
+                <p className="border-t border-fg/[0.06] bg-success/[0.05] px-3.5 py-2 text-[11px] text-success">Ficha completa</p>
+              )}
             </div>
 
             {/* ---- Contato ---- */}
             <div className="card glass-sheen overflow-hidden rounded-2xl">
               <SectionHead icon={<PhoneCall className="h-4 w-4" />} title="Contato" />
 
+              {/* Cada linha traz o botão que USA o número dela — ver `AcaoLinha`. */}
               <div className="divide-y divide-fg/[0.04] py-1">
-                <Dado icon={<MessageCircle size={14} />} label="WhatsApp" valor={client?.contato?.whatsapp ? maskPhone(String(client.contato.whatsapp)) : ""} />
-                <Dado icon={<PhoneCall size={14} />} label="Telefone" valor={client?.contato?.celular || client?.contato?.telefone ? maskPhone(String(client?.contato?.celular || client?.contato?.telefone)) : ""} />
-                <Dado icon={<Mail size={14} />} label="E-mail" valor={email ?? ""} />
+                <Dado
+                  icon={<MessageCircle size={14} />}
+                  label="WhatsApp"
+                  valor={client?.contato?.whatsapp ? maskPhone(String(client.contato.whatsapp)) : ""}
+                  acao={<AcaoLinha icon={<MessageCircle size={13} />} label="Abrir conversa no WhatsApp" href={waDigits ? `https://wa.me/55${waDigits}` : undefined} externo tone="success" />}
+                />
+                <Dado
+                  icon={<PhoneCall size={14} />}
+                  label="Telefone"
+                  valor={client?.contato?.celular || client?.contato?.telefone ? maskPhone(String(client?.contato?.celular || client?.contato?.telefone)) : ""}
+                  acao={<AcaoLinha icon={<PhoneCall size={13} />} label="Ligar" href={telDigits ? `tel:${telDigits}` : undefined} />}
+                />
+                <Dado
+                  icon={<Mail size={14} />}
+                  label="E-mail"
+                  valor={email ?? ""}
+                  acao={<AcaoLinha icon={<Mail size={13} />} label="Escrever e-mail" href={email ? `mailto:${email}` : undefined} />}
+                />
               </div>
             </div>
 
@@ -546,7 +538,7 @@ const ClienteDetalhe = () => {
                   {endereco?.complemento && <Dado icon={<MapPin size={14} />} label="Complemento" valor={endereco.complemento} />}
                 </div>
               ) : (
-                <button type="button" onClick={() => setShowEdit(true)} className="flex w-full cursor-pointer items-center justify-between gap-2 px-5 py-4 text-left text-[12px] text-faint transition-colors hover:bg-fg/[0.03] hover:text-mist">
+                <button type="button" onClick={() => setShowEdit(true)} className="flex w-full cursor-pointer items-center justify-between gap-2 px-3.5 py-3 text-left text-[11.5px] text-faint transition-colors hover:bg-fg/[0.03] hover:text-mist">
                   Nenhum endereço cadastrado — adicione para entregas e rotas.
                   <ChevronRight className="h-3.5 w-3.5 shrink-0" />
                 </button>
@@ -555,12 +547,12 @@ const ClienteDetalhe = () => {
 
             {/* ---- Status dos pedidos ---- */}
             {pedidos.length > 0 && (
-              <div className="card glass-sheen rounded-2xl p-5">
-                <p className="mb-4 text-[11px] uppercase tracking-[0.12em] text-mist">Status dos pedidos</p>
-                <div className="space-y-3.5">
+              <div className="card glass-sheen rounded-2xl p-3.5">
+                <p className="mb-3 text-[9.5px] uppercase tracking-[0.08em] text-faint">Status dos pedidos</p>
+                <div className="space-y-3">
                   {statusBreak.map((s) => (
                     <div key={s.key}>
-                      <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <div className="mb-1.5 flex items-center justify-between text-[12px]">
                         <span className="flex items-center gap-2 text-mist">
                           <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }} />
                           {s.label}
@@ -576,6 +568,102 @@ const ClienteDetalhe = () => {
               </div>
             )}
           </aside>
+
+          {/* ---------------- Coluna principal: o que ele comprou ---------------- */}
+          <div className="flex flex-col gap-3 xl:col-span-3">
+
+            <div className="card glass-sheen overflow-hidden rounded-2xl">
+              <SectionHead icon={<TrendingUp className="h-4 w-4" />} title="Vendas" meta="Últimos 6 meses" />
+              <div className="h-[280px] p-4">
+                <ClienteSalesChart monthlyData={monthly} />
+              </div>
+            </div>
+
+            <div className="card glass-sheen flex flex-col overflow-hidden rounded-2xl">
+              <SectionHead icon={<Receipt className="h-4 w-4" />} title="Pedidos" meta={`${pedidos.length} ${pedidos.length === 1 ? "pedido" : "pedidos"} no total`} />
+
+              <div>
+                {pedidosOrdenados.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-fg/[0.06] bg-fg/[0.03]">
+                      <Receipt className="h-6 w-6 text-faint" />
+                    </div>
+                    <p className="text-[13px] text-mist">Nenhum pedido encontrado</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Os rótulos saem de `ROTULOS_PEDIDOS`, a mesma lista que
+                        o cartão do celular usa. */}
+                    <ListaCabecalho cols={COLS_PEDIDOS}>
+                      {ROTULOS_PEDIDOS.map((r, i) => (
+                        <p key={r} className={i >= 2 ? "text-right" : undefined}>{r}</p>
+                      ))}
+                    </ListaCabecalho>
+
+                    {currentPedidos.map((p) => {
+                      const total = p.pedido?.totalPedido ?? 0;
+                      const nItens = p.pedido?.itensPedido?.length ?? 0;
+                      const status = p.pedido?.pedidoStatus;
+
+                      return (
+                        <ListaLinha
+                          key={p.pedido?.pedidoId}
+                          cols={COLS_PEDIDOS}
+                          altura={ALTURA_PEDIDO}
+                          rotulos={ROTULOS_PEDIDOS}
+                          onClick={() => abrirPedido(p)}
+                          ariaLabel={`Abrir o pedido ${p.pedido?.pedidoId?.slice(0, 8)}`}
+                        >
+                          <span className="flex min-w-0 items-center gap-2.5">
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/[0.12] text-accent-soft ring-1 ring-inset ring-accent/15">
+                              <Receipt size={14} />
+                            </span>
+                            <span className="flex min-w-0 flex-col">
+                              <span className="truncate text-[12.5px] text-ink">
+                                <span className="text-faint">#</span>
+                                {p.pedido?.pedidoId?.slice(0, 8)}
+                              </span>
+                              <span className="truncate text-[10.5px] text-faint">
+                                {nItens} {nItens === 1 ? "item" : "itens"}
+                              </span>
+                            </span>
+                          </span>
+
+                          <span className="min-w-0 truncate text-[12px] text-mist">
+                            {formatDate(p.pedido?.dataPedido)} · {horaPedido(p.pedido?.dataPedido)}
+                          </span>
+
+                          <span className="flex justify-end">
+                            <PedidoStatusBadge status={status} />
+                          </span>
+
+                          <span className="text-right text-[12.5px] tabular-nums text-ink">{formatCurrency(total)}</span>
+                        </ListaLinha>
+                      );
+                    })}
+
+                    {/* Linhas fantasma pra manter altura constante */}
+                    <ListaFantasmas quantidade={emptyRows} altura={ALTURA_PEDIDO} />
+                  </>
+                )}
+              </div>
+
+              {pedidosOrdenados.length > 0 && (
+                /* O rodapé é o mesmo das outras tabelas: o resumo à esquerda,
+                   os controles de página à direita — dois pares de setas
+                   diferentes para a mesma coisa era o que havia antes. */
+                <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-fg/[0.06] px-4 py-2.5 text-[12px] text-faint">
+                  <span className="flex items-center gap-2">
+                    <TrendingUp size={13} className="text-accent-soft" />
+                    Ticket médio: <span className="tabular-nums text-ink">{formatCurrency(stats.ticket)}</span>
+                  </span>
+
+                  {totalPages > 1 && <ControlesPagina pagina={currentPage} totalPaginas={totalPages} onPagina={setCurrentPage} />}
+                </div>
+              )}
+            </div>
+          </div>
+          </section>
         </div>
       )}
 

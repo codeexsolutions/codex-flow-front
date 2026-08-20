@@ -4,7 +4,7 @@ import sysgrafix from "@/shared/api/sysgrafix";
 
 const NoteService = {
   /** Cria novo pedido → POST /pedidos/novo-pedido */
-  create: (note: NovoPedidoDto) => sysgrafix.post("/pedidos/novo-pedido", note),
+  create: (note: NovoPedidoDto) => sysgrafix.post("/pedidos/novo-pedido", note, { carregamento: "Registrando a venda…" }),
 
   /** Lista todos os pedidos → GET /pedidos/ */
   getAll: () => sysgrafix.get("/pedidos/"),
@@ -20,7 +20,7 @@ const NoteService = {
    * O controller lê `data.produtosPedido` do body (nome diferente do de criar!)
    */
   update: async (data: PedidoUpdateDto, pedidoId: string) => {
-    return await sysgrafix.patch(`/pedidos/alterar/${pedidoId}`, data);
+    return await sysgrafix.patch(`/pedidos/alterar/${pedidoId}`, data, { carregamento: "Salvando a nota…" });
   },
 
   /**
@@ -33,7 +33,7 @@ const NoteService = {
    * Cancelar preserva itens, valor e data; só o status muda. Nota já paga é
    * recusada pelo servidor: dinheiro que entrou sai pelo financeiro.
    */
-  cancelar: (pedidoId: string) => sysgrafix.patch(`/pedidos/${pedidoId}/cancelar`),
+  cancelar: (pedidoId: string) => sysgrafix.patch(`/pedidos/${pedidoId}/cancelar`, undefined, { carregamento: "Cancelando a nota…" }),
 };
 
 export default NoteService;

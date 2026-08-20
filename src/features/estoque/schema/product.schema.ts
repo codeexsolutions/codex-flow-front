@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * O formulário do item — produto ou serviço.
+ * O formulário do item — produto, serviço ou insumo.
  *
  * ---------------------------------------------------------------------------
  * O que saiu daqui, e por quê
@@ -24,8 +24,14 @@ export const productSchema = z
   .object({
     nome: z.string().min(3, "Informe o nome do produto"),
 
-    /** PRODUTO controla estoque; SERVICO não tem o que estocar. */
-    tipo: z.enum(["PRODUTO", "SERVICO"]).default("PRODUTO"),
+    /**
+     * PRODUTO, SERVICO ou INSUMO — ver `TipoItem` em `shared/domain/produto`.
+     *
+     * INSUMO controla estoque igual a PRODUTO: o que muda é que ele não é
+     * vendido, então some do catálogo e da busca do PDV. Por isso ele NÃO
+     * entra no `transform` de baixo junto do serviço.
+     */
+    tipo: z.enum(["PRODUTO", "SERVICO", "INSUMO"]).default("PRODUTO"),
 
     /**
      * A coluna do banco continua `valor_compra`; o rótulo na tela é "preço de

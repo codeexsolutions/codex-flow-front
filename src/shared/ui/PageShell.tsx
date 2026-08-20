@@ -40,6 +40,8 @@ export const PageScreen = ({
   icon,
   tabs,
   actions,
+  onVoltar,
+  voltarPara,
   children,
   bodyClassName = "",
   headerClassName,
@@ -50,6 +52,9 @@ export const PageScreen = ({
   tabs?: HeaderTab[];
   /** Controles no cabeçalho — só para telas que precisam da altura. Ver `HeaderPage`. */
   actions?: ReactNode;
+  /** Telas de detalhe: o voltar mora no cabeçalho. Ver `HeaderPage`. */
+  onVoltar?: () => void;
+  voltarPara?: string;
   children: ReactNode;
   bodyClassName?: string;
   /** Envolve o cabeçalho — usado por Relatórios para escondê-lo na impressão. */
@@ -68,10 +73,10 @@ export const PageScreen = ({
 
     {headerClassName ? (
       <div className={headerClassName}>
-        <HeaderPage title={title} subtitle={subtitle} icon={icon} tabs={tabs} actions={actions} />
+        <HeaderPage title={title} subtitle={subtitle} icon={icon} tabs={tabs} actions={actions} onVoltar={onVoltar} voltarPara={voltarPara} />
       </div>
     ) : (
-      <HeaderPage title={title} subtitle={subtitle} icon={icon} tabs={tabs} actions={actions} />
+      <HeaderPage title={title} subtitle={subtitle} icon={icon} tabs={tabs} actions={actions} onVoltar={onVoltar} voltarPara={voltarPara} />
     )}
 
     <PageBody className={bodyClassName}>{children}</PageBody>

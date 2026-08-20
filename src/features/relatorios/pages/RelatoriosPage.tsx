@@ -14,7 +14,7 @@ import { estaAberto, estaCancelado, totalDoPedido, type PedidoClienteType } from
 import { formatCurrency } from "@/shared/utils/currency";
 import { formatDate, formatDateTime, toDate } from "@/shared/utils/date";
 import { formatDocument, formatNumber } from "@/shared/utils/format";
-import ProductType from "@/shared/domain/produto";
+import ProductType, { ehVendavel } from "@/shared/domain/produto";
 
 import { FolhaA4, FolhaHeader, FolhaKpis, FolhaTabela, FolhaTotais, FolhaFooter, type Coluna } from "@/features/relatorios/components/FolhaA4";
 
@@ -319,7 +319,10 @@ const RelatoriosPage = () => {
               <>
                 <FolhaKpis
                   itens={[
-                    { label: "Produtos", valor: formatNumber(produtos.length) },
+                    /* Insumo fica de fora da CONTAGEM de produtos (ele não é um),
+                       mas continua nas linhas de posição de estoque abaixo:
+                       ele tem saldo, e posição de estoque é sobre saldo. */
+                    { label: "Produtos", valor: formatNumber(produtos.filter(ehVendavel).length) },
                     { label: "Unidades", valor: formatNumber(/* bigint chega como string: sem Number() a soma concatena. */
                       produtos.reduce((a, p) => a + (Number(p.quantidade) || 0), 0)) },
                     { label: "Baixo/esgotado", valor: formatNumber(produtos.filter((p) => stockLevel(p.quantidade) !== "disponivel").length) },

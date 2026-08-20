@@ -31,7 +31,7 @@ type RetornoPadrao<T> = { statusCode: number; message: string; data: T[] };
 const AuthService = {
   /** Login: devolve o par de tokens e o usuário. Quem grava é a store. */
   login: async (data: object | undefined): Promise<SessaoDoLogin> => {
-    const res = await sysgrafix.post<RetornoPadrao<SessaoDoLogin>>("/login/token", data || {});
+    const res = await sysgrafix.post<RetornoPadrao<SessaoDoLogin>>("/login/token", data || {}, { carregamento: "Entrando…" });
 
     const sessao = res.data?.data?.[0];
 
@@ -64,7 +64,10 @@ const AuthService = {
    * "saí". Falhar aqui não pode travar o logout.
    */
   logout: async (): Promise<void> => {
-    await sysgrafix.post("/auth/logout");
+    /* Sem aviso: o logout não espera resposta para acontecer (quem encerra é
+       o cliente, apagando o que guardou) e a tela já está indo embora. Um
+       "Salvando…" por cima da saída diria que algo ainda pode dar errado. */
+    await sysgrafix.post("/auth/logout", undefined, { carregamento: false });
   },
 };
 

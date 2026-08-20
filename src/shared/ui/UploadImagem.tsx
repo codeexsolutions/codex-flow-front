@@ -22,8 +22,18 @@ type Props = {
   valor: string | null | undefined;
   onChange: (url: string | null) => void;
   rotulo?: string;
-  /** Quadrada para logo e foto; larga para o fundo da nota. */
-  formato?: "quadrado" | "largo";
+  /**
+   * Quadrada para logo e foto; larga para o fundo da nota; `miniatura` é a
+   * quadrada SEM nada em volta.
+   *
+   * `miniatura` existe para quem já tem uma coluna própria no formulário: a
+   * versão normal traz rótulo em cima e dois botões ao lado ("Enviar imagem",
+   * "Remover"), e isso ocupa três linhas para uma foto opcional. Na miniatura
+   * a prévia é o botão inteiro — clicar troca a imagem, que é o que se tenta
+   * fazer antes de procurar um botão — e o remover só aparece quando existe
+   * imagem para remover, sobre ela.
+   */
+  formato?: "quadrado" | "largo" | "miniatura";
 };
 
 const UploadImagem = ({ tipo, valor, onChange, rotulo = "Imagem", formato = "quadrado" }: Props) => {
@@ -58,7 +68,69 @@ const UploadImagem = ({ tipo, valor, onChange, rotulo = "Imagem", formato = "qua
     }
   };
 
-  const molde = formato === "largo" ? "aspect-[16/6] w-full" : "h-24 w-24";
+  const molde = formato === "largo" ? "aspect-[16/6] w-full" : formato === "miniatura" ? "h-full w-full" : "h-24 w-24";
+  const miniatura = formato === "miniatura";
+
+  /* A miniatura é só o quadrado: sem rótulo em cima e sem a fileira de botões
+     ao lado. Quem a usa já deu a ela uma coluna do formulário. */
+  if (miniatura) {
+    return (
+      <div className="flex h-full min-h-[104px] flex-col gap-1.5">
+        <div className="relative min-h-0 flex-1">
+          <button
+            type="button"
+            onClick={() => entrada.current?.click()}
+            disabled={enviando}
+            title={valor ? "Trocar a foto" : "Escolher uma foto"}
+            className="focus-ring group relative h-full w-full overflow-hidden rounded-xl border border-dashed border-fg/[0.16] bg-fg/[0.03] transition-colors hover:border-accent/50 disabled:opacity-60"
+          >
+            {valor ? (
+              <img src={valor} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <span className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-faint">
+                <ImagePlus size={20} />
+                <span className="text-[11px]">Escolher</span>
+              </span>
+            )}
+
+            {enviando && (
+              <span className="absolute inset-0 grid place-items-center bg-surface/80">
+                <Loader2 size={18} className="animate-spin text-accent" />
+              </span>
+            )}
+          </button>
+
+          {/* Sobre a foto, e só quando há foto: um "Remover" permanente seria
+              uma linha a mais no formulário para desfazer algo que talvez
+              nunca tenha sido feito. */}
+          {valor && !enviando && (
+            <button
+              type="button"
+              onClick={() => onChange(null)}
+              title="Remover a foto"
+              aria-label="Remover a foto"
+              className="focus-ring absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-lg bg-canvas/80 text-muted backdrop-blur transition-colors hover:text-danger"
+            >
+              <Trash2 size={12} />
+            </button>
+          )}
+        </div>
+
+        {erro && <p className="text-[11px] text-danger">{erro}</p>}
+
+        <input
+          ref={entrada}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const arquivo = e.target.files?.[0];
+            if (arquivo) void enviar(arquivo);
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-2">

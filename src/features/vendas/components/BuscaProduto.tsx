@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { PackageSearch, PackagePlus, Plus, Loader2, CornerDownLeft, Ban, Layers } from "lucide-react";
 
-import ProductType, { nivelEstoque } from "@/shared/domain/produto";
+import ProductType, { ehVendavel, nivelEstoque } from "@/shared/domain/produto";
 import type { Variacao } from "@/shared/domain/estoque";
 import EstoqueService from "@/features/estoque/services/estoque.service";
 import { formatCurrency } from "@/shared/utils/currency";
@@ -84,7 +84,17 @@ const BuscaProduto = ({ produtos, carregando = false, onAdicionar, onCadastrar }
   const sugestoes = useMemo(() => {
     if (!termo || procurando) return [];
 
+    /*
+     * Insumo fica FORA da busca do balcão.
+     *
+     * O rolo de tecido e a folha de transfer existem no estoque, contam
+     * unidade e têm ficha — mas não são o que se vende. Aparecendo aqui, eles
+     * disputam as oito sugestões com o produto certo e, pior, deixam lançar
+     * material na nota do cliente: a venda baixaria o insumo diretamente, e a
+     * peça pronta que ele deveria virar continuaria em estoque.
+     */
     return produtos
+      .filter(ehVendavel)
       .filter((p) =>
         p.nome?.toLowerCase().includes(termo) ||
         /* SKU e código de barras entram na busca porque são o que se digita

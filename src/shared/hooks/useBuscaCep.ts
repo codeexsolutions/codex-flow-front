@@ -8,17 +8,6 @@ export type EnderecoCep = {
   uf: string;
 };
 
-/**
- * Consulta de CEP no ViaCEP.
- *
- * O mesmo `fetch` estava copiado no cadastro da empresa e no de configurações,
- * cada um com o seu tratamento de erro. Aqui a busca é uma só: devolve o
- * endereço ou `null`, e quem chama decide o que fazer com o `null` — a tela é
- * que sabe se avisa por toast, por alerta ou em silêncio.
- *
- * Digitação parcial não busca: com menos de 8 dígitos não há o que consultar, e
- * disparar assim mesmo faria uma requisição por tecla.
- */
 export function useBuscaCep() {
   const [buscando, setBuscando] = useState(false);
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
 import { LayoutDashboard, ShoppingCart, DollarSign, Package, Users, Wallet, BarChart3, MoreHorizontal, Settings, LogOut, UserCircle, Truck, Lock, Table2 } from "lucide-react";
 
@@ -61,7 +61,7 @@ type Item = {
  * - **Arrastar a tela troca de aba.** A ordem das abas mora em `ABAS_SWIPE`
  *   (em `useSwipeAbas`) e é lida daqui — uma fonte só para o gesto e a dock.
  */
-const BottomNav = () => {
+const TabBar = () => {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -93,8 +93,8 @@ const BottomNav = () => {
   const APARENCIA: Record<string, { label: string; icon: React.ReactNode }> = {
     "/": { label: "Início", icon: <LayoutDashboard size={18} /> },
     "/pdv": { label: "PDV", icon: <ShoppingCart size={18} /> },
-    // Direto na lista: a "Visão geral" é o que o Início já mostra.
-    "/vendas/lista": { label: gestor ? "Vendas" : "Minhas vendas", icon: <DollarSign size={18} /> },
+    /* O panorama e a lista viraram a mesma tela — ver `VendasPage`. */
+    "/vendas": { label: gestor ? "Vendas" : "Minhas vendas", icon: <DollarSign size={18} /> },
   };
 
   const principais: Item[] = ABAS_SWIPE.map((rota) => ({ rota, ...APARENCIA[rota] }));
@@ -102,40 +102,41 @@ const BottomNav = () => {
   /*
    * O resto vai para a folha "Mais" — não cabe e não é de uso constante.
    *
-   * Os grupos e a ordem acompanham a sidebar — Meu dia, Cadastros,
-   * Dinheiro, Logística, Conta. O que muda é a moldura: lá os três
-   * grandes blocos são abas, aqui tudo desce numa lista. Numa folha que já
-   * custou um toque para abrir, esconder metade dos destinos atrás de uma
-   * segunda troca cobraria caro demais; os títulos separam o suficiente, e a
-   * sequência idêntica faz quem usou o computador achar o item no celular
-   * sem procurar.
+   * Os grupos e a ordem acompanham a sidebar — Meu dia, Gestão da empresa,
+   * Atendimento, Entregas, Conta. Não é simetria por simetria: quem usou o
+   * computador procura no celular pelo nome que já viu, e dois vocabulários
+   * para os mesmos dez destinos fazem a pessoa concluir que são menus
+   * diferentes.
    *
-   * Clientes aparece uma vez só, e não duas como na sidebar: lá a repetição
-   * evita uma troca de aba, aqui não há aba nenhuma para evitar — o mesmo
-   * nome duas vezes numa lista corrida só pareceria engano.
+   * A sigla (ERP, CRM, TMS) fica só na sidebar, na etiqueta ao lado do nome.
+   * Aqui a folha não tem a mesma largura para dois textos por título, e o que
+   * não pode faltar é a palavra que se entende — a sigla é o extra.
+   *
+   * O que muda é só a moldura: a sidebar tem uma faixa de atalhos em cima da
+   * lista, aqui os mesmos atalhos são as abas de baixo e o resto desce nesta
+   * folha. Numa folha que já custou um toque para abrir, esconder metade dos
+   * destinos atrás de uma segunda troca cobraria caro demais; os títulos
+   * separam o suficiente.
    */
   const secundarios: Item[] = [
     /* Planilhas abre a folha, como na sidebar: subiu para "Meu dia" porque é
        ferramenta do trabalho do dia, não de administração. */
     { rota: "/planilhas", label: "Planilhas", icon: <Table2 size={18} />, familia: "Meu dia" },
 
-    { rota: "/clientes", label: "Clientes", icon: <Users size={18} />, familia: "Cadastros" },
+    { rota: "/estoque", label: "Estoque/Serviços", icon: <Package size={18} />, familia: "Gestão da empresa" },
+    // Financeiro voltou a ser destino próprio: caixa, a pagar e a receber numa tela só.
+    ...(gestor ? [{ rota: "/financeiro", label: "Financeiro", icon: <Wallet size={18} />, recurso: "financeiro" }] : []),
+    { rota: "/relatorios", label: "Relatórios", icon: <BarChart3 size={18} />, recurso: "relatorios" },
     // Equipe é do dono e só existe em plano que comporta mais de um usuário.
     ...(gestor && planoTemEquipe(equipe) ? [{ rota: "/funcionarios", label: "Funcionários", icon: <UserCircle size={18} /> }] : []),
 
-    // Financeiro virou aba de Vendas — deixou de ser destino próprio.
-    ...(gestor ? [{ rota: "/vendas/caixa", label: "Financeiro", icon: <Wallet size={18} />, recurso: "financeiro", familia: "Dinheiro" }] : []),
-    { rota: "/relatorios", label: "Relatórios", icon: <BarChart3 size={18} />, recurso: "relatorios" },
+    { rota: "/clientes", label: "Clientes", icon: <Users size={18} />, familia: "Atendimento" },
 
-    /* Estoque e Correios juntos, como na aba Logística da sidebar: o que
-       entra na loja e o que sai dela. O rótulo é o mesmo dos dois lados —
-       quem usou o computador precisa achar o item pelo nome que já conhece. */
-    { rota: "/estoque", label: "Estoque/Serviços", icon: <Package size={18} />, familia: "Logística" },
     // Correios voltou para "em breve" enquanto o módulo é finalizado. Fica na
     // folha, apagado: some do menu e ninguém descobre que existe. O selo é
     // "Em breve", não o cadeado de plano — o cadeado promete uma tela que o
     // upgrade destrava hoje, e essa ainda não está de pé.
-    { rota: "/correios", label: "Correios", icon: <Truck size={18} />, emBreve: true },
+    { rota: "/correios", label: "Correios", icon: <Truck size={18} />, emBreve: true, familia: "Entregas" },
 
     { rota: "/configuracoes", label: "Configurações", icon: <Settings size={18} />, familia: "Conta" },
   ];
@@ -154,18 +155,42 @@ const BottomNav = () => {
 
   return (
     <>
-      {/* A moldura cobre a largura toda só para centralizar a dock e respeitar a
-          área segura; ela não recebe toque, então a tela continua clicável em
-          volta dela. */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] px-3 md:hidden" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 10px)" }}>
+      {/*
+       * Barra encostada na borda, e não uma pílula flutuando no meio.
+       *
+       * ---------------------------------------------------------------------
+       * O que a pílula fazia de errado
+       * ---------------------------------------------------------------------
+       * Ela era `w-fit`, centralizada, com 10px de folga até o fim da tela — e
+       * FLUTUAVA sobre o conteúdo. Três consequências, todas vistas no
+       * aparelho:
+       *
+       *   • COBRIA O QUE IMPORTA. No cadastro de cliente ela ficava por cima
+       *     da linha "Cancelar / Cadastrar"; no orçamento, por cima do "Gerar
+       *     orçamento". O último elemento de toda tela era o único que a barra
+       *     escondia — e é sempre o botão que conclui a tarefa.
+       *   • DESPERDIÇAVA A LARGURA. Sendo `w-fit` no meio, sobravam faixas
+       *     mortas nos dois lados, e os alvos ficavam concentrados no centro
+       *     em vez de espalhados onde o polegar alcança.
+       *   • NÃO TINHA CHÃO. Sem fundo até a borda, o conteúdo aparecia por
+       *     baixo dela ao rolar, atravessando os ícones.
+       *
+       * Agora ela ocupa a largura inteira, tem fundo próprio até o fim da tela
+       * (inclusive dentro da área segura do aparelho) e o corpo da página
+       * reserva a altura dela — ver `PAGE_PAD` em `PageShell`. Nada mais passa
+       * por baixo, e nada mais fica escondido atrás.
+       */}
+      <div className="fixed inset-x-0 bottom-0 z-[100] md:hidden">
         <motion.nav
           initial={{ y: 80, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={reduzir ? { duration: 0 } : { type: "spring", stiffness: 300, damping: 30 }}
-          className="glass-strong pointer-events-auto mx-auto flex h-[62px] w-fit max-w-full items-center gap-1 rounded-full border px-2"
+          className="glass-strong flex h-[58px] items-stretch justify-around gap-1 border-x-0 border-b-0 border-t px-1"
           style={{
             borderColor: "rgb(var(--glass-border) / calc(var(--glass-border-alpha) + 0.06))",
-            boxShadow: "0 14px 32px -16px rgb(0 0 0 / 0.45)",
+            boxShadow: "0 -8px 24px -18px rgb(0 0 0 / 0.5)",
+            paddingBottom: "env(safe-area-inset-bottom)",
+            height: "calc(58px + env(safe-area-inset-bottom))",
           }}
         >
           {principais.map((it) => {
@@ -181,10 +206,17 @@ const BottomNav = () => {
                 aria-current={on ? "page" : undefined}
                 whileTap={reduzir ? undefined : { scale: 0.94 }}
                 transition={mola}
-                /* `w-auto`, não `flex-1`: com flex-1 a aba ativa engolia toda a
-                   sobra da barra e virava um bloco do tamanho de três botões.
-                   Agora ela cresce só o que o nome precisa. */
-                className={`focus-ring relative flex h-12 shrink-0 items-center justify-center gap-2 rounded-[16px] transition-colors ${on ? "px-3.5 text-accent-soft" : "w-12 text-faint"}`}
+                /*
+                 * Agora É `flex-1`: cada aba fica com a mesma fatia da barra.
+                 *
+                 * Na pílula os botões tinham largura de conteúdo porque a
+                 * própria pílula se ajustava a eles. Numa barra que ocupa a
+                 * tela, largura de conteúdo deixa alvos de 48px separados por
+                 * vãos mortos — e o dedo erra justamente nas bordas. Divididos
+                 * por igual, cada alvo passa de 100px de largura e a linha
+                 * inteira é clicável.
+                 */
+                className={`focus-ring relative flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl transition-colors ${on ? "text-accent-soft" : "text-faint"}`}
               >
                 {/* A pílula é um irmão posicionado, não o fundo do botão: assim
                     ela desliza entre os itens em vez de piscar no destino. */}
@@ -194,7 +226,7 @@ const BottomNav = () => {
                     transition={mola}
                     /* Fundo lavado com anel, no lugar do accent chapado: a aba
                        fica marcada sem virar o objeto mais pesado da tela. */
-                    className="absolute inset-0 rounded-[16px] bg-accent/[0.14] ring-1 ring-inset ring-accent/25"
+                    className="absolute inset-x-1 inset-y-0.5 rounded-xl bg-accent/[0.12]"
                   />
                 )}
 
@@ -202,31 +234,26 @@ const BottomNav = () => {
                     A lista de rotas é a MESMA da folha "Mais": trocar o `size`
                     lá aumentaria também os ícones de dentro da folha, que já
                     estão no tamanho certo para uma lista de texto. */}
-                <span className="relative shrink-0 [&_svg]:h-[21px] [&_svg]:w-[21px]">{it.icon}</span>
+                <span className="relative shrink-0 [&_svg]:h-[20px] [&_svg]:w-[20px]">{it.icon}</span>
 
-                {/* O nome abre em largura, não em opacidade: surgir por cima dos
-                    vizinhos e só depois empurrá-los seriam dois tempos. */}
-                <AnimatePresence initial={false}>
-                  {on && (
-                    <motion.span
-                      key="rotulo"
-                      initial={reduzir ? false : { opacity: 0, width: 0 }}
-                      animate={{ opacity: 1, width: "auto" }}
-                      exit={reduzir ? undefined : { opacity: 0, width: 0 }}
-                      transition={mola}
-                      className="relative overflow-hidden whitespace-nowrap text-[12.5px] leading-none tracking-tight"
-                    >
-                      {it.label}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
+                {/*
+                 * O nome de TODAS as abas, sempre, embaixo do ícone.
+                 *
+                 * Antes só a aba ativa mostrava o rótulo, e ele abria em
+                 * largura empurrando as vizinhas. Isso resolvia um problema da
+                 * pílula (caber num espaço que se ajusta ao conteúdo) e criava
+                 * outro: as abas onde você NÃO está — que são justamente as
+                 * que você precisa identificar para ir a algum lugar — viravam
+                 * ícones sem nome. Um carrinho e um cifrão lado a lado não
+                 * dizem qual é "PDV" e qual é "Financeiro".
+                 *
+                 * Com a barra dividida por igual, cabe o rótulo embaixo do
+                 * ícone em todas — e nenhuma se mexe quando a ativa muda.
+                 */}
+                <span className="relative whitespace-nowrap text-[10px] leading-none tracking-tight">{it.label}</span>
               </motion.button>
             );
           })}
-
-          {/* Divisória: "Mais" abre uma folha, não navega. O fio separa as duas
-              naturezas sem precisar de um rótulo explicando. */}
-          <span aria-hidden className="mx-1 h-6 w-px shrink-0 bg-fg/10" />
 
           <motion.button
             type="button"
@@ -236,20 +263,21 @@ const BottomNav = () => {
             aria-expanded={maisAberto}
             whileTap={reduzir ? undefined : { scale: 0.94 }}
             transition={mola}
-            className={`focus-ring relative flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] transition-colors ${maisAberto ? "text-accent-soft" : "text-faint"}`}
+            className={`focus-ring relative flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl transition-colors ${maisAberto ? "text-accent-soft" : "text-faint"}`}
           >
             {maisAberto && (
               <motion.span
                 initial={{ opacity: 0, scale: 0.75 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ type: "spring", stiffness: 480, damping: 30 }}
-                className="absolute inset-0 rounded-[16px] bg-accent/[0.14] ring-1 ring-inset ring-accent/25"
+                className="absolute inset-x-1 inset-y-0.5 rounded-xl bg-accent/[0.12]"
               />
             )}
 
             <motion.span className="relative" animate={reduzir ? {} : { rotate: maisAberto ? 90 : 0 }} transition={{ type: "spring", stiffness: 420, damping: 28 }}>
-              <MoreHorizontal size={21} />
+              <MoreHorizontal size={20} />
             </motion.span>
+            <span className="relative whitespace-nowrap text-[10px] leading-none tracking-tight">Mais</span>
           </motion.button>
         </motion.nav>
       </div>
@@ -318,4 +346,4 @@ const BottomNav = () => {
   );
 };
 
-export default BottomNav;
+export default TabBar;

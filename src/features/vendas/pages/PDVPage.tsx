@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LegacyRef, ReactNode } from "react";
 import { ShoppingCart, Plus, Receipt, UserCheck, DollarSign, Wallet, AlertCircle, Hash, TrendingUp, ChevronRight, Search, UserPlus, PackagePlus, FileText, Check, X, Trash2, Loader2, Pencil, CalendarDays } from "lucide-react";
 
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import Invoice from "@/features/vendas/components/Invoice";
 import { PageScreen, PrimaryAction, GhostAction } from "@/shared/ui/PageShell";
@@ -19,6 +19,8 @@ import ProductService from "@/features/estoque/services/product.service";
 import type { ProductFormData } from "@/features/estoque/schema/product.schema";
 import type { ClienteFormData } from "@/features/clientes/schema/cliente.schema";
 import { Modal } from "@/shared/ui/Modal";
+import { BarraFiltros } from "@/shared/ui/DataTable";
+import { AbasTabela } from "@/shared/ui/AbasTabela";
 import { useAlert } from "@/shared/ui/Alert";
 import { extractErrorMessage, getErrorTitle } from "@/shared/utils/errorHandler";
 import { formatCurrency } from "@/shared/utils/currency";
@@ -33,7 +35,7 @@ import useEnterprise from "@/features/empresa/store/enterprise.store";
 
 import { estaAberto as estaAberta, totalDoPedido, type ItemPedidoType, type PedidoClienteType } from "@/shared/domain/pedido";
 import { formatTime as horaVenda, formatDate as dataBr, diaExtenso, isSameDay as noMesmoDia } from "@/shared/utils/date";
-import { getInitials as iniciais, formatDocument } from "@/shared/utils/format";
+import { getInitials as iniciais, formatDocument, formatNumber } from "@/shared/utils/format";
 import { Selo, type TomSelo } from "@/shared/ui/StatusBadge";
 
 // Só o essencial: quem é o cliente e (se existir) qual pedido.
@@ -195,6 +197,8 @@ const PontoDeVenda = () => {
      diferentes; estas trocam o conteúdo sem sair do balcão. */
   const [aba, setAba] = useState<"vendas" | "orcamentos">("vendas");
 
+  const location = useLocation();
+
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
 
   /* Ação em andamento numa linha — trava só aquela, não a tabela inteira. */
@@ -309,6 +313,24 @@ const PontoDeVenda = () => {
    * seletor de dia; agora tem — e dois recortes diferentes para a mesma lista
    * faziam o mesmo aparelho mostrar números distintos ao girar de lado.
    */
+  /*
+   * "Nova venda" e "Novo orçamento" da lista de vendas chegam aqui.
+   *
+   * A nota e a proposta são montadas no balcão, então os botões de lá navegam
+   * para cá pedindo a caixa que já vinham pedindo — e o estado é limpo em
+   * seguida, senão um F5 (ou o voltar do navegador) reabriria o modal sozinho.
+   */
+  useEffect(() => {
+    const abrir = (location.state as { abrir?: "venda" | "orcamento" } | null)?.abrir;
+
+    if (!abrir) return;
+
+    if (abrir === "venda") setNovaVendaOpen(true);
+    else setOrcamentoOpen(true);
+
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location, navigate]);
+
   const vendasVisiveis = useMemo(
     () =>
       [...vendas.filter((v) => noMesmoDia(v.pedido.dataPedido, dia))]
@@ -691,88 +713,97 @@ const PontoDeVenda = () => {
         {/* Card da lista */}
         <div className="card glass-sheen flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {/*
-           * Cabeçalho da tabela — tudo o que a tela faz mora aqui.
+           * Cabeçalho: só o que se pode CRIAR.
            *
-           * Os quatro botões de criar estavam acima, numa faixa própria, e os
-           * filtros aqui embaixo: duas barras de controle empilhadas antes de
-           * qualquer conteúdo, e uma delas ficava longe da lista que ela
-           * comanda. Juntos, o cabeçalho vira o painel do balcão — o que ver
-           * (aba e dia), o que procurar (busca) e o que criar (as quatro
-           * ações) — e a tabela ganha a altura das duas faixas antigas.
+           * As abas e a busca desceram para a `BarraFiltros`, colada na lista
+           * — navegação de um lado, filtros do outro. Aqui ficam as quatro
+           * portas de criar, que não olham para a lista: elas acrescentam a
+           * ela, e por isso não pertencem à barra que a restringe.
            */}
-          <div className="flex shrink-0 flex-col gap-3 border-b border-fg/[0.07] px-4 py-3">
-            {/* Linha 1: o que a tabela mostra · o que se pode criar */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="glass-subtle flex items-center gap-1 rounded-xl p-1">
-                {([
-                  { id: "vendas", label: "Vendas", icone: <Receipt size={14} />, total: vendasVisiveis.length },
-                  { id: "orcamentos", label: "Orçamentos", icone: <FileText size={14} />, total: orcamentos.length },
-                ] as const).map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setAba(opt.id)}
-                    aria-pressed={aba === opt.id}
-                    className={`focus-ring flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] transition-colors ${
-                      aba === opt.id ? "bg-accent text-white shadow-glow" : "text-mist hover:text-ink"
-                    }`}
-                  >
-                    {opt.icone}
-                    {opt.label}
-                    {/* A contagem na própria aba: saber que existem três
-                        orçamentos no dia é metade do motivo de trocar de aba. */}
-                    <span className={`tabular-nums ${aba === opt.id ? "text-white/70" : "text-faint"}`}>{opt.total}</span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <GhostAction icon={<UserPlus size={15} />} onClick={() => setNovoClienteOpen(true)}>
-                  Novo cliente
-                </GhostAction>
-                <GhostAction icon={<PackagePlus size={15} />} onClick={() => setNovoProdutoOpen(true)}>
-                  Novo produto
-                </GhostAction>
-                {/* Cor diferente de propósito: orçamento não é venda, e dois botões
-                    iguais lado a lado fariam o operador clicar no errado com pressa. */}
-                <button
-                  type="button"
-                  onClick={() => setOrcamentoOpen(true)}
-                  className="focus-ring flex h-[38px] cursor-pointer items-center gap-1.5 rounded-xl border border-warning/40 bg-warning/[0.12] px-3.5 text-[12.5px] text-warning transition-colors hover:bg-warning/20"
-                >
-                  <FileText className="h-4 w-4" />
-                  Novo orçamento
-                </button>
-
-                <PrimaryAction icon={<Plus className="h-4 w-4" />} onClick={() => setNovaVendaOpen(true)}>
-                  Nova venda
-                </PrimaryAction>
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2.5 border-b border-fg/[0.07] px-4 py-3">
+            {/*
+             * O cartão precisava dizer o que é.
+             *
+             * Ele era a única lista do sistema sem cabeçalho: começava direto
+             * em quatro botões encostados à direita, e o que a tabela mostrava
+             * só se descobria lendo as abas da barra de baixo. O título é fixo
+             * — "Balcão" é o cartão inteiro, vendas e orçamentos —, e é a
+             * linha de apoio que acompanha a aba aberta, como nas outras
+             * listas ("128 itens", "12 clientes").
+             */}
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/20">
+                <ShoppingCart className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="truncate text-[13px] text-ink">Balcão</h2>
+                <p className="truncate text-[11px] text-faint">
+                  {aba === "vendas"
+                    ? `${formatNumber(vendasFiltradas.length)} ${vendasFiltradas.length === 1 ? "venda" : "vendas"} ${rotuloCurtoDoDia}`
+                    : `${formatNumber(orcamentosFiltrados.length)} ${orcamentosFiltrados.length === 1 ? "orçamento" : "orçamentos"}`}
+                </p>
               </div>
             </div>
 
-            {/* Linha 2: de que dia · procurando o quê */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <SearchBox
-                value={busca}
-                onChange={setBusca}
-                placeholder={aba === "vendas" ? "Buscar venda por cliente…" : "Buscar orçamento por cliente ou código…"}
-                className="min-w-[200px] flex-1 sm:max-w-xs"
-              />
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <GhostAction icon={<UserPlus size={15} />} onClick={() => setNovoClienteOpen(true)}>
+                Novo cliente
+              </GhostAction>
+              <GhostAction icon={<PackagePlus size={15} />} onClick={() => setNovoProdutoOpen(true)}>
+                Novo produto
+              </GhostAction>
+              {/* Cor diferente de propósito: orçamento não é venda, e dois botões
+                  iguais lado a lado fariam o operador clicar no errado com pressa. */}
+              <button
+                type="button"
+                onClick={() => setOrcamentoOpen(true)}
+                className="focus-ring flex h-[38px] cursor-pointer items-center gap-1.5 rounded-xl border border-warning/40 bg-warning/[0.12] px-3.5 text-[12.5px] text-warning transition-colors hover:bg-warning/20"
+              >
+                <FileText className="h-4 w-4" />
+                Novo orçamento
+              </button>
 
-              {/* O calendário vale para as vendas. Orçamento não é do dia: a
-                  proposta parada há duas semanas é justamente a que precisa de
-                  telefonema, e escondê-la atrás de uma data seria perder a
-                  única lista que a mostra. */}
-              {aba === "vendas" && <SeletorDia valor={dia} onChange={setDia} />}
-
-              {aba === "orcamentos" && aguardandoResposta > 0 && (
-                <span className="flex items-center gap-1.5 rounded-xl border border-warning/30 bg-warning/[0.1] px-3 py-2 text-[12px] text-warning">
-                  <FileText size={13} />
-                  {aguardandoResposta} {aguardandoResposta === 1 ? "aguardando resposta" : "aguardando resposta"}
-                </span>
-              )}
+              <PrimaryAction icon={<Plus className="h-4 w-4" />} onClick={() => setNovaVendaOpen(true)}>
+                Nova venda
+              </PrimaryAction>
             </div>
           </div>
+
+          <BarraFiltros
+            /* A `BarraFiltros` já agrupa a navegação num flex próprio na
+               ponta esquerda; aqui vão só os botões. */
+            navegacao={
+              <AbasTabela
+                grupo="abas-pdv"
+                valor={aba}
+                onValor={setAba}
+                abas={[
+                  { id: "vendas", label: "Vendas", icone: <Receipt size={13} />, contagem: vendasVisiveis.length },
+                  { id: "orcamentos", label: "Orçamentos", icone: <FileText size={13} />, contagem: orcamentos.length },
+                ]}
+              />
+            }
+          >
+            <SearchBox
+              value={busca}
+              onChange={setBusca}
+              placeholder={aba === "vendas" ? "Buscar venda por cliente…" : "Buscar orçamento por cliente ou código…"}
+              className="w-[240px] shrink-0"
+            />
+
+            {/* O calendário vale para as vendas. Orçamento não é do dia: a
+                proposta parada há duas semanas é justamente a que precisa de
+                telefonema, e escondê-la atrás de uma data seria perder a
+                única lista que a mostra. */}
+            {aba === "vendas" && <SeletorDia valor={dia} onChange={setDia} />}
+
+            {aba === "orcamentos" && aguardandoResposta > 0 && (
+              <span className="flex items-center gap-1.5 rounded-xl border border-warning/30 bg-warning/[0.1] px-3 py-2 text-[12px] text-warning">
+                <FileText size={13} />
+                {aguardandoResposta} {aguardandoResposta === 1 ? "aguardando resposta" : "aguardando resposta"}
+              </span>
+            )}
+          </BarraFiltros>
 
           {/*
             Corpo — vendas do dia numa lista corrida; orçamentos, todos,
