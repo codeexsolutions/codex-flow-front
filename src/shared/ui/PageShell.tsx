@@ -88,9 +88,18 @@ export const PageScreen = ({
  * dentro do outlet, junto do conteúdo que elas afetam, e não no cabeçalho.
  */
 export const PageToolbar = ({ children, left, className = "" }: { children?: ReactNode; left?: ReactNode; className?: string }) => (
-  <div className={`flex shrink-0 flex-wrap items-center justify-between gap-2 ${className}`}>
-    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{left}</div>
-    {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
+  /*
+   * No celular a barra EMPILHA; a partir de `sm` ela volta a ser uma linha.
+   *
+   * Com `flex-wrap` numa linha só, os controles da esquerda quebravam em duas
+   * fileiras e o grupo da direita continuava alinhado ao centro vertical da
+   * primeira — os botões apareciam DESENHADOS POR CIMA do segundo seletor.
+   * É o que acontecia em Relatórios com "Exportar Excel" sobre o rótulo
+   * "Relatório".
+   */
+  <div className={`flex shrink-0 flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between ${className}`}>
+    <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-1">{left}</div>
+    {children && <div className="flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none">{children}</div>}
   </div>
 );
 

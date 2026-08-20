@@ -785,6 +785,27 @@ input[type="number"]::-webkit-outer-spin-button {
   box-sizing: border-box;
 }
 
+/*
+ * No celular a folha ENCOLHE para caber, em vez de ser espremida.
+ *
+ * A prévia usa as medidas do papel (210mm ≈ 794px) porque o que se vê é o que
+ * sai impresso. Num aparelho de 402px isso dava duas coisas ruins ao mesmo
+ * tempo: rolagem lateral na página inteira e — pior — os quadros do cabeçalho
+ * do relatório espremidos a ~90px, com "R$ 17.237,00" desenhado por cima de
+ * "R$ 10.964,34".
+ *
+ * `zoom` (e não `transform: scale`) porque ele REFLUI: o espaço que a folha
+ * ocupa na página encolhe junto, então não sobra um vão em branco embaixo nem
+ * uma barra de rolagem fantasma. A folha continua com as proporções exatas do
+ * papel — é uma miniatura fiel, e quem precisa ler dá zoom com os dedos ou
+ * usa "Imprimir / PDF", que é para onde esta tela existe para levar.
+ */
+@media (max-width: 767px) {
+  .folha-a4 {
+    zoom: 0.45;
+  }
+}
+
 @page {
   size: A4 portrait;
   margin: 0;

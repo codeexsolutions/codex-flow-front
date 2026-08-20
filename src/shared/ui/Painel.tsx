@@ -44,6 +44,33 @@ export const SeloIcone = ({ tone, size = 40, children }: { tone: Tom; size?: num
  * no panorama leva à lista do que venceu, em vez de obrigar a pessoa a procurar
  * a guia certa.
  */
+/**
+ * A fileira de números de uma tela.
+ *
+ * ---------------------------------------------------------------------------
+ * No celular ela ROLA de lado; no computador vira grade
+ * ---------------------------------------------------------------------------
+ * Em 402px, quatro ou cinco cartões numa grade de duas colunas dão ~180px de
+ * largura a cada um — e 180px não cabem "R$ 190.876,00" ao lado de um ícone de
+ * 36px. O resultado era o número TRUNCADO ("R$ 190.87…"), que é o pior defeito
+ * possível num cartão cuja única razão de existir é mostrar um número. Um
+ * quinto cartão ainda sobrava sozinho numa terceira fileira.
+ *
+ * Rolando na horizontal, cada cartão recebe a largura de que precisa (72% da
+ * tela), o número aparece inteiro, e o corte do próximo cartão na borda é o
+ * que convida a arrastar. `snap-x` prende cada parada no começo do cartão.
+ *
+ * `-mx-4 px-4` faz a faixa sangrar até as bordas: rolagem que começa e termina
+ * no meio do vão parece conteúdo cortado, não conteúdo que anda.
+ */
+export const KpiFaixa = ({ children, className = "" }: { children: ReactNode; className?: string }) => (
+  <div
+    className={`-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] [&>*]:w-[72vw] [&>*]:shrink-0 [&>*]:snap-start [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:overflow-visible sm:px-0 sm:[&>*]:w-auto ${className}`}
+  >
+    {children}
+  </div>
+);
+
 export const Kpi = ({
   icon,
   tone,
@@ -70,7 +97,15 @@ export const Kpi = ({
 
       <div className="min-w-0">
         <p className="truncate text-[10px] uppercase tracking-wider text-muted">{label}</p>
-        <p className="nums truncate text-[15px] text-ink">{value}</p>
+        {/*
+         * O NÚMERO não trunca — ele quebra.
+         *
+         * Truncar o valor é apagar a única informação do cartão: "R$ 190.87…"
+         * não é um número, é um enigma. Quando não couber numa linha, que
+         * ocupe duas; a dica embaixo continua truncando, porque ela é
+         * explicação e sobrevive cortada.
+         */}
+        <p className="nums text-[15px] leading-tight text-ink [overflow-wrap:anywhere]">{value}</p>
         {hint && <p className="truncate text-[10.5px] text-faint">{hint}</p>}
       </div>
     </Tag>

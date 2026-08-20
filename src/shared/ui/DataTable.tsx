@@ -46,9 +46,18 @@ const MIN_TABLE_WIDTH = 720;
  * fileiras, tomando meia tela antes de a lista começar.
  */
 export const BarraFiltros = ({ navegacao, pagina, children }: { navegacao?: ReactNode; pagina?: { label: string; icon?: ReactNode }; children?: ReactNode }) => (
-  <div className="flex max-w-full shrink-0 items-center gap-3 overflow-x-auto border-b border-fg/[0.06] px-4 py-2.5 [scrollbar-width:none] sm:overflow-visible [&::-webkit-scrollbar]:hidden">
+  /*
+   * No CELULAR a barra quebra em duas linhas; no computador continua uma.
+   *
+   * Rolando na horizontal, a busca — o controle mais usado dos cinco —
+   * nascia cortada na borda direita ("Buscar vend…") e só aparecia inteira
+   * depois de um arrasto que ninguém adivinha. Em duas linhas, a navegação
+   * fica em cima e os filtros embaixo, cada um com a largura que tem; a
+   * busca estica e os seletores dividem o resto.
+   */
+  <div className="flex max-w-full shrink-0 flex-col gap-2 border-b border-fg/[0.06] px-4 py-2.5 sm:flex-row sm:items-center sm:gap-3">
     {navegacao ? (
-      <div className="flex shrink-0 items-center gap-0.5">{navegacao}</div>
+      <div className="-mx-4 flex items-center gap-0.5 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:shrink-0 sm:overflow-visible sm:px-0">{navegacao}</div>
     ) : pagina ? (
       /*
        * Sem abas, o lugar da navegação recebe a PRÓPRIA PÁGINA.
@@ -70,7 +79,10 @@ export const BarraFiltros = ({ navegacao, pagina, children }: { navegacao?: Reac
     {/* `ml-auto` empurra os filtros para a direita mesmo sem navegação — sem
         ele, uma barra só de filtros começaria colada na margem esquerda e
         deixaria de estar alinhada com o botão de criar do cabeçalho. */}
-    <div className="ml-auto flex shrink-0 items-center gap-2 sm:flex-wrap sm:justify-end">{children}</div>
+    {/* No celular a fileira de filtros rola sozinha se não couber — são
+        controles de largura fixa, e em 360px quatro deles empilhariam em
+        quatro fileiras. A busca cresce para ocupar a sobra. */}
+    <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:ml-auto sm:shrink-0 sm:flex-wrap sm:justify-end sm:overflow-visible sm:px-0 sm:pb-0">{children}</div>
   </div>
 );
 
@@ -135,7 +147,16 @@ export const TabelaCard = ({
   bodyRef?: Ref<HTMLDivElement>;
   minWidth?: number;
 }) => (
-  <section className="card glass-sheen flex min-h-[220px] min-w-0 flex-1 flex-col overflow-hidden">
+  /*
+   * No celular a tabela tem ALTURA PRÓPRIA; no computador ela estica.
+   *
+   * O cartão foi desenhado para ocupar o que sobra da janela — é assim que a
+   * paginação sabe quantas linhas cabem. Numa página que rola (que é o que o
+   * telefone tem), `flex-1` não estica nada: encolhe até o conteúdo mais
+   * curto, e a lista aparecia com uma linha e meia, com o rodapé por cima
+   * dela. 460px são ~7 linhas — uma tela de trabalho de verdade.
+   */
+  <section className="card glass-sheen flex min-h-[460px] min-w-0 flex-col overflow-hidden sm:min-h-[220px] sm:flex-1">
     <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2.5 border-b border-fg/[0.07] px-4 py-3">
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
         {icon && <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/20">{icon}</span>}
@@ -150,7 +171,10 @@ export const TabelaCard = ({
       </div>
 
       {(onAdd || acoes) && (
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        /* No celular as ações ocupam a largura inteira, em vez de se
+           espremerem à direita do título: dois botões de 130px numa tela de
+           402px sobravam 40px para o nome da lista. */
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end [&>*]:flex-1 sm:[&>*]:flex-none">
           {acoes}
 
           {onAdd && (
@@ -215,16 +239,18 @@ export function TabelaRow<T>({ colunas, cols, row, onClick }: { colunas: Coluna<
         ))}
       </span>
 
-      {/* Cartão — celular */}
-      <span className="flex flex-col gap-1.5 px-4 py-3 sm:hidden">
+      {/* Cartão — celular. Os pares em DUAS colunas: ver a nota da `ListaLinha`. */}
+      <span className="flex flex-col gap-2 px-4 py-2.5 sm:hidden">
         {principal && <span className="min-w-0 truncate text-[13px] text-ink">{principal.cell(row)}</span>}
 
-        {visiveis.map((c) => (
-          <span key={c.id} className="flex items-baseline justify-between gap-3">
-            <span className="shrink-0 text-[10.5px] uppercase tracking-wider text-faint">{c.header}</span>
-            <span className="min-w-0 truncate text-right text-[12.5px]">{c.cell(row)}</span>
-          </span>
-        ))}
+        <span className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+          {visiveis.map((c) => (
+            <span key={c.id} className="flex min-w-0 flex-col gap-0.5">
+              <span className="truncate text-[9.5px] uppercase tracking-[0.08em] text-faint">{c.header}</span>
+              <span className="min-w-0 truncate text-[12.5px]">{c.cell(row)}</span>
+            </span>
+          ))}
+        </span>
       </span>
     </Tag>
   );
@@ -353,24 +379,35 @@ export const ListaLinha = ({
       {/* Grade — desktop */}
       <span className={`hidden h-full ${cols} items-center px-5 sm:grid`}>{children}</span>
 
-      {/* Cartão — celular */}
-      <span className="flex flex-col gap-2 px-4 py-3 sm:hidden">
+      {/*
+       * Cartão — celular. Os pares vão em DUAS COLUNAS.
+       *
+       * Um par por linha dava seis linhas de altura a cada item: no estoque,
+       * um produto ocupava metade da tela do telefone e ver três exigia rolar
+       * a página inteira. Em duas colunas o mesmo conteúdo cabe em três
+       * linhas, com o rótulo miúdo em cima do valor — a forma que a lista de
+       * lançamentos de um banco usa, e pelo mesmo motivo: o olho lê a coluna
+       * da esquerda de cima a baixo sem atravessar o cartão a cada dado.
+       */}
+      <span className="flex flex-col gap-2 px-4 py-2.5 sm:hidden">
         <span className="min-w-0">{identidade}</span>
 
-        {resto.map((celula, i) => {
-          const rotulo = rotulos?.[i + 1];
+        <span className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+          {resto.map((celula, i) => {
+            const rotulo = rotulos?.[i + 1];
 
-          /* Sem rótulo, a célula não entra: é o caso da coluna que só reserva
-             a largura das ações, que no cartão não existe. */
-          if (!rotulo) return null;
+            /* Sem rótulo, a célula não entra: é o caso da coluna que só
+               reserva a largura das ações, que no cartão não existe. */
+            if (!rotulo) return null;
 
-          return (
-            <span key={i} className="flex items-baseline justify-between gap-3">
-              <span className="shrink-0 text-[10.5px] uppercase tracking-wider text-faint">{rotulo}</span>
-              <span className="min-w-0 text-right">{celula}</span>
-            </span>
-          );
-        })}
+            return (
+              <span key={i} className="flex min-w-0 flex-col gap-0.5">
+                <span className="truncate text-[9.5px] uppercase tracking-[0.08em] text-faint">{rotulo}</span>
+                <span className="min-w-0 [&>*]:justify-start">{celula}</span>
+              </span>
+            );
+          })}
+        </span>
       </span>
     </Tag>
   );

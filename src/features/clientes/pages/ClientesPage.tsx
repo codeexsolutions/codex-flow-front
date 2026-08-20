@@ -18,6 +18,7 @@ import { SkeletonTableRows, SkeletonIdentityCell } from "@/shared/ui/skeleton";
 import { useAutoPageSize, ROW_HEIGHT } from "@/shared/hooks/useAutoPageSize";
 import { useDebouncedValue } from "@/shared/hooks/useDebouncedValue";
 import { PageScreen } from "@/shared/ui/PageShell";
+import { KpiFaixa } from "@/shared/ui/Painel";
 import Select from "@/shared/ui/Select";
 import BuscaSugestoes from "@/shared/ui/BuscaSugestoes";
 import { BarraFiltros, ListaAcao, ListaCabecalho, ListaFantasmas, ListaLinha, TabelaPaginacao } from "@/shared/ui/DataTable";
@@ -415,7 +416,7 @@ const Clientes = () => {
        * o que falta melhorar. Ambos saem do filtro aplicado, então refletem o
        * recorte que a pessoa está olhando — não o catálogo inteiro.
        */}
-      <section className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
+      <KpiFaixa className="shrink-0 sm:grid-cols-4">
         <Kpi
           icon={<Users size={16} />}
           label="Clientes"
@@ -441,7 +442,7 @@ const Clientes = () => {
           hint={ficha.media > 0 ? `${ficha.media}% em média` : undefined}
           tom={customers.filter((c) => completudeCliente(c) < 100).length > 0 ? "warning" : undefined}
         />
-      </section>
+      </KpiFaixa>
 
       {/*
        * Duas colunas: a lista à esquerda, os painéis à direita.
@@ -449,9 +450,20 @@ const Clientes = () => {
        * Abaixo de `lg` volta a empilhar: em tela estreita não há largura para
        * duas colunas sem espremer as duas.
        */}
-      <section className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
+      <section className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:flex-row">
         {/* ---------- Lista ---------- */}
-        <div className="card glass-sheen flex min-h-[260px] min-w-0 flex-1 flex-col overflow-hidden rounded-lg">
+        {/*
+         * `min-h` no celular, `flex-1` só a partir de `lg`.
+         *
+         * A lista foi desenhada para ESTICAR até o fim da janela: é assim que
+         * a paginação sabe quantas linhas cabem (ver `useAutoPageSize`) e é
+         * assim que o rodapé fica colado embaixo. No celular não existe "fim
+         * da janela" para esticar — a página inteira rola —, e um `flex-1`
+         * dentro de uma coluna que rola encolhe até a altura do conteúdo mais
+         * curto. O resultado era o cartão com uma linha e meia e o rodapé de
+         * paginação DESENHADO POR CIMA da primeira linha.
+         */}
+        <div className="card glass-sheen flex min-h-[460px] min-w-0 flex-col overflow-hidden rounded-lg lg:min-h-[260px] lg:flex-1">
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-fg/[0.06] px-4 py-3.5">
             <div className="flex items-center gap-2.5">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/[0.15]">

@@ -18,6 +18,7 @@ import { ProdutoForm } from "@/features/estoque/components/ProdutoForm";
 import ProductService from "@/features/estoque/services/product.service";
 import type { ProductFormData } from "@/features/estoque/schema/product.schema";
 import type { ClienteFormData } from "@/features/clientes/schema/cliente.schema";
+import { KpiFaixa } from "@/shared/ui/Painel";
 import { Modal } from "@/shared/ui/Modal";
 import { BarraFiltros } from "@/shared/ui/DataTable";
 import { AbasTabela } from "@/shared/ui/AbasTabela";
@@ -703,12 +704,12 @@ const PontoDeVenda = () => {
           lê "Faturamento" achando que é o de hoje. O número mudou junto com a
           lista; o rótulo precisa contar isso.
         */}
-        <div className="stagger grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">
+        <KpiFaixa className="stagger shrink-0 lg:grid-cols-4">
           <Kpi icon={<DollarSign size={16} />} label={`Faturamento · ${rotuloCurtoDoDia}`} value={formatCurrency(faturamento)} tone="accent" />
           <Kpi icon={<Wallet size={16} />} label="Recebido" value={formatCurrency(recebido)} tone="success" />
           <Kpi icon={<AlertCircle size={16} />} label="Pendente" value={formatCurrency(pendente)} tone="warning" />
           <Kpi icon={<Hash size={16} />} label="Vendas" value={String(vendasVisiveis.length)} tone="neutral" />
-        </div>
+        </KpiFaixa>
 
         {/* Card da lista */}
         <div className="card glass-sheen flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -745,7 +746,15 @@ const PontoDeVenda = () => {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            {/*
+             * No celular as quatro portas de criar ROLAM numa fileira só.
+             *
+             * Elas quebravam em duas fileiras encostadas à direita, e o balcão
+             * começava com dois centímetros de botão antes da primeira venda.
+             * Numa fileira que rola, "Nova venda" — a que se usa o dia inteiro
+             * — fica visível e as outras três ficam a um arrasto.
+             */}
+            <div className="-mx-4 flex w-[calc(100%+2rem)] items-center gap-2 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0 sm:mx-0 sm:w-auto sm:flex-wrap sm:justify-end sm:overflow-visible sm:px-0 sm:pb-0">
               <GhostAction icon={<UserPlus size={15} />} onClick={() => setNovoClienteOpen(true)}>
                 Novo cliente
               </GhostAction>
@@ -763,9 +772,14 @@ const PontoDeVenda = () => {
                 Novo orçamento
               </button>
 
-              <PrimaryAction icon={<Plus className="h-4 w-4" />} onClick={() => setNovaVendaOpen(true)}>
-                Nova venda
-              </PrimaryAction>
+              {/* No celular "Nova venda" vem PRIMEIRO: é a ação do dia
+                  inteiro, e numa fileira que rola ela nascia fora da tela,
+                  atrás de três botões que se usa uma vez por semana. */}
+              <span className="order-first shrink-0 sm:order-none">
+                <PrimaryAction icon={<Plus className="h-4 w-4" />} onClick={() => setNovaVendaOpen(true)}>
+                  Nova venda
+                </PrimaryAction>
+              </span>
             </div>
           </div>
 

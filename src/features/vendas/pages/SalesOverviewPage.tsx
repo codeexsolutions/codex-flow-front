@@ -8,7 +8,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 import { Modal } from "@/shared/ui/Modal";
 import Invoice from "@/features/vendas/components/Invoice";
-import { ChartTip, Kpi, Legenda, Painel, PainelVazio, type Tom } from "@/shared/ui/Painel";
+import { ChartTip, Kpi, Legenda, Painel, PainelVazio, type Tom, KpiFaixa } from "@/shared/ui/Painel";
 import { usePainelCores } from "@/shared/ui/painelCores";
 import { formatCurrency } from "@/shared/utils/currency";
 import { estaAberto, estaCancelado, estaFechado, totalDoPedido, valorPagoDoPedido, valorPendenteDoPedido } from "@/shared/domain/pedido";
@@ -192,7 +192,7 @@ const SalesOverviewPage = () => {
      */
     <div className="flex shrink-0 flex-col gap-3">
       {/* ---------- Os quatro números do mês ---------- */}
-      <div className="stagger grid shrink-0 grid-cols-2 gap-3 xl:grid-cols-4">
+      <KpiFaixa className="stagger shrink-0 xl:grid-cols-4">
         <Kpi tone="accent" icon={<DollarSign size={17} />} label="Faturado este mês" value={formatCurrency(dados.faturadoMes)} hint={`${dados.vendasNoMes} ${dados.vendasNoMes === 1 ? "venda" : "vendas"}`} />
         <Kpi tone="success" icon={<CheckCircle size={17} />} label="Recebido este mês" value={formatCurrency(dados.recebidoMes)} hint={`${dados.percentualRecebido.toFixed(0)}% do faturado`} />
         <Kpi tone="danger" icon={<AlertCircle size={17} />} label="A receber de clientes" value={formatCurrency(dados.aReceberTotal)} hint={`${dados.pendentes} ${dados.pendentes === 1 ? "nota aberta" : "notas abertas"}`} onClick={() => navigate("/vendas")} />
@@ -204,7 +204,7 @@ const SalesOverviewPage = () => {
         ) : (
           <Kpi tone="warning" icon={<ShoppingCart size={17} />} label="Total de vendas" value={String(dados.totalVendas)} hint={`${dados.vendasNoMes} neste mês`} />
         )}
-      </div>
+      </KpiFaixa>
 
       {/* ---------- Faturamento anual + status ---------- */}
       <div className="grid shrink-0 grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">

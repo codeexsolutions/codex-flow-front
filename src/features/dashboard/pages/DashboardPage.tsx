@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
+import { KpiFaixa } from "@/shared/ui/Painel";
 import { Rosca } from "@/shared/ui/Rosca";
 import { PageScreen } from "@/shared/ui/PageShell";
 import { SkeletonKpis, SkeletonGrafico, SkeletonListaPainel } from "@/shared/ui/skeleton";
@@ -527,7 +528,11 @@ const DashboardPage = () => {
       {carregando ? (
         <SkeletonKpis />
       ) : (
-        <Bloco i={0} className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+        /* A fileira de números ROLA de lado no celular — ver `KpiFaixa`. Em
+           grade de duas colunas eles truncavam o próprio valor, que é a única
+           coisa que o cartão tem para dizer. */
+        <Bloco i={0}>
+          <KpiFaixa className="sm:grid-cols-3 xl:grid-cols-5">
           <Kpi
             icon={<DollarSign size={16} />}
             label="Faturado no mês"
@@ -564,6 +569,7 @@ const DashboardPage = () => {
                        incluindo material — material acabando é exatamente
                        o que um painel precisa avisar. */
             hint={`${formatNumber(produtos.filter(ehVendavel).length)} produtos cadastrados`} tone="danger" />
+          </KpiFaixa>
         </Bloco>
       )}
 

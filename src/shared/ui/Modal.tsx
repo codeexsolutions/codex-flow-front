@@ -115,7 +115,17 @@ const Modal = memo(({ open, onClose, title, subtitle, accent = "rgb(var(--accent
             (é o `min-height: auto` de todo item flex) e empurra o painel para
             além da tela — o que sobra some no `overflow-hidden` do painel. Com
             ele, conteúdo grande rola em vez de ser cortado. */}
-        <div className={`min-h-0 flex-1 overflow-y-auto ${isFull ? "" : "p-4 sm:p-5"}`}>{children}</div>
+        {/*
+         * No celular a folha termina ACIMA da barra de abas.
+         *
+         * A barra é fixa no rodapé e ficava por cima do fim da folha: o botão
+         * de salvar — a única coisa que a pessoa veio fazer aqui — nascia
+         * encostado nela, e num aparelho com faixa de gestos ficava embaixo
+         * dela. 66px é a altura da barra, o mesmo número que o corpo das
+         * telas usa (ver a regra em `index.css`), mais a área segura do
+         * aparelho.
+         */}
+        <div className={`min-h-0 flex-1 overflow-y-auto ${isFull ? "" : "p-4 pb-[calc(66px+env(safe-area-inset-bottom))] sm:p-5"}`}>{children}</div>
       </div>
     </div>
   );

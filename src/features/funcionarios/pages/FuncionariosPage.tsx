@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 
 import { TabelaCard, TabelaHead, TabelaRow, TabelaVazia, type Coluna } from "@/shared/ui/DataTable";
+import { KpiFaixa } from "@/shared/ui/Painel";
 import { Modal } from "@/shared/ui/Modal";
 import { useAlert } from "@/shared/ui/Alert";
 import Select from "@/shared/ui/Select";
@@ -121,7 +122,10 @@ const KpiCard = ({ icon, label, value, hint, tom }: { icon: ReactNode; label: st
     </span>
     <div className="flex min-w-0 flex-1 flex-col">
       <p className="truncate text-[10px] uppercase tracking-[0.09em] text-faint">{label}</p>
-      <p className="truncate text-[15px] leading-[19px] tabular-nums tracking-tight text-ink">{value}</p>
+      {/* O número não trunca — ele quebra. "R$ 190.87…" não é um número,
+          é um enigma; a dica embaixo continua truncando, porque explicação
+          sobrevive cortada. */}
+        <p className="text-[15px] leading-[19px] tabular-nums tracking-tight text-ink [overflow-wrap:anywhere]">{value}</p>
       {hint && <p className="truncate text-[10px] leading-[13px] text-faint">{hint}</p>}
     </div>
   </div>
@@ -531,7 +535,7 @@ const FuncionariosPage = () => {
          */}
 
         {/* KPIs da equipe */}
-        <section className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4">
+        <KpiFaixa className="shrink-0 sm:grid-cols-4">
           <KpiCard
             icon={<Users size={14} />}
             label="Total"
@@ -557,7 +561,7 @@ const FuncionariosPage = () => {
             value={carregando ? "—" : formatNumber(funcionarios.filter((f) => f.ganhaComissao).length)}
             hint="recebem comissão"
           />
-        </section>
+        </KpiFaixa>
 
         <TabelaCard
           title="Equipe"

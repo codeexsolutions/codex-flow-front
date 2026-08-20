@@ -398,8 +398,17 @@ export function ProdutoForm({ defaultValues, onSubmit, onCancel, onDelete, submi
              * direito. `items-start` porque quem define a altura da fileira é o
              * que for mais alto, e nenhum dos dois precisa acompanhar o outro.
              */}
-            <div className="flex items-start gap-3">
-              <div className="aspect-square w-[132px] shrink-0 sm:w-[176px]">
+            {/*
+             * No CELULAR a foto sobe e os campos ficam embaixo.
+             *
+             * Lado a lado em 402px sobravam ~200px para o campo de nome, e o
+             * próprio exemplo dele não cabia: o placeholder aparecia como
+             * "Camiseta básica pre…". Um campo que não mostra o que se espera
+             * dele deixa de ser um exemplo e vira um enigma. Empilhado, o
+             * nome ocupa a largura inteira; a partir de `sm` a fileira volta.
+             */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+              <div className="aspect-square w-[104px] shrink-0 sm:w-[176px]">
                 {/*
                  * A foto é ESCOLHIDA, não colada.
                  *

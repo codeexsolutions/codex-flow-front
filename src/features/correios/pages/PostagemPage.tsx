@@ -5,7 +5,7 @@ import CorreiosService from "@/features/correios/services/correios.service";
 import type { PostagemType, PrePostagemDto, ServicoCorreio } from "@/features/correios/types/correios.types";
 
 import { TabelaCard, TabelaVazia, ListaCabecalho, ListaLinha, ListaFantasmas } from "@/shared/ui/DataTable";
-import { Kpi } from "@/shared/ui/Painel";
+import { Kpi, KpiFaixa } from "@/shared/ui/Painel";
 import { Modal } from "@/shared/ui/Modal";
 import { useAutoPageSize } from "@/shared/hooks/useAutoPageSize";
 import { TabelaPaginacao } from "@/shared/ui/DataTable";
@@ -208,11 +208,11 @@ const PostagemPage = () => {
   return (
     <div className="flex flex-col gap-4">
       {/* KPIs no topo — o mesmo padrão do Stock e Funcionarios. */}
-      <div className="grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-3">
+      <KpiFaixa className="shrink-0 sm:grid-cols-3">
         <Kpi icon={<Package size={17} />} tone="accent" label="Total de postagens" value={String(resumo.total)} />
         <Kpi icon={<Clock size={17} />} tone="warning" label="Pendentes" value={String(resumo.pendentes)} />
         <Kpi icon={<CheckCircle2 size={17} />} tone="success" label="Postadas" value={String(resumo.postadas)} />
-      </div>
+      </KpiFaixa>
 
       {/* Tabela */}
       <TabelaCard

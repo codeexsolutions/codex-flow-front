@@ -14,6 +14,7 @@ import EstoqueService from "@/features/estoque/services/estoque.service";
 import { ProdutoForm } from "@/features/estoque/components/ProdutoForm";
 import CategoriasPainel from "@/features/estoque/components/CategoriasPainel";
 import { ProductFormData } from "@/features/estoque/schema/product.schema";
+import { KpiFaixa } from "@/shared/ui/Painel";
 import { Modal } from "@/shared/ui/Modal";
 import Select from "@/shared/ui/Select";
 import BuscaSugestoes from "@/shared/ui/BuscaSugestoes";
@@ -572,7 +573,7 @@ const Estoque = () => {
       )}
 
       {/* ---------- Números ---------- */}
-      <section className="grid shrink-0 grid-cols-2 gap-3 xl:grid-cols-4">
+      <KpiFaixa className="shrink-0 xl:grid-cols-4">
         <Kpi
           icon={<Package className="h-4 w-4" />}
           label="Itens"
@@ -605,10 +606,10 @@ const Estoque = () => {
           hint={`${formatNumber(stats.esgotados)} esgotados · ${formatNumber(stats.baixos)} baixos`}
           tom={stats.esgotados > 0 ? "danger" : stats.baixos > 0 ? "warning" : undefined}
         />
-      </section>
+      </KpiFaixa>
 
       {/* ---------- Lista ---------- */}
-      <section className="card glass-sheen flex min-h-[260px] min-w-0 flex-1 flex-col overflow-hidden rounded-lg">
+      <section className="card glass-sheen flex min-h-[460px] min-w-0 flex-col overflow-hidden rounded-lg sm:min-h-[260px] sm:flex-1">
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2.5 border-b border-fg/[0.06] px-4 py-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/[0.14] text-accent-soft ring-1 ring-inset ring-accent/20">
